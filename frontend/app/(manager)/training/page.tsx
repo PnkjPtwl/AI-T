@@ -16,6 +16,8 @@ export default function TrainingPage() {
   const [priority, setPriority] = useState('Medium')
   const [assigning, setAssigning] = useState(false)
   const [success, setSuccess] = useState('')
+  const [editingAssignment, setEditingAssignment] = useState<any>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -30,11 +32,23 @@ export default function TrainingPage() {
         fetch(`${API}/api/users/team-assignments`, { headers })
       ])
 
-      if (repsRes.ok) setReps(await repsRes.json())
-      if (scenariosRes.ok) setScenarios(await scenariosRes.json())
-      if (assignmentsRes.ok) setAssignments(await assignmentsRes.json())
+      if (repsRes.ok) {
+        const data = await repsRes.json()
+        console.log('[ManagerTraining] Fetched reps:', data)
+        setReps(data)
+      }
+      if (scenariosRes.ok) {
+        const data = await scenariosRes.json()
+        console.log('[ManagerTraining] Fetched scenarios:', data)
+        setScenarios(data)
+      }
+      if (assignmentsRes.ok) {
+        const data = await assignmentsRes.json()
+        console.log('[ManagerTraining] Fetched assignments:', data)
+        setAssignments(data)
+      }
     } catch (err) {
-      console.error('Failed to fetch training data', err)
+      console.error('[ManagerTraining] Fetch error:', err)
     } finally {
       setLoading(false)
     }
@@ -78,6 +92,47 @@ export default function TrainingPage() {
       console.error('Assignment failed', err)
     } finally {
       setAssigning(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API}/api/users/assignments/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) fetchData()
+    } catch (err) {
+      console.error('Delete failed', err)
+    }
+  }
+
+  const handleUpdate = async () => {
+    if (!editingAssignment) return
+    
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API}/api/users/assignments/${editingAssignment.id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({
+          deadline: editingAssignment.deadline,
+          priority: editingAssignment.priority,
+          status: editingAssignment.status,
+          rep_id: editingAssignment.rep_id,
+          scenario_id: editingAssignment.scenario_id
+        })
+      })
+      if (res.ok) {
+        setShowEditModal(false)
+        fetchData()
+      }
+    } catch (err) {
+      console.error('Update failed', err)
     }
   }
 
@@ -149,6 +204,7 @@ export default function TrainingPage() {
                        <th className="px-10 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC]">Status</th>
                        <th className="px-10 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC]">Deadline</th>
                        <th className="px-10 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC] text-right">Performance</th>
+                       <th className="px-10 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC] text-right">Actions</th>
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-[#D8CCBC]">
@@ -176,11 +232,28 @@ export default function TrainingPage() {
                          </td>
                          <td className="px-10 py-6 text-right">
                             {assign.status === 'Completed' ? (
-                              <span className="text-2xl font-extrabold text-[#7D8461] tracking-tighter">{assign.completed_score}%</span>
+                              <span className="text-2xl font-extrabold text-[#7D8461] tracking-tighter">{assign.score}%</span>
                             ) : (
                               <span className="text-[9px] font-black text-[#D8CCBC] uppercase tracking-widest">Pending</span>
                             )}
                          </td>
+                         <td className="px-10 py-6 text-right space-x-4">
+                             <button 
+                               onClick={() => {
+                                 setEditingAssignment({...assign, deadline: assign.deadline.split('T')[0]})
+                                 setShowEditModal(true)
+                               }} 
+                               className="text-[#7D8461] hover:text-[#3A2F28] text-[9px] font-black uppercase tracking-widest transition-colors"
+                             >
+                               Edit
+                             </button>
+                             <button 
+                               onClick={() => handleDelete(assign.id)} 
+                               className="text-[#A06A5B] hover:text-[#3A2F28] text-[9px] font-black uppercase tracking-widest transition-colors"
+                             >
+                               Delete
+                             </button>
+                          </td>
                       </tr>
                     ))}
                  </tbody>
@@ -270,6 +343,91 @@ export default function TrainingPage() {
                   className="w-full py-5 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-lg shadow-[#7D8461]/20 transition-all disabled:opacity-50 mt-4"
                 >
                   {assigning ? 'Initializing Deployment...' : 'Authorize Mission Deployment'}
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Assignment Modal */}
+      {showEditModal && editingAssignment && (
+        <div className="fixed inset-0 bg-[#3A2F28]/60 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="bg-[#F6F1E8] w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden border border-[#D8CCBC]">
+             <div className="px-12 py-10 border-b border-[#D8CCBC] flex justify-between items-center bg-[#EAE2D6]/30">
+                <div>
+                  <h2 className="text-xl font-black text-[#3A2F28] uppercase tracking-tighter">Modify Mission</h2>
+                  <p className="text-sm text-[#7B6F63] mt-1">Update parameters for {editingAssignment.rep_name}</p>
+                </div>
+                <button onClick={() => setShowEditModal(false)} className="text-[10px] font-black uppercase tracking-widest text-[#7B6F63] hover:text-[#3A2F28]">Cancel</button>
+             </div>
+
+             <div className="p-12 space-y-8 max-h-[60vh] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-6">
+                   <div className="space-y-4">
+                      <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Representative</label>
+                      <select 
+                        value={editingAssignment.rep_id}
+                        onChange={(e) => setEditingAssignment({...editingAssignment, rep_id: e.target.value})}
+                        className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all appearance-none"
+                      >
+                         {reps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      </select>
+                   </div>
+                   <div className="space-y-4">
+                      <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">AI Persona</label>
+                      <select 
+                        value={editingAssignment.scenario_id}
+                        onChange={(e) => setEditingAssignment({...editingAssignment, scenario_id: e.target.value})}
+                        className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all appearance-none"
+                      >
+                         {scenarios.map(s => <option key={s.id} value={s.id}>{s.persona_name}</option>)}
+                      </select>
+                   </div>
+                </div>
+
+                <div className="space-y-4">
+                   <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Deadline</label>
+                   <input 
+                     type="date" 
+                     value={editingAssignment.deadline}
+                     onChange={(e) => setEditingAssignment({...editingAssignment, deadline: e.target.value})}
+                     className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all"
+                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                   <div className="space-y-4">
+                     <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Priority</label>
+                     <select 
+                       value={editingAssignment.priority}
+                       onChange={(e) => setEditingAssignment({...editingAssignment, priority: e.target.value})}
+                       className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all appearance-none"
+                     >
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                     </select>
+                   </div>
+                   <div className="space-y-4">
+                     <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Status</label>
+                     <select 
+                       value={editingAssignment.status}
+                       onChange={(e) => setEditingAssignment({...editingAssignment, status: e.target.value})}
+                       className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all appearance-none"
+                     >
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Overdue">Overdue</option>
+                     </select>
+                   </div>
+                </div>
+
+                <button 
+                  onClick={handleUpdate}
+                  className="w-full py-5 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-lg shadow-[#7D8461]/20 transition-all mt-4"
+                >
+                  Update Mission Parameters
                 </button>
              </div>
           </div>

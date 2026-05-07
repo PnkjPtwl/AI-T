@@ -52,7 +52,9 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
 
       if (res.ok) {
         const data = await res.json()
-        router.push(`/rep/train/${scenarioId}?sessionId=${data.sessionId}`)
+        const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}`
+        console.log(`[Briefing] Navigating to simulation: ${targetUrl}`);
+        router.push(targetUrl)
       } else {
         alert('Failed to start session. Please try again.')
         setStarting(false)
@@ -149,7 +151,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
             <div className="p-10 space-y-10">
               <div>
                 <h4 className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest mb-3">Operational Background</h4>
-                <p className="text-sm text-[#3A2F28]/80 leading-relaxed italic">"{scenario.context_text.replace(/\[SCENARIO:.*?\]\s*/, '')}"</p>
+                <p className="text-sm text-[#3A2F28]/80 leading-relaxed italic">"{scenario.context_text.replace(/\[SCENARIO:.*?\]\s*/g, '').replace(/\[SCENARIO_METADATA:\s*({.*?})\]/s, '').trim()}"</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 <div className="bg-[#F6F1E8] rounded-2xl p-6 border border-[#D8CCBC]/30">

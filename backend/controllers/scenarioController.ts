@@ -143,12 +143,24 @@ export const createScenario = async (req: any, res: any) => {
     evaluation_focus,
     objection_style,
     conversation_expectations,
-    target_skills 
+    target_skills,
+    custom_prompt
   } = req.body
 
   if (!persona_name || !persona_type || !context_text || !difficulty) {
     return res.status(400).json({ error: 'All fields are required' })
   }
+
+  // Pack extra fields into a soft-schema JSON inside context_text
+  const metadata = {
+    personality_traits,
+    evaluation_focus,
+    objection_style,
+    conversation_expectations,
+    target_skills
+  }
+  
+  const finalContextText = `${context_text}\n\n[SCENARIO_METADATA: ${JSON.stringify(metadata)}]`
 
   const { data, error } = await supabase
     .from('training_scenarios')
@@ -156,13 +168,9 @@ export const createScenario = async (req: any, res: any) => {
       org_id: orgId,
       persona_name,
       persona_type,
-      context_text,
+      context_text: finalContextText,
       difficulty,
-      personality_traits,
-      evaluation_focus,
-      objection_style,
-      conversation_expectations,
-      target_skills
+      custom_prompt
     })
     .select()
     .single()
@@ -269,6 +277,20 @@ export const updateScenario = async (req: any, res: any) => {
       return res.status(404).json({ error: 'Scenario not found or access denied' })
     }
 
+    // Pack extra fields into a soft-schema JSON inside context_text
+    const metadata = {
+      personality_traits: updates.personality_traits,
+      evaluation_focus: updates.evaluation_focus,
+      objection_style: updates.objection_style,
+      conversation_expectations: updates.conversation_expectations,
+      target_skills: updates.target_skills
+    }
+    
+    // Ensure we don't append multiple metadata tags if updating
+    let baseContext = updates.context_text || ''
+    baseContext = baseContext.replace(/\\n*\\[SCENARIO_METADATA:.*?\\]/s, '')
+    const finalContextText = `${baseContext}\n\n[SCENARIO_METADATA: ${JSON.stringify(metadata)}]`
+
     // 2. Update the DB with all columns
     const { data, error } = await supabase
       .from('training_scenarios')
@@ -276,12 +298,8 @@ export const updateScenario = async (req: any, res: any) => {
         persona_name: updates.persona_name,
         persona_type: updates.persona_type,
         difficulty: updates.difficulty,
-        context_text: updates.context_text,
-        personality_traits: updates.personality_traits,
-        evaluation_focus: updates.evaluation_focus,
-        objection_style: updates.objection_style,
-        conversation_expectations: updates.conversation_expectations,
-        target_skills: updates.target_skills
+        context_text: finalContextText,
+        custom_prompt: updates.custom_prompt
       })
       .eq('id', scenarioId)
       .eq('org_id', orgId)

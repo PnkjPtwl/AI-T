@@ -8,7 +8,8 @@ import {
   sendMessage, 
   sendVoiceMessage, 
   endSession, 
-  getSession 
+  getSession,
+  deleteSession
 } from '../controllers/sessionController'
 
 const router = express.Router()
@@ -31,5 +32,8 @@ router.post('/end', authenticate, repOnly, endSession)
 
 // GET /api/sessions/:sessionId
 router.get('/:sessionId', authenticate, getSession)
+
+// DELETE /api/sessions/:sessionId
+router.delete('/:sessionId', authenticate, deleteSession)
 
 export default router

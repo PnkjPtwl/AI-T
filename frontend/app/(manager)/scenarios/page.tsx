@@ -243,7 +243,7 @@ export default function ManagerScenariosPage() {
 
                 <div className="hidden lg:block flex-1 max-w-md">
                    <p className="text-sm text-[#7B6F63] line-clamp-2 italic leading-relaxed font-medium">
-                      {s.context_text}
+                      {s.context_text?.replace(/\[SCENARIO:.*?\]\s*/g, '').replace(/\[SCENARIO_METADATA:\s*({.*?})\]/s, '').trim()}
                    </p>
                 </div>
 
@@ -296,7 +296,7 @@ export default function ManagerScenariosPage() {
                        <section>
                           <h4 className="text-[10px] font-black uppercase text-[#7B6F63] tracking-[0.4em] mb-8 ml-1">Operational Context</h4>
                           <div className="bg-[#EAE2D6] border border-[#D8CCBC] rounded-[2.5rem] p-10">
-                             <p className="text-[#3A2F28] leading-relaxed text-sm whitespace-pre-wrap font-medium">{selectedScenario.context_text}</p>
+                             <p className="text-[#3A2F28] leading-relaxed text-sm whitespace-pre-wrap font-medium">{selectedScenario.context_text?.replace(/\[SCENARIO:.*?\]\s*/g, '').replace(/\[SCENARIO_METADATA:\s*({.*?})\]/s, '').trim()}</p>
                           </div>
                        </section>
                        <section>

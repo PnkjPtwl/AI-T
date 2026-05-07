@@ -1,7 +1,7 @@
 import express from 'express'
 import { authenticate } from '../middleware/auth'
 import { managerOnly } from '../middleware/roleGuard'
-import { getMe, getReps, getOrganizationDetails, getRepSessions, getDashboardStats, getCoachingAlerts, getTeamAnalytics, getMyAnalytics, assignTraining, getMyAssignments, getTeamAssignments, addNote, getRepNotes, getMyNotes, getSentNotes } from '../controllers/userController'
+import { getMe, getReps, getOrganizationDetails, getRepSessions, getDashboardStats, getCoachingAlerts, getTeamAnalytics, getMyAnalytics, assignTraining, getMyAssignments, getTeamAssignments, updateAssignment, deleteAssignment, addNote, getRepNotes, getMyNotes, getSentNotes, completeAssignment } from '../controllers/userController'
 
 const router = express.Router()
 
@@ -20,8 +20,9 @@ router.get('/my-notes', authenticate, getMyNotes)
 // GET /api/users/reps
 router.get('/reps', authenticate, managerOnly, getReps)
 
-// GET /api/users/organization
+// GET /api/users/organization (and alias org-details)
 router.get('/organization', authenticate, managerOnly, getOrganizationDetails)
+router.get('/org-details', authenticate, managerOnly, getOrganizationDetails)
 
 // GET /api/users/dashboard-stats
 router.get('/dashboard-stats', authenticate, managerOnly, getDashboardStats)
@@ -37,6 +38,15 @@ router.get('/team-assignments', authenticate, managerOnly, getTeamAssignments)
 
 // POST /api/users/assign-training
 router.post('/assign-training', authenticate, managerOnly, assignTraining)
+
+// PATCH /api/users/assignments/:assignmentId
+router.patch('/assignments/:assignmentId', authenticate, managerOnly, updateAssignment)
+
+// DELETE /api/users/assignments/:assignmentId
+router.delete('/assignments/:assignmentId', authenticate, managerOnly, deleteAssignment)
+
+// POST /api/users/complete-assignment
+router.post('/complete-assignment', authenticate, completeAssignment)
 
 // GET /api/users/reps/:repId/sessions
 router.get('/reps/:repId/sessions', authenticate, managerOnly, getRepSessions)

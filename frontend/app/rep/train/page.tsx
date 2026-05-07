@@ -22,10 +22,18 @@ export default function TrainingCenter() {
           fetch(`${API}/api/users/my-assignments`, { headers: { 'Authorization': `Bearer ${token}` } })
         ])
 
-        if (scenRes.ok) setScenarios(await scenRes.json())
-        if (assignRes.ok) setAssignments(await assignRes.json())
+        if (scenRes.ok) {
+          const data = await scenRes.json()
+          console.log('[TrainingCenter] Fetched scenarios:', data)
+          setScenarios(data)
+        }
+        if (assignRes.ok) {
+          const data = await assignRes.json()
+          console.log('[TrainingCenter] Fetched assignments:', data)
+          setAssignments(data)
+        }
       } catch (err) {
-        console.error(err)
+        console.error('[TrainingCenter] Fetch error:', err)
       } finally {
         setLoading(false)
       }
@@ -75,13 +83,18 @@ export default function TrainingCenter() {
 
       {/* Content */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-        {filter === 'assigned' && activeAssignments.length === 0 && (
+        {filter === 'completed' && assignments.filter(a => a.status === 'Completed').length === 0 && (
           <div className="col-span-full py-32 text-center bg-[#EAE2D6]/40 border border-dashed border-[#D8CCBC] rounded-[2.5rem]">
-             <p className="text-[#7B6F63] font-black uppercase tracking-[0.2em] text-[10px]">No active missions assigned.</p>
+             <p className="text-[#7B6F63] font-black uppercase tracking-[0.2em] text-[10px]">No completed sessions found.</p>
           </div>
         )}
 
-        {(filter === 'all' ? scenarios : filter === 'assigned' ? activeAssignments.map(a => ({ ...a.scenario, assignmentId: a.id, difficulty: a.priority })) : []).map((scenario: any) => (
+        {(filter === 'all' 
+          ? scenarios 
+          : filter === 'assigned' 
+            ? activeAssignments.map(a => ({ ...a.scenario, assignmentId: a.id, difficulty: a.priority, status: a.status }))
+            : assignments.filter(a => a.status === 'Completed').map(a => ({ ...a.scenario, assignmentId: a.id, difficulty: a.priority, status: a.status, score: a.score, sessionId: a.session_id }))
+        ).map((scenario: any) => (
           <div key={scenario.id} className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2rem] overflow-hidden hover:shadow-xl transition-all flex flex-col group">
              <div className="p-10 flex-1 space-y-6">
                 <div className="flex justify-between items-start">
@@ -92,7 +105,9 @@ export default function TrainingCenter() {
                       {scenario.difficulty || 'Standard'}
                    </span>
                    {scenario.assignmentId && (
-                     <span className="bg-[#7D8461] text-[#F6F1E8] text-[8px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-tighter shadow-sm">Assigned</span>
+                     <span className={`text-[8px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-tighter shadow-sm ${scenario.status === 'Completed' ? 'bg-[#7D8461] text-white' : 'bg-[#D6C2A8] text-[#3A2F28]'}`}>
+                        {scenario.status === 'Completed' ? `Score: ${scenario.score}%` : 'Assigned'}
+                     </span>
                    )}
                 </div>
                 <div>
@@ -100,7 +115,7 @@ export default function TrainingCenter() {
                    <p className="text-[9px] text-[#7B6F63] font-black uppercase tracking-[0.2em] mt-1">{scenario.persona_type}</p>
                 </div>
                 <p className="text-sm text-[#3A2F28]/80 leading-relaxed line-clamp-3">
-                   {scenario.context_text?.replace(/\[SCENARIO:.*?\]\s*/, '')}
+                   {scenario.context_text?.replace(/\[SCENARIO:.*?\]\s*/g, '').replace(/\[SCENARIO_METADATA:\s*({.*?})\]/s, '').trim()}
                 </p>
              </div>
              <div className="p-10 bg-[#EAE2D6]/40 border-t border-[#D8CCBC]/50 flex justify-between items-center">
@@ -109,10 +124,12 @@ export default function TrainingCenter() {
                    <p className="text-[10px] font-black text-[#3A2F28] uppercase tracking-tight mt-0.5">Tactical Discovery</p>
                 </div>
                 <button 
-                  onClick={() => handleStartPractice(scenario.id, scenario.assignmentId)}
-                  className="px-8 py-3.5 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-md"
+                  onClick={() => scenario.status === 'Completed' 
+                    ? router.push(`/rep/train/${scenario.id}/review?sessionId=${scenario.sessionId}`)
+                    : handleStartPractice(scenario.id, scenario.assignmentId)}
+                  className={`px-8 py-3.5 text-[#F6F1E8] text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-md ${scenario.status === 'Completed' ? 'bg-[#3A2F28] hover:bg-[#2A221D]' : 'bg-[#7D8461] hover:bg-[#6B7252]'}`}
                 >
-                  Briefing →
+                  {scenario.status === 'Completed' ? 'Review Report →' : 'Briefing →'}
                 </button>
              </div>
           </div>

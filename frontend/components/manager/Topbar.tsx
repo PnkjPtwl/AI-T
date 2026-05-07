@@ -58,14 +58,14 @@ export default function Topbar() {
             </div>
           </button>
 
-          {/* Dropdown */}
-          <div className="absolute right-0 mt-3 w-52 bg-[#EFE7DC] border border-[#D8CCBC] rounded-[1.5rem] shadow-xl opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-200 overflow-hidden">
-            <div className="p-2">
+          {/* Dropdown with invisible hover bridge */}
+          <div className="absolute right-0 w-52 pt-3 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-200 z-50">
+            <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] shadow-2xl overflow-hidden p-2">
               <button 
                 onClick={handleLogout}
-                className="w-full text-left px-5 py-4 text-[10px] font-black text-[#A06A5B] uppercase tracking-widest hover:bg-[#A06A5B]/10 rounded-xl transition-all flex items-center justify-center"
+                className="w-full text-left px-6 py-4 text-[10px] font-black text-[#A06A5B] uppercase tracking-widest hover:bg-[#A06A5B]/10 rounded-2xl transition-all flex items-center justify-center gap-3"
               >
-                End Session
+                <span>🚪</span> End Session
               </button>
             </div>
           </div>

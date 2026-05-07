@@ -105,6 +105,24 @@ export default function RepDetailPage() {
     }
   }
 
+  const handleDeleteSession = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    if (!confirm('Are you sure you want to delete this training session?')) return
+    
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API}/api/sessions/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        setSessions(prev => prev.filter(s => s.id !== id))
+      }
+    } catch (err) {
+      console.error('Delete failed', err)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -424,6 +442,7 @@ export default function RepDetailPage() {
                            <th className="px-8 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC]">Persona</th>
                            <th className="px-8 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC]">Date</th>
                            <th className="px-8 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC] text-right">Proficiency</th>
+                           <th className="px-8 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC] text-right">Actions</th>
                         </tr>
                      </thead>
                      <tbody className="divide-y divide-[#D8CCBC]">
@@ -440,6 +459,14 @@ export default function RepDetailPage() {
                              </td>
                              <td className="px-8 py-6 text-right">
                                 <span className={`text-2xl font-extrabold tracking-tighter ${s.feedback_json.overall_score > 80 ? 'text-[#7D8461]' : 'text-[#3A2F28]'}`}>{s.feedback_json.overall_score}%</span>
+                             </td>
+                             <td className="px-8 py-6 text-right">
+                                <button 
+                                  onClick={(e) => handleDeleteSession(e, s.id)} 
+                                  className="text-[#A06A5B] hover:text-[#3A2F28] text-[9px] font-black uppercase tracking-widest transition-colors"
+                                >
+                                  Delete
+                                </button>
                              </td>
                           </tr>
                         ))}
@@ -512,8 +539,18 @@ export default function RepDetailPage() {
                                 `Received Coaching Directive`}
                             </h4>
                          </div>
-                         <span className="text-[9px] font-black uppercase tracking-widest px-4 py-1.5 bg-[#F6F1E8] border border-[#D8CCBC] rounded-full text-[#7B6F63]">{item.type}</span>
-                      </div>
+                          <div className="flex items-center gap-4">
+                             <span className="text-[9px] font-black uppercase tracking-widest px-4 py-1.5 bg-[#F6F1E8] border border-[#D8CCBC] rounded-full text-[#7B6F63]">{item.type}</span>
+                             {item.type === 'session' && (
+                               <button 
+                                 onClick={(e) => handleDeleteSession(e, item.data.id)}
+                                 className="text-[#A06A5B] hover:text-[#3A2F28] text-[9px] font-black uppercase tracking-widest transition-colors"
+                               >
+                                 Delete
+                               </button>
+                             )}
+                          </div>
+                       </div>
                       
                       {item.type === 'session' && (
                          <div className="flex gap-10 items-center mt-8 pt-8 border-t border-[#D8CCBC]">

@@ -32,7 +32,7 @@ export const getReps = async (req: any, res: any) => {
     const repsWithStats = reps.map(rep => {
       const repSessions = allSessions.filter(s => s.rep_id === rep.id)
         .sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime())
-      
+
       const count = repSessions.length
       if (count === 0) {
         return {
@@ -48,10 +48,10 @@ export const getReps = async (req: any, res: any) => {
       }
 
       const avgScore = Math.round(repSessions.reduce((acc, s) => acc + (s.feedback_json?.overall_score || 0), 0) / count)
-      
+
       // Trend calculation (last 3 vs previous 3)
       const recentAvg = repSessions.slice(0, 3).reduce((acc, s) => acc + (s.feedback_json?.overall_score || 0), 0) / Math.min(count, 3)
-      const olderAvg = count > 3 
+      const olderAvg = count > 3
         ? repSessions.slice(3, 6).reduce((acc, s) => acc + (s.feedback_json?.overall_score || 0), 0) / Math.min(count - 3, 3)
         : recentAvg
       const trend = recentAvg > olderAvg ? 'up' : recentAvg < olderAvg ? 'down' : 'stable'
@@ -152,7 +152,7 @@ export const getRepSessions = async (req: any, res: any) => {
   }
 
   // Filter out coaching notes and assignments from analytics
-  const practiceSessions = (sessions || []).filter((s: any) => 
+  const practiceSessions = (sessions || []).filter((s: any) =>
     !s.feedback_json?.is_note && !s.feedback_json?.is_assignment
   )
 
@@ -181,13 +181,13 @@ export const getRepSessions = async (req: any, res: any) => {
   })).reverse().slice(-10)
 
   // 2. Skill Radar
-  const skills = { 
-    empathy: 0, 
-    objection_handling: 0, 
-    confidence: 0, 
-    listening: 0, 
-    executive_communication: 0, 
-    questioning_ability: 0 
+  const skills = {
+    empathy: 0,
+    objection_handling: 0,
+    confidence: 0,
+    listening: 0,
+    executive_communication: 0,
+    questioning_ability: 0
   }
   practiceSessions.forEach((s: any) => {
     const scores = s.feedback_json?.scores || {}
@@ -217,20 +217,20 @@ export const getRepSessions = async (req: any, res: any) => {
     const type = s.training_scenarios?.persona_type || 'Unknown'
     const name = s.training_scenarios?.persona_name || 'Prospect'
     const scores = s.feedback_json?.scores || {}
-    
+
     if (!personaMap[type]) {
-      personaMap[type] = { 
-        type, 
+      personaMap[type] = {
+        type,
         name,
-        totalScore: 0, 
+        totalScore: 0,
         count: 0,
         skillTotals: { empathy: 0, objection_handling: 0, confidence: 0, listening: 0, executive_communication: 0, questioning_ability: 0 }
       }
     }
-    
+
     personaMap[type].totalScore += s.feedback_json?.overall_score || 0
     personaMap[type].count += 1
-    
+
     Object.keys(personaMap[type].skillTotals).forEach(skill => {
       if (scores[skill] !== undefined) {
         personaMap[type].skillTotals[skill] += scores[skill]
@@ -255,12 +255,12 @@ export const getRepSessions = async (req: any, res: any) => {
     }
   })
 
-  const avgScore = practiceSessions.length 
-    ? Math.round(practiceSessions.reduce((acc, s) => acc + (s.feedback_json?.overall_score || 0), 0) / practiceSessions.length) 
+  const avgScore = practiceSessions.length
+    ? Math.round(practiceSessions.reduce((acc, s) => acc + (s.feedback_json?.overall_score || 0), 0) / practiceSessions.length)
     : 0;
 
-  res.json({ 
-    rep, 
+  res.json({
+    rep,
     sessions: formatted,
     analytics: {
       avgScore,
@@ -275,7 +275,7 @@ export const getRepSessions = async (req: any, res: any) => {
 export const getMyAnalytics = async (req: any, res: any) => {
   const repId = req.query.repId || req.user.id
   const isManager = req.user.role === 'manager'
-  
+
   // Basic security: Reps can only see their own analytics
   if (!isManager && repId !== req.user.id) {
     return res.status(403).json({ error: 'Unauthorized' })
@@ -299,7 +299,7 @@ export const getMyAnalytics = async (req: any, res: any) => {
 
     if (sessionsError) throw sessionsError
 
-    const practiceSessions = (sessions || []).filter((s: any) => 
+    const practiceSessions = (sessions || []).filter((s: any) =>
       !s.feedback_json?.is_note && !s.feedback_json?.is_assignment
     )
 
@@ -327,20 +327,20 @@ export const getMyAnalytics = async (req: any, res: any) => {
       const type = (s.training_scenarios as any)?.persona_type || 'Unknown'
       const name = (s.training_scenarios as any)?.persona_name || 'Prospect'
       const scores = s.feedback_json?.scores || {}
-      
+
       if (!personaMap[type]) {
-        personaMap[type] = { 
-          type, 
+        personaMap[type] = {
+          type,
           name,
-          totalScore: 0, 
+          totalScore: 0,
           count: 0,
           skillTotals: { opening: 0, discovery: 0, objection_handling: 0, talk_ratio: 0, closing: 0 }
         }
       }
-      
+
       personaMap[type].totalScore += s.feedback_json?.overall_score || 0
       personaMap[type].count += 1
-      
+
       Object.keys(personaMap[type].skillTotals).forEach(skill => {
         personaMap[type].skillTotals[skill] += scores[skill] || 0
       })
@@ -363,14 +363,14 @@ export const getMyAnalytics = async (req: any, res: any) => {
       }
     })
 
-    const avgScore = practiceSessions.length 
-      ? Math.round(practiceSessions.reduce((acc, s) => acc + (s.feedback_json?.overall_score || 0), 0) / practiceSessions.length) 
+    const avgScore = practiceSessions.length
+      ? Math.round(practiceSessions.reduce((acc, s) => acc + (s.feedback_json?.overall_score || 0), 0) / practiceSessions.length)
       : 0;
 
     const sortedSkills = [...radarData].sort((a, b) => b.A - a.A);
     const strongestSkill = sortedSkills[0]?.subject || 'N/A';
     const weakestSkill = sortedSkills[sortedSkills.length - 1]?.subject || 'N/A';
-    
+
     // Simple trend calculation (last vs second last)
     let trendValue = 0;
     if (trendData.length >= 2) {
@@ -414,7 +414,7 @@ export const getDashboardStats = async (req: any, res: any) => {
       .eq('users.org_id', orgId)
       .is('completed_at', null)
       .gt('created_at', twoHoursAgo)
-    
+
     const activeSessionsList = (activeSessionsData || []).map((s: any) => ({
       id: s.id,
       rep_name: s.users?.name,
@@ -577,29 +577,25 @@ export const getCoachingAlerts = async (req: any, res: any) => {
       .from('training_assignments')
       .select(`
         *,
-        rep:rep_id (name),
-        training_scenarios (persona_name)
+        rep:users!training_assignments_rep_id_fkey (name),
+        scenario:training_scenarios!training_assignments_scenario_id_fkey (persona_name)
       `)
+      .eq('manager_id', req.user.id)
       .eq('status', 'Completed')
       .order('completed_at', { ascending: false })
       .limit(10)
 
     assignments?.forEach(a => {
       const repName = a.rep?.name || 'Rep'
-      const scenarioName = a.training_scenarios?.persona_name || 'Scenario'
+      const scenarioName = a.scenario?.persona_name || 'Scenario'
       const completedDate = new Date(a.completed_at)
       const deadlineDate = new Date(a.deadline)
       const isEarly = completedDate < deadlineDate
 
-      if (a.completed_score >= 90) {
-        alerts.push({
-          rep_name: repName,
-          severity: 'Low', // Using Low as 'Success/Info' alert
-          issue: 'High-Performance Completion',
-          details: `Mastered "${scenarioName}" with a top score of ${a.completed_score}%.`,
-          recommendation: 'Recognize this achievement and consider making them a peer mentor.'
-        })
-      } else if (isEarly) {
+      // Since completed_score was removed from DB, we might need to skip score-based alerts
+      // or derive them from elsewhere. For now, we just skip the High-Performance alert.
+
+      if (isEarly) {
         const daysEarly = Math.ceil((deadlineDate.getTime() - completedDate.getTime()) / (1000 * 60 * 60 * 24))
         alerts.push({
           rep_name: repName,
@@ -643,7 +639,7 @@ export const getTeamAnalytics = async (req: any, res: any) => {
     if (sessionsError) throw sessionsError
 
     // STRICT FILTERING: Only include real training interactions
-    const practiceSessions = (sessions || []).filter((s: any) => 
+    const practiceSessions = (sessions || []).filter((s: any) =>
       !s.feedback_json?.is_note && !s.feedback_json?.is_assignment
     )
 
@@ -695,7 +691,7 @@ export const getTeamAnalytics = async (req: any, res: any) => {
       const scenario = s.training_scenarios as any
       const match = scenario?.context_text?.match(/\[SCENARIO:\s*(.*?)\]/)
       const name = match ? match[1] : (scenario?.persona_type || 'Unknown')
-      
+
       if (!scenarioMap[name]) scenarioMap[name] = { name, total: 0, count: 0 }
       scenarioMap[name].total += s.feedback_json?.overall_score || 0
       scenarioMap[name].count += 1
@@ -710,7 +706,7 @@ export const getTeamAnalytics = async (req: any, res: any) => {
     practiceSessions.forEach(s => {
       const repName = (s.users as any)?.name || 'Unknown'
       if (!repMap[repName]) {
-        repMap[repName] = { 
+        repMap[repName] = {
           name: repName,
           empathy: 0, objection_handling: 0, confidence: 0, listening: 0, executive_communication: 0, questioning_ability: 0,
           count: 0
@@ -845,7 +841,7 @@ export const assignTraining = async (req: any, res: any) => {
       .select('id, persona_name')
       .eq('id', scenarioId)
       .single();
-    
+
     if (scenarioError || !scenario) {
       console.error("Scenario Validation Failed:", scenarioError);
       return res.status(404).json({ error: 'Selected scenario not found.' });
@@ -876,10 +872,10 @@ export const assignTraining = async (req: any, res: any) => {
     console.log("Successfully inserted assignments:", insertedData);
     console.log("--- ASSIGN TRAINING DEBUG END ---");
 
-    res.json({ 
+    res.json({
       success: true,
       message: `Successfully assigned "${scenario.persona_name}" to ${repIds.length} representatives.`,
-      count: repIds.length 
+      count: repIds.length
     })
   } catch (err: any) {
     console.error("CRITICAL ERROR in assignTraining:", err);
@@ -889,21 +885,26 @@ export const assignTraining = async (req: any, res: any) => {
 
 export const getMyAssignments = async (req: any, res: any) => {
   const repId = req.user.id
+  console.log(`[getMyAssignments] Fetching for rep_id: ${repId}`);
 
   try {
-    const { data, error } = await supabase
+    let assignmentsData: any[] = [];
+    let assignmentsError: any = null;
+
+    // Try with session_id first (resilient approach)
+    const firstTry = await supabase
       .from('training_assignments')
       .select(`
         id, 
         scenario_id, 
         status, 
-        priority,
-        deadline,
-        assigned_at,
-        completed_at,
-        completed_score,
-        users:manager_id (name),
-        training_scenarios (
+        priority, 
+        deadline, 
+        assigned_at, 
+        completed_at, 
+        session_id,
+        manager:users!manager_id (name),
+        scenario:training_scenarios (
           id,
           persona_name,
           persona_type,
@@ -913,14 +914,65 @@ export const getMyAssignments = async (req: any, res: any) => {
       .eq('rep_id', repId)
       .order('created_at', { ascending: false })
 
-    if (error) throw error
+    if (firstTry.error && firstTry.error.message.includes('column "session_id" does not exist')) {
+      console.warn(`[getMyAssignments] session_id column missing, falling back to basic fetch`);
+      const secondTry = await supabase
+        .from('training_assignments')
+        .select(`
+          id, 
+          scenario_id, 
+          status, 
+          priority, 
+          deadline, 
+          assigned_at, 
+          completed_at,
+          manager:users!manager_id (name),
+          scenario:training_scenarios (
+            id,
+            persona_name,
+            persona_type,
+            difficulty
+          )
+        `)
+        .eq('rep_id', repId)
+        .order('created_at', { ascending: false })
+      assignmentsData = secondTry.data || [];
+      assignmentsError = secondTry.error;
+    } else {
+      assignmentsData = firstTry.data || [];
+      assignmentsError = firstTry.error;
+    }
 
+    if (assignmentsError) throw assignmentsError
+
+    // Fetch related sessions for scores if we have session_ids
+    const sessionIds = (assignmentsData || []).filter(a => a.session_id).map(a => a.session_id)
+    let sessionMap: Record<string, any> = {}
+    
+    if (sessionIds.length > 0) {
+      const { data: sessionsData } = await supabase
+        .from('training_sessions')
+        .select('id, feedback_json')
+        .in('id', sessionIds)
+      
+      if (sessionsData) {
+        sessionsData.forEach(s => {
+          sessionMap[s.id] = s.feedback_json
+        })
+      }
+    }
+
+    console.log(`[getMyAssignments] Fetched ${assignmentsData?.length || 0} assignments for rep ${repId}`);
+    
     // Enrich and check overdue
-    const assignments = data.map((a: any) => {
+    const assignments = (assignmentsData || []).map((a: any) => {
       const deadlineDate = new Date(a.deadline);
       const now = new Date();
       let status = a.status || 'Pending';
       
+      const feedback = a.session_id ? sessionMap[a.session_id] : null;
+      const score = feedback?.overall_score || 0;
+
       if (status !== 'Completed' && now > deadlineDate) {
         status = 'Overdue';
       }
@@ -928,12 +980,14 @@ export const getMyAssignments = async (req: any, res: any) => {
       return {
         ...a,
         status,
-        assigned_by: a.users?.name || 'Manager',
-        scenario_name: a.training_scenarios?.persona_name || 'Training Scenario',
-        scenario: a.training_scenarios
+        score,
+        assigned_by: a.manager?.name || 'Manager',
+        scenario_name: a.scenario?.persona_name || 'Training Scenario',
+        scenario: a.scenario
       };
     });
 
+    console.log(`[getMyAssignments] Transformed ${assignments.length} assignments for frontend`);
     res.json(assignments)
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -941,31 +995,15 @@ export const getMyAssignments = async (req: any, res: any) => {
 }
 
 export const getTeamAssignments = async (req: any, res: any) => {
-  const orgId = req.user.org_id
-
-  console.log("--- GET TEAM ASSIGNMENTS DEBUG START ---");
-  console.log("Org ID:", orgId);
+  const managerId = req.user.id
+  console.log(`[getTeamAssignments] Fetching for manager_id: ${managerId}`);
 
   try {
-    // 1. Get all reps for this org first - this is more reliable than complex join filters
-    const { data: reps, error: repsError } = await supabase
-      .from('users')
-      .select('id, name')
-      .eq('org_id', orgId)
-      .eq('role', 'rep');
+    let assignmentsData: any[] = [];
+    let assignmentsError: any = null;
 
-    if (repsError) throw repsError;
-    
-    if (!reps || reps.length === 0) {
-      console.log("No reps found for this organization.");
-      return res.json([]);
-    }
-
-    const repIds = reps.map(r => r.id);
-    const repNameMap = Object.fromEntries(reps.map(r => [r.id, r.name]));
-
-    // 2. Fetch assignments for these reps
-    const { data, error } = await supabase
+    // Try with session_id first
+    const firstTry = await supabase
       .from('training_assignments')
       .select(`
         id, 
@@ -976,28 +1014,76 @@ export const getTeamAssignments = async (req: any, res: any) => {
         deadline,
         assigned_at,
         completed_at,
-        completed_score,
-        training_scenarios (
+        session_id,
+        rep:users!rep_id (name),
+        scenario:training_scenarios (
           id,
           persona_name,
           difficulty
         )
       `)
-      .in('rep_id', repIds)
+      .eq('manager_id', managerId)
       .order('created_at', { ascending: false })
 
-    if (error) {
-      console.error("Supabase Query Error (getTeamAssignments):", error);
-      throw error;
+    if (firstTry.error && firstTry.error.message.includes('column "session_id" does not exist')) {
+      console.warn(`[getTeamAssignments] session_id column missing, falling back to basic fetch`);
+      const secondTry = await supabase
+        .from('training_assignments')
+        .select(`
+          id, 
+          rep_id,
+          scenario_id, 
+          status, 
+          priority,
+          deadline,
+          assigned_at,
+          completed_at,
+          rep:users!rep_id (name),
+          scenario:training_scenarios (
+            id,
+            persona_name,
+            difficulty
+          )
+        `)
+        .eq('manager_id', managerId)
+        .order('created_at', { ascending: false })
+      assignmentsData = secondTry.data || [];
+      assignmentsError = secondTry.error;
+    } else {
+      assignmentsData = firstTry.data || [];
+      assignmentsError = firstTry.error;
     }
 
-    console.log(`Fetched ${data?.length || 0} assignments for org reps.`);
+    if (assignmentsError) {
+      console.error("Supabase Query Error (getTeamAssignments):", assignmentsError);
+      throw assignmentsError;
+    }
 
-    const assignments = (data || []).map((a: any) => {
+    // Fetch related sessions for scores manually
+    const sessionIds = (assignmentsData || []).filter(a => a.session_id).map(a => a.session_id)
+    let sessionMap: Record<string, any> = {}
+
+    if (sessionIds.length > 0) {
+      const { data: sessionsData } = await supabase
+        .from('training_sessions')
+        .select('id, feedback_json')
+        .in('id', sessionIds)
+
+      if (sessionsData) {
+        sessionsData.forEach(s => {
+          sessionMap[s.id] = s.feedback_json
+        })
+      }
+    }
+
+    const assignments = (assignmentsData || []).map((a: any) => {
       const deadlineDate = new Date(a.deadline);
       const now = new Date();
       let status = a.status || 'Pending';
-      
+
+      const feedback = a.session_id ? sessionMap[a.session_id] : null;
+      const score = feedback?.overall_score || 0;
+
       if (status !== 'Completed' && now > deadlineDate) {
         status = 'Overdue';
       }
@@ -1005,16 +1091,74 @@ export const getTeamAssignments = async (req: any, res: any) => {
       return {
         ...a,
         status,
-        rep_name: repNameMap[a.rep_id] || 'Unknown Rep',
-        scenario_name: a.training_scenarios?.persona_name || 'Unknown Scenario',
-        difficulty: a.training_scenarios?.difficulty || 'N/A'
+        score,
+        rep_name: a.rep?.name || 'Unknown Rep',
+        scenario_name: a.scenario?.persona_name || 'Unknown Scenario',
+        difficulty: a.scenario?.difficulty || 'N/A'
       };
     });
 
+    console.log(`[getTeamAssignments] Transformed ${assignments.length} assignments for frontend`);
     console.log("--- GET TEAM ASSIGNMENTS DEBUG END ---");
     res.json(assignments)
   } catch (err: any) {
     console.error("Critical Error in getTeamAssignments:", err);
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export const updateAssignment = async (req: any, res: any) => {
+  const { assignmentId } = req.params
+  const { deadline, priority, status, rep_id, scenario_id } = req.body
+  const managerId = req.user.id
+
+  try {
+    let finalStatus = status;
+
+    // Auto-reset status from Overdue if deadline is extended
+    if (status === 'Overdue') {
+      const newDeadlineDate = new Date(deadline);
+      const now = new Date();
+      if (newDeadlineDate > now) {
+        finalStatus = 'Pending';
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('training_assignments')
+      .update({
+        deadline,
+        priority,
+        status: finalStatus,
+        rep_id,
+        scenario_id
+      })
+      .eq('id', assignmentId)
+      .eq('manager_id', managerId)
+      .select()
+      .single()
+
+    if (error) throw error
+    res.json(data)
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+export const deleteAssignment = async (req: any, res: any) => {
+  const { assignmentId } = req.params
+  const managerId = req.user.id
+
+  try {
+    const { error } = await supabase
+      .from('training_assignments')
+      .delete()
+      .eq('id', assignmentId)
+      .eq('manager_id', managerId)
+
+    if (error) throw error
+    res.json({ success: true })
+  } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
 }
@@ -1034,11 +1178,11 @@ export const addNote = async (req: any, res: any) => {
       .insert([{
         rep_id: repId,
         scenario_id: placeholderScenarioId,
-        feedback_json: { 
-          content, 
+        feedback_json: {
+          content,
           priority: priority || 'Medium',
           assigned_by: managerId,
-          is_note: true 
+          is_note: true
         }
       }])
 
@@ -1163,6 +1307,43 @@ export const getMyNotes = async (req: any, res: any) => {
 
     res.json(formatted)
   } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+}
+export const completeAssignment = async (req: any, res: any) => {
+  const { assignmentId } = req.body
+  const repId = req.user.id
+
+  if (!assignmentId) {
+    return res.status(400).json({ error: 'assignmentId is required' })
+  }
+
+  try {
+    console.log(`[completeAssignment] Marking assignment ${assignmentId} as Completed for rep ${repId}`);
+    
+    const { data, error } = await supabase
+      .from('training_assignments')
+      .update({
+        status: 'Completed',
+        completed_at: new Date().toISOString()
+      })
+      .eq('id', assignmentId)
+      .eq('rep_id', repId)
+      .select()
+      .single()
+
+    if (error) {
+      console.error(`[completeAssignment] DB Error:`, error.message);
+      throw error
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Mission marked as completed.',
+      assignment: data
+    })
+  } catch (err: any) {
+    console.error('[completeAssignment] CRITICAL Error:', err.message)
     res.status(500).json({ error: err.message })
   }
 }
