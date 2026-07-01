@@ -131,7 +131,7 @@ export const login = async (req, res) => {
     try {
       const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers()
       if (!listErr) {
-        const match = users.find(u => u.email?.toLowerCase() === email)
+        const match = users.find((u: any) => u.email?.toLowerCase() === email)
         if (match) {
           await supabase.auth.admin.updateUserById(match.id, { email_confirm: true })
           console.log(`✅ Auto-confirmed email for ${email}. Retrying login...`)

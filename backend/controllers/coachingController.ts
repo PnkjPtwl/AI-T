@@ -70,7 +70,7 @@ Format the response in professional Markdown.`
       })
     })
 
-    const data = await response.json()
+    const data = await response.json() as any
     const guide = data.choices?.[0]?.message?.content || 'Failed to generate guide.'
 
     res.json({ guide })

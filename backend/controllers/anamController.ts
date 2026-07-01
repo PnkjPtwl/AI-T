@@ -40,7 +40,7 @@ export const getAnamSessionToken = async (req: Request, res: Response) => {
       })
     }
 
-    const data = await anamRes.json()
+    const data = await anamRes.json() as any
     return res.json({ sessionToken: data.sessionToken })
   } catch (err: any) {
     console.error('[ANAM] Unexpected error:', err)
