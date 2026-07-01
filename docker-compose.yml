@@ -44,8 +44,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Empty string forces relative API calls (proxied by Nginx)
-        - NEXT_PUBLIC_API_URL=""
+        - NEXT_PUBLIC_API_URL=
     container_name: salescoach-frontend
     restart: unless-stopped
     expose:
