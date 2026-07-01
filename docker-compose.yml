@@ -44,7 +44,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=
+        - NEXT_PUBLIC_API_URL=http://3.6.244.139
     container_name: salescoach-frontend
     restart: unless-stopped
     expose:
