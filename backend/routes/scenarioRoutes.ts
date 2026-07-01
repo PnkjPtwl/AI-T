@@ -1,7 +1,7 @@
 import express from 'express'
 import { authenticate } from '../middleware/auth'
 import { managerOnly } from '../middleware/roleGuard'
-import { getScenarios, createScenario, getScenario, updateScenario, deleteScenario } from '../controllers/scenarioController'
+import { getScenarios, createScenario, getScenario, updateScenario, deleteScenario, assignRepsToScenario, getScenarioAssignments } from '../controllers/scenarioController'
 
 const router = express.Router()
 
@@ -19,5 +19,11 @@ router.put('/:scenarioId', authenticate, managerOnly, updateScenario)
 
 // DELETE /api/scenarios/:scenarioId (managers only can delete)
 router.delete('/:scenarioId', authenticate, managerOnly, deleteScenario)
+
+// POST /api/scenarios/:scenarioId/assign (managers only can assign)
+router.post('/:scenarioId/assign', authenticate, managerOnly, assignRepsToScenario)
+
+// GET /api/scenarios/:scenarioId/reps (managers view assignments)
+router.get('/:scenarioId/reps', authenticate, managerOnly, getScenarioAssignments)
 
 export default router

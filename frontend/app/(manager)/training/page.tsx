@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 export default function TrainingPage() {
+  const router = useRouter()
   const [reps, setReps] = useState<any[]>([])
   const [scenarios, setScenarios] = useState<any[]>([])
   const [assignments, setAssignments] = useState<any[]>([])
@@ -16,14 +18,11 @@ export default function TrainingPage() {
   const [priority, setPriority] = useState('Medium')
   const [assigning, setAssigning] = useState(false)
   const [success, setSuccess] = useState('')
-  const [editingAssignment, setEditingAssignment] = useState<any>(null)
-  const [showEditModal, setShowEditModal] = useState(false)
 
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('token')
       if (!token) return
-
       const headers = { 'Authorization': `Bearer ${token}` }
       
       const [repsRes, scenariosRes, assignmentsRes] = await Promise.all([
@@ -32,21 +31,9 @@ export default function TrainingPage() {
         fetch(`${API}/api/users/team-assignments`, { headers })
       ])
 
-      if (repsRes.ok) {
-        const data = await repsRes.json()
-        console.log('[ManagerTraining] Fetched reps:', data)
-        setReps(data)
-      }
-      if (scenariosRes.ok) {
-        const data = await scenariosRes.json()
-        console.log('[ManagerTraining] Fetched scenarios:', data)
-        setScenarios(data)
-      }
-      if (assignmentsRes.ok) {
-        const data = await assignmentsRes.json()
-        console.log('[ManagerTraining] Fetched assignments:', data)
-        setAssignments(data)
-      }
+      if (repsRes.ok) setReps(await repsRes.json())
+      if (scenariosRes.ok) setScenarios(await scenariosRes.json())
+      if (assignmentsRes.ok) setAssignments(await assignmentsRes.json())
     } catch (err) {
       console.error('[ManagerTraining] Fetch error:', err)
     } finally {
@@ -63,30 +50,20 @@ export default function TrainingPage() {
 
   const handleAssign = async () => {
     if (selectedRepIds.length === 0 || !selectedScenarioId || !deadline) return
-    
     setAssigning(true)
     try {
       const token = localStorage.getItem('token')
       const res = await fetch(`${API}/api/users/assign-training`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify({
-          repIds: selectedRepIds,
-          scenarioId: selectedScenarioId,
-          deadline,
-          priority
-        })
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repIds: selectedRepIds, scenarioId: selectedScenarioId, deadline, priority })
       })
-
       if (res.ok) {
-        setSuccess('Missions deployed successfully.')
+        setSuccess('Training assigned successfully.')
         setShowAssignModal(false)
         setSelectedRepIds([])
         fetchData()
-        setTimeout(() => setSuccess(''), 4000)
+        setTimeout(() => setSuccess(''), 3000)
       }
     } catch (err) {
       console.error('Assignment failed', err)
@@ -107,329 +84,219 @@ export default function TrainingPage() {
       console.error('Delete failed', err)
     }
   }
-
-  const handleUpdate = async () => {
-    if (!editingAssignment) return
-    
-    try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`${API}/api/users/assignments/${editingAssignment.id}`, {
-        method: 'PATCH',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify({
-          deadline: editingAssignment.deadline,
-          priority: editingAssignment.priority,
-          status: editingAssignment.status,
-          rep_id: editingAssignment.rep_id,
-          scenario_id: editingAssignment.scenario_id
-        })
-      })
-      if (res.ok) {
-        setShowEditModal(false)
-        fetchData()
-      }
-    } catch (err) {
-      console.error('Update failed', err)
-    }
+  const statusColor: Record<string, string> = {
+    'Completed': 'bg-green-50 text-green-700 border-green-200',
+    'Overdue': 'bg-red-50 text-red-600 border-red-200',
+    'In Progress': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    'Pending': 'bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0]',
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#7D8461]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#2C5282]"></div>
       </div>
     )
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-12 pb-20">
+    <div className="max-w-7xl mx-auto space-y-[24px] pb-[48px]">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-10">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-[16px]">
         <div>
-          <h1 className="text-4xl font-extrabold text-[#3A2F28] tracking-tight">Mission Control</h1>
-          <p className="text-[#7B6F63] font-medium mt-2 text-base">Deploy and monitor team training assignments.</p>
+          <h1 className="text-[24px] md:text-[28px] font-[700] tracking-[-0.3px] text-gray-900">Training Management</h1>
+          <p className="text-[14px] md:text-[15px] font-[400] text-gray-500 mt-1 leading-[1.6]">Deploy and monitor team training assignments.</p>
         </div>
         <button 
           onClick={() => setShowAssignModal(true)}
-          className="px-8 py-4 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-md transition-all"
+          className="bg-[#2C5282] text-white font-[600] py-[8px] md:py-[10px] px-[16px] md:px-[20px] min-w-[100px] rounded-[10px] transition-all duration-200 hover:bg-[#1A365D] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-[8px]"
         >
-          Deploy New Mission
+          <svg className="w-[16px] h-[16px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+          Assign Training
         </button>
       </div>
 
       {success && (
-        <div className="p-5 bg-[#EAE2D6] border border-[#D8CCBC] rounded-2xl text-[#7D8461] text-xs font-black uppercase tracking-widest animate-in fade-in slide-in-from-top-2">
+        <div className="p-[16px] bg-green-50 border border-green-200 rounded-[10px] text-green-700 text-[14px] font-[500]">
           {success}
         </div>
       )}
 
-      {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-         <div className="bg-[#EFE7DC] border border-[#D8CCBC] p-8 rounded-[2.5rem] shadow-sm">
-            <p className="text-[10px] font-black text-[#7B6F63] uppercase tracking-[0.3em] mb-4">Active Missions</p>
-            <p className="text-4xl font-extrabold text-[#3A2F28] tracking-tighter">{assignments.filter(a => a.status !== 'Completed').length}</p>
-         </div>
-         <div className="bg-[#EFE7DC] border border-[#D8CCBC] p-8 rounded-[2.5rem] shadow-sm">
-            <p className="text-[10px] font-black text-[#7B6F63] uppercase tracking-[0.3em] mb-4">Total Assignments</p>
-            <p className="text-4xl font-extrabold text-[#7D8461] tracking-tighter">{assignments.length}</p>
-         </div>
-         <div className="bg-[#EFE7DC] border border-[#D8CCBC] p-8 rounded-[2.5rem] shadow-sm">
-            <p className="text-[10px] font-black text-[#7B6F63] uppercase tracking-[0.3em] mb-4">Success Rate</p>
-            <p className="text-4xl font-extrabold text-[#7D8461] tracking-tighter">
-               {assignments.length > 0 ? Math.round((assignments.filter(a => a.status === 'Completed').length / assignments.length) * 100) : 0}%
-            </p>
-         </div>
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-[24px]">
+        <div className="bg-white border border-gray-900/10 rounded-[12px] p-[24px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+          <p className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70">Active Missions</p>
+          <p className="text-[32px] md:text-[36px] font-[700] tracking-[-1px] text-gray-900 mt-[8px]">{assignments.filter(a => a.status !== 'Completed').length}</p>
+        </div>
+        <div className="bg-white border border-gray-900/10 rounded-[12px] p-[24px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+          <p className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70">Total Assignments</p>
+          <p className="text-[32px] md:text-[36px] font-[700] tracking-[-1px] text-[#2C5282] mt-[8px]">{assignments.length}</p>
+        </div>
+        <div className="bg-white border border-gray-900/10 rounded-[12px] p-[24px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+          <p className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70">Success Rate</p>
+          <p className="text-[32px] md:text-[36px] font-[700] tracking-[-1px] text-green-600 mt-[8px]">
+            {assignments.length > 0 ? Math.round((assignments.filter(a => a.status === 'Completed').length / assignments.length) * 100) : 0}%
+          </p>
+        </div>
       </div>
 
-      {/* Assignment List */}
-      <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] shadow-sm overflow-hidden">
-         <div className="px-10 py-8 border-b border-[#D8CCBC] bg-[#EAE2D6]/50">
-            <h2 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Mission Deployment Tracking</h2>
-         </div>
-         
-         {assignments.length === 0 ? (
-           <div className="p-24 text-center">
-              <p className="text-[#7B6F63] font-black uppercase tracking-[0.3em] text-[10px]">No active missions deployed.</p>
-           </div>
-         ) : (
-           <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                 <thead>
-                    <tr className="bg-[#EAE2D6]/30">
-                       <th className="px-10 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC]">Representative</th>
-                       <th className="px-10 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC]">Scenario</th>
-                       <th className="px-10 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC]">Status</th>
-                       <th className="px-10 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC]">Deadline</th>
-                       <th className="px-10 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC] text-right">Performance</th>
-                       <th className="px-10 py-5 text-[10px] font-black text-[#7B6F63] uppercase tracking-widest border-b border-[#D8CCBC] text-right">Actions</th>
-                    </tr>
-                 </thead>
-                 <tbody className="divide-y divide-[#D8CCBC]">
-                    {assignments.map((assign) => (
-                      <tr key={assign.id} className="hover:bg-[#F6F1E8]/50 transition-colors">
-                         <td className="px-10 py-6">
-                            <p className="text-sm font-bold text-[#3A2F28] uppercase tracking-tight">{assign.rep_name}</p>
-                            <p className="text-[9px] text-[#7B6F63] font-black uppercase tracking-[0.2em] mt-1">Field Personnel</p>
-                         </td>
-                         <td className="px-10 py-6">
-                            <p className="text-sm font-bold text-[#3A2F28] uppercase tracking-tight">{assign.scenario_name}</p>
-                            <p className="text-[9px] text-[#7B6F63] font-black uppercase tracking-[0.2em] mt-1">{assign.difficulty}</p>
-                         </td>
-                         <td className="px-10 py-6">
-                            <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                              assign.status === 'Completed' ? 'bg-[#7D8461]/10 text-[#7D8461] border-[#7D8461]/20' : 
-                              assign.status === 'Overdue' ? 'bg-[#A06A5B]/10 text-[#A06A5B] border-[#A06A5B]/20' : 
-                              'bg-[#D6C2A8]/10 text-[#3A2F28] border-[#D8CCBC]'
-                            }`}>
-                               {assign.status}
-                            </span>
-                         </td>
-                         <td className="px-10 py-6 text-xs font-bold text-[#7B6F63]">
-                            {new Date(assign.deadline).toLocaleDateString()}
-                         </td>
-                         <td className="px-10 py-6 text-right">
-                            {assign.status === 'Completed' ? (
-                              <span className="text-2xl font-extrabold text-[#7D8461] tracking-tighter">{assign.score}%</span>
-                            ) : (
-                              <span className="text-[9px] font-black text-[#D8CCBC] uppercase tracking-widest">Pending</span>
-                            )}
-                         </td>
-                         <td className="px-10 py-6 text-right space-x-4">
-                             <button 
-                               onClick={() => {
-                                 setEditingAssignment({...assign, deadline: assign.deadline.split('T')[0]})
-                                 setShowEditModal(true)
-                               }} 
-                               className="text-[#7D8461] hover:text-[#3A2F28] text-[9px] font-black uppercase tracking-widest transition-colors"
-                             >
-                               Edit
-                             </button>
-                             <button 
-                               onClick={() => handleDelete(assign.id)} 
-                               className="text-[#A06A5B] hover:text-[#3A2F28] text-[9px] font-black uppercase tracking-widest transition-colors"
-                             >
-                               Delete
-                             </button>
-                          </td>
-                      </tr>
-                    ))}
-                 </tbody>
-              </table>
-           </div>
-         )}
+      {/* Assignment Table */}
+      <div className="bg-white border border-gray-900/10 rounded-[12px] overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+        <div className="px-[24px] py-[16px] border-b border-gray-900/10 bg-gray-50/50">
+          <h2 className="text-[14px] md:text-[15px] font-[600] text-gray-900">Assignment Tracking</h2>
+        </div>
+        
+        {assignments.length === 0 ? (
+          <div className="p-[64px] text-center text-[14px] md:text-[15px] text-gray-500 font-[400]">No assignments yet. Click "Assign Training" to get started.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[14px]">
+              <thead>
+                <tr className="border-b border-gray-900/10 bg-gray-50/30">
+                  <th className="text-left px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Rep</th>
+                  <th className="text-left px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Scenario</th>
+                  <th className="text-left px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Status</th>
+                  <th className="text-left px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Deadline</th>
+                  <th className="text-right px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Score</th>
+                  <th className="text-right px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-900/5">
+                {assignments.map((assign) => (
+                  <tr key={assign.id} className="hover:bg-gray-50/50 transition-colors duration-150">
+                    <td className="px-[24px] py-[16px]">
+                      <p className="font-[500] text-gray-900 text-[14px] md:text-[15px]">{assign.rep_name}</p>
+                      <p className="text-[13px] text-gray-500 mt-[2px]">Sales Rep</p>
+                    </td>
+                    <td className="px-[24px] py-[16px]">
+                      <p className="font-[500] text-gray-900 text-[14px] md:text-[15px]">{assign.scenario_name}</p>
+                      <p className="text-[13px] text-gray-500 mt-[2px]">{assign.difficulty}</p>
+                    </td>
+                    <td className="px-[24px] py-[16px]">
+                      <span className={`inline-flex items-center px-[10px] py-[2px] rounded-full text-[12px] font-[600] tracking-[0.6px] uppercase border ${statusColor[assign.status] || 'bg-gray-50 text-gray-500 border-gray-900/10'}`}>
+                        {assign.status}
+                      </span>
+                    </td>
+                    <td className="px-[24px] py-[16px] text-[14px] text-gray-500 font-[400]">
+                      {new Date(assign.deadline).toLocaleDateString()}
+                    </td>
+                    <td className="px-[24px] py-[16px] text-right">
+                      {assign.status === 'Completed' ? (
+                        <span className="text-[18px] md:text-[20px] font-[700] tracking-[-0.3px] text-green-600">{assign.score}%</span>
+                      ) : (
+                        <span className="text-[13px] text-gray-500 font-[400]">Pending</span>
+                      )}
+                    </td>
+                    <td className="px-[24px] py-[16px] text-right space-x-[12px]">
+                      {assign.status === 'Completed' && assign.session_id && (
+                        <button 
+                          onClick={() => router.push(`/training/review/${assign.session_id}`)}
+                          className="text-green-600 hover:text-green-700 hover:underline text-[13px] font-[600] transition-colors"
+                        >
+                          Review
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => handleDelete(assign.id)} 
+                        className="text-red-600 hover:text-red-700 hover:underline text-[13px] font-[600] transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Modal - Assign Training */}
+      {/* Assign Modal */}
       {showAssignModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 animate-in fade-in">
-          <div className="absolute inset-0 bg-[#3A2F28]/40 backdrop-blur-sm" onClick={() => setShowAssignModal(false)}></div>
-          <div className="relative w-full max-w-2xl bg-[#F6F1E8] border border-[#D8CCBC] rounded-[3rem] shadow-2xl overflow-hidden p-12">
-             <div className="flex justify-between items-center mb-10">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-[24px]">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAssignModal(false)} />
+          <div className="relative w-full max-w-lg bg-white rounded-[12px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] overflow-hidden">
+            <div className="flex justify-between items-center px-[24px] py-[20px] border-b border-gray-900/10">
+              <h2 className="text-[18px] md:text-[20px] font-[600] text-gray-900">Assign Training</h2>
+              <button onClick={() => setShowAssignModal(false)} className="text-gray-500 hover:text-gray-900 transition-colors">
+                <svg className="w-[20px] h-[20px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <div className="p-[24px] space-y-[20px]">
+              <div>
+                <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block mb-[8px]">Select Representatives</label>
+                <div className="flex flex-wrap gap-[8px]">
+                  {reps.filter(r => {
+                    // Filter out reps who are already assigned to the selected scenario
+                    if (!selectedScenarioId) return true;
+                    return !assignments.some(a => a.rep_id === r.id && a.scenario_id === selectedScenarioId && a.status !== 'Completed');
+                  }).map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => {
+                        if (selectedRepIds.includes(r.id)) setSelectedRepIds(selectedRepIds.filter(id => id !== r.id))
+                        else setSelectedRepIds([...selectedRepIds, r.id])
+                      }}
+                      className={`px-[12px] py-[6px] rounded-[8px] text-[13px] font-[600] border transition-all duration-200 ${selectedRepIds.includes(r.id) ? 'bg-[#2C5282] border-[#2C5282] text-white shadow-sm' : 'bg-white border-gray-900/10 text-gray-700 hover:border-gray-900/30'}`}
+                    >
+                      {r.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block mb-[8px]">Training Scenario</label>
+                <select
+                  value={selectedScenarioId}
+                  onChange={(e) => {
+                    setSelectedScenarioId(e.target.value);
+                    // Clear selected reps when scenario changes to avoid assigning excluded reps
+                    setSelectedRepIds([]);
+                  }}
+                  className="w-full h-[40px] md:h-[44px] bg-white border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors"
+                >
+                  <option value="">Select scenario...</option>
+                  {scenarios.map(s => <option key={s.id} value={s.id}>{s.persona_name} ({s.difficulty})</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-[16px]">
                 <div>
-                  <h2 className="text-3xl font-extrabold text-[#3A2F28] tracking-tight">Deploy New Mission</h2>
-                  <p className="text-sm text-[#7B6F63] mt-1">Select agents and intelligence scenario.</p>
+                  <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block mb-[8px]">Deadline</label>
+                  <input
+                    type="date"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    className="w-full h-[40px] md:h-[44px] bg-white border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors"
+                  />
                 </div>
-                <button onClick={() => setShowAssignModal(false)} className="text-[10px] font-black uppercase tracking-widest text-[#7B6F63] hover:text-[#3A2F28]">Close</button>
-             </div>
-
-             <div className="space-y-8">
-                {/* Reps Selection */}
-                <div className="space-y-4">
-                   <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Target Representatives</label>
-                   <div className="flex flex-wrap gap-2.5">
-                     {reps.map(r => (
-                       <button 
-                         key={r.id}
-                         onClick={() => {
-                           if (selectedRepIds.includes(r.id)) {
-                             setSelectedRepIds(selectedRepIds.filter(id => id !== r.id))
-                           } else {
-                             setSelectedRepIds([...selectedRepIds, r.id])
-                           }
-                         }}
-                         className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
-                           selectedRepIds.includes(r.id) ? 'bg-[#7D8461] border-[#7D8461] text-[#F6F1E8] shadow-md' : 'bg-[#EFE7DC] border-[#D8CCBC] text-[#3A2F28] hover:border-[#7D8461]'
-                         }`}
-                       >
-                         {r.name}
-                       </button>
-                     ))}
-                   </div>
+                <div>
+                  <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block mb-[8px]">Priority</label>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value)}
+                    className="w-full h-[40px] md:h-[44px] bg-white border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors"
+                  >
+                    <option>Low</option>
+                    <option>Medium</option>
+                    <option>High</option>
+                  </select>
                 </div>
+              </div>
 
-                {/* Scenario Selection */}
-                <div className="space-y-4">
-                   <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Mission Scenario</label>
-                   <select 
-                     value={selectedScenarioId}
-                     onChange={(e) => setSelectedScenarioId(e.target.value)}
-                     className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all appearance-none"
-                   >
-                      <option value="">Select AI Persona...</option>
-                      {scenarios.map(s => <option key={s.id} value={s.id}>{s.persona_name} ({s.difficulty})</option>)}
-                   </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-6">
-                   <div className="space-y-4">
-                     <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Deadline</label>
-                     <input 
-                       type="date" 
-                       value={deadline}
-                       onChange={(e) => setDeadline(e.target.value)}
-                       className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all"
-                     />
-                   </div>
-                   <div className="space-y-4">
-                     <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Priority</label>
-                     <select 
-                       value={priority}
-                       onChange={(e) => setPriority(e.target.value)}
-                       className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all appearance-none"
-                     >
-                        <option value="Low">Low</option>
-                        <option value="Medium">Medium</option>
-                        <option value="High">High</option>
-                     </select>
-                   </div>
-                </div>
-
-                <button 
+              <div className="flex gap-[12px] pt-[8px]">
+                <button onClick={() => setShowAssignModal(false)} className="flex-1 border border-gray-900/20 text-gray-700 font-[600] py-[8px] md:py-[10px] px-[16px] md:px-[20px] rounded-[10px] transition-all duration-200 hover:bg-gray-50 text-[14px]">Cancel</button>
+                <button
                   onClick={handleAssign}
                   disabled={assigning || selectedRepIds.length === 0 || !selectedScenarioId}
-                  className="w-full py-5 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-lg shadow-[#7D8461]/20 transition-all disabled:opacity-50 mt-4"
+                  className="flex-1 bg-[#2C5282] text-white font-[600] py-[8px] md:py-[10px] px-[16px] md:px-[20px] rounded-[10px] transition-all duration-200 hover:bg-[#1A365D] disabled:opacity-40 disabled:cursor-not-allowed text-[14px]"
                 >
-                  {assigning ? 'Initializing Deployment...' : 'Authorize Mission Deployment'}
+                  {assigning ? 'Assigning...' : 'Assign Training'}
                 </button>
-             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Assignment Modal */}
-      {showEditModal && editingAssignment && (
-        <div className="fixed inset-0 bg-[#3A2F28]/60 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="bg-[#F6F1E8] w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden border border-[#D8CCBC]">
-             <div className="px-12 py-10 border-b border-[#D8CCBC] flex justify-between items-center bg-[#EAE2D6]/30">
-                <div>
-                  <h2 className="text-xl font-black text-[#3A2F28] uppercase tracking-tighter">Modify Mission</h2>
-                  <p className="text-sm text-[#7B6F63] mt-1">Update parameters for {editingAssignment.rep_name}</p>
-                </div>
-                <button onClick={() => setShowEditModal(false)} className="text-[10px] font-black uppercase tracking-widest text-[#7B6F63] hover:text-[#3A2F28]">Cancel</button>
-             </div>
-
-             <div className="p-12 space-y-8 max-h-[60vh] overflow-y-auto">
-                <div className="grid grid-cols-2 gap-6">
-                   <div className="space-y-4">
-                      <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Representative</label>
-                      <select 
-                        value={editingAssignment.rep_id}
-                        onChange={(e) => setEditingAssignment({...editingAssignment, rep_id: e.target.value})}
-                        className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all appearance-none"
-                      >
-                         {reps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                      </select>
-                   </div>
-                   <div className="space-y-4">
-                      <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">AI Persona</label>
-                      <select 
-                        value={editingAssignment.scenario_id}
-                        onChange={(e) => setEditingAssignment({...editingAssignment, scenario_id: e.target.value})}
-                        className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all appearance-none"
-                      >
-                         {scenarios.map(s => <option key={s.id} value={s.id}>{s.persona_name}</option>)}
-                      </select>
-                   </div>
-                </div>
-
-                <div className="space-y-4">
-                   <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Deadline</label>
-                   <input 
-                     type="date" 
-                     value={editingAssignment.deadline}
-                     onChange={(e) => setEditingAssignment({...editingAssignment, deadline: e.target.value})}
-                     className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all"
-                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-6">
-                   <div className="space-y-4">
-                     <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Priority</label>
-                     <select 
-                       value={editingAssignment.priority}
-                       onChange={(e) => setEditingAssignment({...editingAssignment, priority: e.target.value})}
-                       className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all appearance-none"
-                     >
-                        <option value="Low">Low</option>
-                        <option value="Medium">Medium</option>
-                        <option value="High">High</option>
-                     </select>
-                   </div>
-                   <div className="space-y-4">
-                     <label className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em] ml-1">Status</label>
-                     <select 
-                       value={editingAssignment.status}
-                       onChange={(e) => setEditingAssignment({...editingAssignment, status: e.target.value})}
-                       className="w-full bg-[#EFE7DC] border border-[#D8CCBC] rounded-2xl py-4 px-6 text-sm font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all appearance-none"
-                     >
-                        <option value="Pending">Pending</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Overdue">Overdue</option>
-                     </select>
-                   </div>
-                </div>
-
-                <button 
-                  onClick={handleUpdate}
-                  className="w-full py-5 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-lg shadow-[#7D8461]/20 transition-all mt-4"
-                >
-                  Update Mission Parameters
-                </button>
-             </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

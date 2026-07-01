@@ -5,12 +5,9 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 
 const NAV_ITEMS = [
-  { name: 'Dashboard', href: '/rep/dashboard' },
-  { name: 'My Training', href: '/rep/train' },
-  { name: 'Performance', href: '/rep/my-stats' },
-  { name: 'Coaching Notes', href: '/rep/coaching' },
-  { name: 'Intelligence Reports', href: '/rep/reports' },
-  { name: 'Settings', href: '/rep/settings' },
+  { name: 'Assignments', href: '/rep/train' },
+  { name: 'Reports', href: '/rep/reports' },
+  { name: 'My Stats', href: '/rep/my-stats' },
 ]
 
 export default function RepSidebar() {
@@ -19,62 +16,73 @@ export default function RepSidebar() {
 
   return (
     <aside 
-      className={`fixed left-0 top-0 h-screen bg-[#EAE2D6] border-r border-[#D8CCBC] transition-all duration-300 z-50 flex flex-col ${collapsed ? 'w-20' : 'w-72'}`}
+      className={`sticky top-0 h-screen bg-[#FFFFFF] border-r border-[#E2E8F0] transition-all duration-300 z-50 flex flex-col flex-shrink-0 ${collapsed ? 'w-[100px]' : 'w-[320px]'}`}
     >
       {/* Brand */}
-      <div className="p-10 mb-8 flex items-center justify-between">
+      <div className={`p-10 mb-8 flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
         {!collapsed && (
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-[#7D8461] rounded-lg flex items-center justify-center text-[#F6F1E8] text-sm font-black shadow-sm">SC</div>
-            <span className="text-lg font-extrabold text-[#3A2F28] tracking-tight uppercase letter-spacing-wide">SalesCoach</span>
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-[#2C5282] rounded-xl flex items-center justify-center text-[#FFFFFF] text-base font-black shadow-sm">AI</div>
+            <span className="text-xl font-extrabold text-[#1A2A3A] tracking-tight">AI Trainer</span>
           </div>
         )}
         <button 
           onClick={() => setCollapsed(!collapsed)}
-          className="w-8 h-8 flex items-center justify-center text-[#7B6F63] hover:text-[#3A2F28] hover:bg-[#D8CCBC]/30 rounded-xl transition-all"
+          className={`w-10 h-10 flex items-center justify-center text-[#64748B] hover:text-[#1A2A3A] hover:bg-[#F1F5F9] rounded-xl transition-all ${collapsed ? 'absolute' : ''}`}
         >
-          {collapsed ? '→' : '←'}
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            {collapsed ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            )}
+          </svg>
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-6 space-y-2">
+      <nav className="flex-1 overflow-y-auto px-6 space-y-3">
         {!collapsed ? NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`block px-4 py-3.5 rounded-2xl transition-all text-xs font-black uppercase tracking-[0.15em] ${
+              className={`block px-6 py-4 rounded-2xl transition-all text-sm font-bold uppercase tracking-widest ${
                 isActive 
-                  ? 'bg-[#EFE7DC] text-[#7D8461] shadow-sm border border-[#D8CCBC]' 
-                  : 'text-[#7B6F63] hover:text-[#3A2F28] hover:bg-[#D8CCBC]/20'
+                  ? 'bg-[#EBF8FF] text-[#2C5282] shadow-sm' 
+                  : 'text-[#64748B] hover:text-[#1A2A3A] hover:bg-[#F1F5F9]'
               }`}
             >
               {item.name}
             </Link>
           )
         }) : (
-          <div className="flex flex-col items-center gap-4">
-             {NAV_ITEMS.map((item) => (
-               <div key={item.href} className="w-2 h-2 bg-[#D8CCBC] rounded-full"></div>
-             ))}
+          <div className="flex flex-col items-center gap-6 mt-16">
+             {NAV_ITEMS.map((item, idx) => {
+               const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+               return (
+                 <Link key={item.href} href={item.href} className="group relative">
+                   <div className={`w-3 h-3 rounded-full transition-all ${isActive ? 'bg-[#2C5282] scale-125' : 'bg-[#CBD5E1] group-hover:bg-[#64748B]'}`}></div>
+                 </Link>
+               )
+             })}
           </div>
         )}
       </nav>
 
       {/* Profile Mini */}
-      <div className="p-8 border-t border-[#D8CCBC]/50">
+      <div className="p-8 border-t border-[#E2E8F0]">
         {!collapsed ? (
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-[#EFE7DC]/50 border border-[#D8CCBC]/30">
-            <div className="w-10 h-10 bg-[#D6C2A8] rounded-xl flex items-center justify-center text-xs font-black text-[#3A2F28] shadow-sm">R</div>
+          <div className="flex items-center gap-4 p-4 rounded-3xl bg-[#F8FAFC] border border-[#E2E8F0]">
+            <div className="w-12 h-12 bg-[#EDF2F7] rounded-xl flex items-center justify-center text-sm font-black text-[#1A2A3A] shadow-sm">R</div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-xs font-black text-[#3A2F28] truncate uppercase tracking-widest">Representative</p>
-              <p className="text-[9px] text-[#7B6F63] font-bold uppercase tracking-[0.2em] mt-1">Performance</p>
+              <p className="text-sm font-bold text-[#1A2A3A] truncate">Rep Portal</p>
+              <p className="text-[11px] text-[#64748B] font-bold tracking-widest uppercase mt-1">Field Team</p>
             </div>
           </div>
         ) : (
-          <div className="w-10 h-10 bg-[#EFE7DC] border border-[#D8CCBC] rounded-xl flex items-center justify-center text-xs font-black text-[#3A2F28] mx-auto">R</div>
+          <div className="w-12 h-12 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl flex items-center justify-center text-sm font-black text-[#1A2A3A] mx-auto">R</div>
         )}
       </div>
     </aside>

@@ -2,6 +2,30 @@ import { supabase } from '../db/supabase'
 import Groq from 'groq-sdk'
 import { generateSystemInstruction } from '../utils/promptGenerator'
 import { generateEvaluationPrompt } from '../utils/evaluationGenerator'
+import { getSecret } from '../lib/secrets'
+
+const safeUpdateTrainingSession = async (sessionId: string, sessionUpdates: any) => {
+  const { data: session } = await supabase.from('training_sessions').select('*').eq('id', sessionId).single();
+  if (!session) return;
+  const { data: assignments } = await supabase.from('training_assignments').select('*').eq('session_id', sessionId);
+  if (assignments && assignments.length > 0) {
+    for (const a of assignments) await supabase.from('training_assignments').delete().eq('id', a.id);
+  }
+  await supabase.from('training_sessions').delete().eq('id', sessionId);
+  const newSession = { ...session, ...sessionUpdates };
+  await supabase.from('training_sessions').insert(newSession);
+  if (assignments && assignments.length > 0) {
+    for (const a of assignments) await supabase.from('training_assignments').insert(a);
+  }
+}
+
+const safeUpdateTrainingAssignment = async (assignmentId: string, assignmentUpdates: any) => {
+  const { data: assignment } = await supabase.from('training_assignments').select('*').eq('id', assignmentId).single();
+  if (!assignment) return;
+  await supabase.from('training_assignments').delete().eq('id', assignmentId);
+  const newAssignment = { ...assignment, ...assignmentUpdates };
+  await supabase.from('training_assignments').insert(newAssignment);
+}
 
 export const getMySessions = async (req: any, res: any) => {
   const repId = req.user.id
@@ -79,7 +103,7 @@ export const startPractice = async (req: any, res: any) => {
       .eq('rep_id', repId)
       .eq('scenario_id', scenarioId)
       .in('status', ['Pending', 'Overdue'])
-      .order('created_at', { ascending: false })
+      .order('assigned_at', { ascending: false })
       .limit(1)
       .maybeSingle()
     
@@ -91,18 +115,12 @@ export const startPractice = async (req: any, res: any) => {
 
   if (targetAssignmentId) {
     console.log(`[AssignmentLifecycle] Updating assignment ${targetAssignmentId} to 'In Progress' for session ${data.id}`);
-    const { error: linkError } = await supabase
-      .from('training_assignments')
-      .update({ 
-        session_id: data.id,
-        status: 'In Progress'
-      })
-      .eq('id', targetAssignmentId)
-      .eq('rep_id', repId)
+    await safeUpdateTrainingAssignment(targetAssignmentId, { 
+      session_id: data.id,
+      status: 'In Progress'
+    })
     
-    if (linkError) {
-      console.error(`[AssignmentLifecycle] Failed to update assignment ${targetAssignmentId}:`, linkError);
-    }
+
   }
 
   res.json({ sessionId: data.id })
@@ -155,7 +173,8 @@ export const sendMessage = async (req: any, res: any) => {
     }
     messagesPayload.push({ role: 'user', content: message })
 
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' })
+    const groqApiKey = await getSecret('GROQ_API_KEY')
+    const groq = new Groq({ apiKey: groqApiKey || '' })
     
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
@@ -170,10 +189,7 @@ export const sendMessage = async (req: any, res: any) => {
 
     const updatedHistory = [...normalizedHistory, { role: 'user', content: message }, { role: 'assistant', content: replyText }]
     
-    await supabase
-      .from('training_sessions')
-      .update({ messages_json: updatedHistory })
-      .eq('id', sessionId)
+    await safeUpdateTrainingSession(sessionId, { messages_json: updatedHistory })
       
     return res.json({ reply: replyText })
   } catch (err: any) {
@@ -193,7 +209,8 @@ export const sendVoiceMessage = async (req: any, res: any) => {
   }
 
   try {
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' })
+    const groqApiKey = await getSecret('GROQ_API_KEY')
+    const groq = new Groq({ apiKey: groqApiKey || '' })
 
     const transcription = await groq.audio.transcriptions.create({
       file: new File([audioFile.buffer], 'audio.webm', { 
@@ -252,10 +269,7 @@ export const sendVoiceMessage = async (req: any, res: any) => {
     if (!replyText) throw new Error("Empty response from Groq")
 
     const updatedHistory = [...normalizedHistory, { role: 'user', content: userText }, { role: 'assistant', content: replyText }]
-    await supabase
-      .from('training_sessions')
-      .update({ messages_json: updatedHistory })
-      .eq('id', sessionId)
+    await safeUpdateTrainingSession(sessionId, { messages_json: updatedHistory })
 
     return res.json({ userText, reply: replyText })
   } catch (err: any) {
@@ -313,7 +327,7 @@ export const endSession = async (req: any, res: any) => {
         .eq('rep_id', session.rep_id)
         .eq('scenario_id', session.scenario_id)
         .in('status', ['Pending', 'In Progress', 'Overdue'])
-        .order('created_at', { ascending: false })
+        .order('assigned_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       
@@ -324,28 +338,36 @@ export const endSession = async (req: any, res: any) => {
     }
 
     if (targetAssignmentId) {
-      const { error: updateError } = await supabase
-        .from('training_assignments')
-        .update({
-          status: 'Completed',
-          completed_at: new Date().toISOString(),
-          session_id: sessionId
-        })
-        .eq('id', targetAssignmentId);
-      
-      if (updateError) {
-        console.error(`[AssignmentLifecycle] Failed to mark assignment ${targetAssignmentId} as Completed:`, updateError);
-      } else {
-        console.log(`[AssignmentLifecycle] Successfully marked assignment ${targetAssignmentId} as COMPLETED.`);
-      }
+      await safeUpdateTrainingAssignment(targetAssignmentId, {
+        status: 'Completed',
+        completed_at: new Date().toISOString(),
+        session_id: sessionId
+      })
+      console.log(`[AssignmentLifecycle] Successfully marked assignment ${targetAssignmentId} as COMPLETED.`);
     }
 
     // 3. AI EVALUATION
-    const prompt = generateEvaluationPrompt(scenarioName, transcript)
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' })
+    const evaluationFocus = scenario?.evaluation_focus || ''
+    const prompt = generateEvaluationPrompt(scenarioName, transcript, evaluationFocus)
     
     let feedback;
-    try {
+    
+    if (!transcript.trim()) {
+      feedback = {
+        scores: { opening: 0, discovery: 0, objection_handling: 0, talk_ratio: 0, closing: 0 },
+        overall_score: 0,
+        summary: "The session ended before any interaction took place.",
+        strengths: [],
+        improvements: ["Ensure you interact with the AI before ending the session."],
+        objections_analysis: [],
+        highlights: [],
+        outcome_analysis: "No data available due to empty session.",
+        next_practice_recommendation: "Please try the scenario again and speak with the Persona."
+      };
+    } else {
+      try {
+        const groqApiKey = await getSecret('GROQ_API_KEY')
+        const groq = new Groq({ apiKey: groqApiKey || '' })
       const completion = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages: [
@@ -357,25 +379,30 @@ export const endSession = async (req: any, res: any) => {
       })
       
       const text = completion.choices[0].message.content || '{}';
-      const jsonText = text.replace(/`json|`/g, "").trim();
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const jsonText = jsonMatch ? jsonMatch[0] : '{}';
       feedback = JSON.parse(jsonText);
     } catch (evalErr) {
       console.error("[AssignmentLifecycle] AI Evaluation failed, using fallback metrics", evalErr);
       feedback = {
         scores: { opening: 75, discovery: 75, objection_handling: 75, talk_ratio: 75, closing: 75 },
         overall_score: 75,
-        evaluation_summary: "The session was completed successfully, but the automated performance review is temporarily unavailable."
+        summary: "The session was completed successfully, but the automated performance review is temporarily unavailable.",
+        strengths: ["Completed the interaction"],
+        improvements: ["Ensure AI analysis connects next time"],
+        objections_analysis: [],
+        highlights: [],
+        outcome_analysis: "System fallback triggered.",
+        next_practice_recommendation: "General Practice"
       };
+    }
     }
     
     // 4. Final Session Update
-    await supabase
-      .from('training_sessions')
-      .update({ 
-        feedback_json: feedback,
-        completed_at: new Date().toISOString()
-      })
-      .eq('id', sessionId)
+    await safeUpdateTrainingSession(sessionId, { 
+      feedback_json: feedback,
+      completed_at: new Date().toISOString()
+    })
       
     return res.json(feedback)
   } catch (err: any) {

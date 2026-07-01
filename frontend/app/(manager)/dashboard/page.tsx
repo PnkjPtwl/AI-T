@@ -2,191 +2,265 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  BarChart, Bar, Cell
-} from 'recharts'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
-export default function DashboardPage() {
+export default function ManagerDashboardPage() {
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState<any>(null)
   const [analytics, setAnalytics] = useState<any>(null)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const token = localStorage.getItem('token')
-        if (!token) return
-
-        const headers = { 'Authorization': `Bearer ${token}` }
-        const [statsRes, analyticsRes] = await Promise.all([
-          fetch(`${API}/api/users/dashboard-stats`, { headers }),
-          fetch(`${API}/api/users/team-analytics`, { headers })
-        ])
-
-        if (statsRes.ok) setStats(await statsRes.json())
-        if (analyticsRes.ok) setAnalytics(await analyticsRes.json())
-      } catch (err) {
-        console.error('Failed to fetch dashboard data', err)
-      } finally {
-        setLoading(false)
-      }
+  const fetchData = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+      const headers = { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`${API}/api/users/team-analytics`, { headers })
+      if (res.ok) setAnalytics(await res.json())
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
     }
-    fetchData()
-  }, [])
+  }
+
+  useEffect(() => { fetchData() }, [])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#7D8461]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#2C5282]"></div>
       </div>
     )
   }
 
+  const personas = analytics?.personaComparisonData || []
+  const reps = analytics?.repPercentileData || []
+  const insights = analytics?.insights || []
+  const recommendations = analytics?.recommendations || []
+  const summary = analytics?.summaryStats || {}
+
+  const totalAssignments = summary.totalAssignments ?? 0
+  const completedAssignments = summary.completedAssignments ?? 0
+  const overdueAssignments = summary.overdueAssignments ?? 0
+  const totalReps = summary.totalReps ?? reps.length
+  const completionPct = totalAssignments > 0 ? Math.round((completedAssignments / totalAssignments) * 100) : 0
+
   return (
-    <div className="max-w-7xl mx-auto space-y-12 pb-20">
+    <div className="max-w-7xl mx-auto space-y-10 pb-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-10">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-extrabold text-[#3A2F28] tracking-tight">Executive Intelligence</h1>
-          <p className="text-[#7B6F63] font-medium mt-2 text-base">Organizational performance and strategic operational oversight.</p>
+          <h1 className="text-3xl font-bold text-[#1A2A3A] tracking-tight">Team Dashboard</h1>
+          <p className="text-[#64748B] text-sm mt-1">Comparative analytics, persona performance and AI-generated insights.</p>
         </div>
-        <div className="flex gap-4">
-           <Link 
-             href="/training" 
-             className="px-8 py-4 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-md transition-all"
-           >
-             Deploy Mission
-           </Link>
-           <Link 
-             href="/coaching" 
-             className="px-8 py-4 bg-[#D6C2A8] hover:bg-[#C5B095] text-[#3A2F28] font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl border border-[#D8CCBC] shadow-sm transition-all"
-           >
-             Coaching Center
-           </Link>
-        </div>
+        <Link
+          href="/scenarios/new"
+          className="bg-[#2C5282] hover:bg-[#1A365D] text-white py-2.5 px-5 rounded-xl font-semibold text-sm transition-all shadow-md flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4"/></svg>
+          New Persona
+        </Link>
       </div>
 
-      {/* KPI Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
-        <StatCard title="Team Force" value={stats?.totalReps || 0} label="Active Sales Personnel" />
-        <StatCard title="Active Operations" value={stats?.activeSessions || 0} label="Tactical Simulations" />
-        <StatCard title="Avg Proficiency" value={`${stats?.avgTeamScore || 0}%`} label="Lifetime Aggregate" />
-        <StatCard title="Risk Analysis" value={stats?.repsNeedingAttention || 0} label="Requires Direct Coaching" isAlert={stats?.repsNeedingAttention > 0} />
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard label="Total Assignments" value={totalAssignments} />
+        <KpiCard label="Completed" value={completedAssignments} accent="green" />
+        <KpiCard label="Completion Rate" value={`${completionPct}%`} accent={completionPct >= 80 ? 'green' : completionPct >= 50 ? 'yellow' : 'red'} />
+        <KpiCard label="Overdue" value={overdueAssignments} alert={overdueAssignments > 0} accent={overdueAssignments > 0 ? 'red' : 'default'} />
       </div>
 
-      {/* Analytics Section */}
-      {analytics && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-          {/* Trend Analysis */}
-          <div className="lg:col-span-8 bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-12 shadow-sm">
-             <div className="flex justify-between items-center mb-12">
-               <div>
-                 <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Performance Trajectory</h3>
-                 <p className="text-xs text-[#7B6F63] mt-1">Weighted team proficiency over time</p>
-               </div>
-               <span className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest bg-[#F6F1E8] px-4 py-2 rounded-xl border border-[#D8CCBC]">System Live</span>
-             </div>
-             <div className="h-[400px] w-full">
-               <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={analytics.trendData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#D8CCBC" vertical={false} />
-                    <XAxis dataKey="date" stroke="#7B6F63" fontSize={10} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#7B6F63" fontSize={10} tickLine={false} axisLine={false} domain={[0, 100]} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#EFE7DC', border: '1px solid #D8CCBC', borderRadius: '1.5rem', boxShadow: '0 10px 25px -5px rgba(58, 47, 40, 0.1)' }} 
-                      itemStyle={{ color: '#7D8461', fontWeight: '800', fontSize: '12px' }} 
-                    />
-                    <Line type="monotone" dataKey="score" stroke="#7D8461" strokeWidth={4} dot={{ r: 4, fill: '#7D8461', strokeWidth: 2, stroke: '#F6F1E8' }} activeDot={{ r: 6, stroke: '#7D8461', strokeWidth: 2 }} />
-                  </LineChart>
-               </ResponsiveContainer>
-             </div>
-          </div>
+      {/* AI Insights + Recommendations */}
+      {(insights.length > 0 || recommendations.length > 0) && (
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Insights */}
+          {insights.length > 0 && (
+            <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-[#64748B] uppercase tracking-wider mb-4">AI Insights</h2>
+              <div className="space-y-3">
+                {insights.map((item: any, i: number) => (
+                  <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border ${
+                    item.type === 'Alert' || item.type === 'Complexity Alert' ? 'bg-red-50 border-red-100' :
+                    item.type === 'Team Strength' ? 'bg-green-50 border-green-100' :
+                    item.type === 'Skill Gap' ? 'bg-yellow-50 border-yellow-100' :
+                    'bg-[#F8FAFC] border-[#E2E8F0]'
+                  }`}>
+                    <span className="text-lg leading-none mt-0.5">{item.icon}</span>
+                    <div>
+                      <p className={`text-xs font-semibold mb-0.5 ${
+                        item.type === 'Alert' || item.type === 'Complexity Alert' ? 'text-red-600' :
+                        item.type === 'Team Strength' ? 'text-green-700' :
+                        item.type === 'Skill Gap' ? 'text-yellow-700' :
+                        'text-[#2C5282]'
+                      }`}>{item.type}</p>
+                      <p className="text-sm text-[#374151]">{item.text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-          {/* Skill Matrix */}
-          <div className="lg:col-span-4 bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-12 shadow-sm">
-             <div className="mb-12">
-               <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Skill Distribution</h3>
-               <p className="text-xs text-[#7B6F63] mt-1">Aggregate team competency matrix</p>
-             </div>
-             <div className="h-[400px] w-full">
-               <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={analytics.radarData}>
-                    <PolarGrid stroke="#D8CCBC" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#7B6F63', fontSize: 9, fontWeight: 800 }} />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                    <Radar name="Team Avg" dataKey="A" stroke="#7D8461" fill="#7D8461" fillOpacity={0.15} />
-                  </RadarChart>
-               </ResponsiveContainer>
-             </div>
-          </div>
+          {/* Recommendations */}
+          {recommendations.length > 0 && (
+            <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-[#64748B] uppercase tracking-wider mb-4">Recommendations</h2>
+              <div className="space-y-3">
+                {recommendations.map((r: any, i: number) => (
+                  <div key={i} className="flex items-start gap-3 p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
+                    <span className={`mt-0.5 px-2 py-0.5 rounded text-xs font-bold ${
+                      r.priority === 'Critical' ? 'bg-red-600 text-white' :
+                      r.priority === 'High' ? 'bg-orange-500 text-white' :
+                      'bg-[#2C5282] text-white'
+                    }`}>{r.priority}</span>
+                    <div>
+                      <p className="text-xs font-semibold text-[#1A2A3A] mb-0.5">{r.action}</p>
+                      <p className="text-sm text-[#64748B]">{r.text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
-          {/* Persona Insights */}
-          <div className="lg:col-span-6 bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-12 shadow-sm">
-             <div className="mb-10">
-               <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Persona Intelligence</h3>
-               <p className="text-xs text-[#7B6F63] mt-1">Success correlation by prospect archetype</p>
-             </div>
-             <div className="space-y-6">
-               {analytics.personaPerformanceData?.slice(0, 4).map((p: any, idx: number) => (
-                 <div key={idx} className="p-8 bg-[#F6F1E8] border border-[#D8CCBC] rounded-[2rem] hover:border-[#7D8461] transition-all flex justify-between items-center">
-                    <div className="flex items-center gap-6">
+      {/* Persona Performance Comparison */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-[#1A2A3A]">Persona Performance</h2>
+        {personas.length === 0 ? (
+          <div className="p-12 text-center bg-white border border-[#E2E8F0] rounded-2xl">
+            <p className="text-sm text-[#64748B]">No persona data yet. Complete training sessions to see comparisons.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {personas.map((p: any, idx: number) => (
+              <div key={idx} className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm hover:shadow-md transition-all">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-[#1A2A3A]">{p.type}</h3>
+                    {p.sessionCount && (
+                      <p className="text-xs text-[#64748B] mt-0.5">{p.sessionCount} session{p.sessionCount !== 1 ? 's' : ''}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-[#64748B] mb-1">Avg Score</p>
+                    <p className={`text-2xl font-bold ${p.avgScore >= 75 ? 'text-green-600' : p.avgScore >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>{p.avgScore}%</p>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full h-1.5 bg-[#E2E8F0] rounded-full mb-4 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${p.avgScore >= 75 ? 'bg-green-500' : p.avgScore >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
+                    style={{ width: `${p.avgScore}%` }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-[#F0FDF4] p-3 rounded-xl border border-green-100">
+                    <p className="text-xs font-medium text-green-700 mb-1 flex items-center gap-1">▲ Top Performer</p>
+                    {p.bestRep ? (
                       <div>
-                        <p className="text-base font-bold text-[#3A2F28] uppercase tracking-tight">{p.type}</p>
-                        <p className="text-[9px] text-[#7B6F63] font-black uppercase tracking-[0.2em] mt-1">{p.sessionsCompleted} Missions</p>
+                        <p className="text-sm font-semibold text-[#1A2A3A]">{p.bestRep.name}</p>
+                        <p className="text-sm font-bold text-green-600">{p.bestRep.score}%</p>
                       </div>
-                    </div>
-                    <div className="text-right">
-                       <p className={`text-3xl font-extrabold ${p.avgScore < 60 ? 'text-[#A06A5B]' : p.avgScore < 75 ? 'text-[#D6C2A8]' : 'text-[#7D8461]'}`}>
-                         {p.avgScore}%
-                       </p>
-                    </div>
-                 </div>
-               ))}
-             </div>
+                    ) : <p className="text-sm text-[#64748B]">—</p>}
+                  </div>
+                  <div className="bg-[#FFF5F5] p-3 rounded-xl border border-red-100">
+                    <p className="text-xs font-medium text-red-600 mb-1 flex items-center gap-1">▼ Needs Coaching</p>
+                    {p.worstRep ? (
+                      <div>
+                        <p className="text-sm font-semibold text-[#1A2A3A]">{p.worstRep.name}</p>
+                        <p className="text-sm font-bold text-red-500">{p.worstRep.score}%</p>
+                      </div>
+                    ) : <p className="text-sm text-[#64748B]">—</p>}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
+        )}
+      </section>
 
-          {/* Mission Stats */}
-          <div className="lg:col-span-6 bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-12 shadow-sm">
-             <div className="mb-10">
-               <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Tactical Correlation</h3>
-               <p className="text-xs text-[#7B6F63] mt-1">Mission difficulty vs Team proficiency mapping</p>
-             </div>
-             <div className="h-[350px] w-full">
-               <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.scenarioData} layout="vertical" margin={{ left: 30 }}>
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" stroke="#7B6F63" fontSize={10} width={120} tickLine={false} axisLine={false} />
-                    <Tooltip 
-                      cursor={{ fill: 'rgba(214, 194, 168, 0.15)' }} 
-                      contentStyle={{ backgroundColor: '#EFE7DC', border: '1px solid #D8CCBC', borderRadius: '1.5rem' }} 
-                    />
-                    <Bar dataKey="score" radius={[0, 10, 10, 0]} barSize={24}>
-                      {analytics.scenarioData.map((entry: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={entry.score >= 80 ? '#7D8461' : entry.score >= 60 ? '#D6C2A8' : '#A06A5B'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-               </ResponsiveContainer>
-             </div>
+      {/* Team Percentile Ranking */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-[#1A2A3A]">Team Ranking</h2>
+        <div className="bg-white border border-[#E2E8F0] rounded-2xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                <tr>
+                  <th className="px-6 py-3.5 text-xs font-semibold text-[#64748B] uppercase tracking-wider">#</th>
+                  <th className="px-6 py-3.5 text-xs font-semibold text-[#64748B] uppercase tracking-wider">Rep</th>
+                  <th className="px-6 py-3.5 text-xs font-semibold text-[#64748B] uppercase tracking-wider">Score</th>
+                  <th className="px-6 py-3.5 text-xs font-semibold text-[#64748B] uppercase tracking-wider">Percentile</th>
+                  <th className="px-6 py-3.5 text-xs font-semibold text-[#64748B] uppercase tracking-wider max-w-[280px]">Status / AI Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E2E8F0]">
+                {reps.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-sm text-[#64748B]">
+                      No reps with activity yet. Assign training sessions to see rankings.
+                    </td>
+                  </tr>
+                ) : (
+                  reps.map((rep: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-[#F8FAFC] transition-colors">
+                      <td className="px-6 py-4 text-sm font-bold text-[#64748B]">#{idx + 1}</td>
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-semibold text-[#1A2A3A]">{rep.name}</p>
+                        {rep.completionRate !== undefined && (
+                          <p className="text-xs text-[#64748B] mt-0.5">{rep.completionRate}% complete</p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-sm font-semibold ${
+                          rep.avgScore >= 80 ? 'bg-green-100 text-green-700' :
+                          rep.avgScore >= 60 ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {rep.avgScore}%
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-sm font-medium text-[#1A2A3A] w-10">{rep.percentile}th</span>
+                          <div className="w-24 h-2 bg-[#E2E8F0] rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${rep.percentile >= 75 ? 'bg-[#2C5282]' : rep.percentile >= 40 ? 'bg-yellow-400' : 'bg-red-400'}`}
+                              style={{ width: `${rep.percentile}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 max-w-[280px]">
+                        <p className="text-sm text-[#64748B] truncate" title={rep.aiRating}>
+                          {rep.aiRating || 'No AI feedback yet'}
+                        </p>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
+      </section>
+    </div>
+  )
+}
+
+function KpiCard({ label, value, alert, accent = 'default' }: { label: string; value: string | number; alert?: boolean; accent?: 'green' | 'yellow' | 'red' | 'default' }) {
+  const valueColor = accent === 'green' ? 'text-green-600' : accent === 'yellow' ? 'text-yellow-600' : accent === 'red' ? 'text-red-600' : 'text-[#1A2A3A]'
+  return (
+    <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm relative hover:shadow-md transition-all">
+      <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wider">{label}</p>
+      <p className={`text-3xl font-bold mt-2 ${valueColor}`}>{value}</p>
+      {alert && (
+        <span className="absolute top-5 right-5 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
       )}
     </div>
   )
 }
-
-function StatCard({ title, value, label, isAlert = false }: any) {
-  return (
-    <div className="bg-[#EFE7DC] border border-[#D8CCBC] p-10 rounded-[2.5rem] hover:shadow-lg transition-all group relative overflow-hidden">
-      {isAlert && <span className="absolute top-6 right-6 w-3 h-3 bg-[#A06A5B] rounded-full animate-pulse shadow-sm shadow-[#A06A5B]/30"></span>}
-      <p className="text-[10px] font-black text-[#7B6F63] uppercase tracking-[0.3em] mb-4">{title}</p>
-      <h3 className="text-5xl font-extrabold text-[#3A2F28] mb-2 tracking-tighter">{value}</h3>
-      <p className="text-[9px] text-[#82786F] font-bold uppercase tracking-widest mt-1 opacity-80">{label}</p>
-    </div>
-  )
-}
-

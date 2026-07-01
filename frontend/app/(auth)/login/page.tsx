@@ -37,11 +37,10 @@ export default function LoginPage() {
         localStorage.setItem('orgId', data.orgId)
         
         console.log(`--- [AUTH] Login successful. Redirecting as ${data.role}... ---`)
-        
         if (data.role === 'manager') {
           router.push('/dashboard')
         } else {
-          router.push('/rep/dashboard')
+          router.push('/rep/train')
         }
       } else {
         console.error(`--- [AUTH] Login failed: ${data.error} ---`)
@@ -57,33 +56,33 @@ export default function LoginPage() {
 
 
   return (
-    <div className="auth-page flex items-center justify-center min-h-screen bg-[#F6F1E8]">
-      <div className="auth-card w-full max-w-4xl bg-[#EAE2D6] border border-[#D8CCBC] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row">
+    <div className="auth-page flex items-center justify-center min-h-screen bg-[#F8FAFC]">
+      <div className="auth-card w-full max-w-4xl bg-white border border-[#E2E8F0] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row">
         
         {/* Left Side: Branding */}
-        <div className="md:w-1/2 p-16 flex flex-col justify-center items-center md:items-start border-b md:border-b-0 md:border-r border-[#D8CCBC]/50">
-          <h1 className="text-5xl font-extrabold text-[#3A2F28] tracking-tighter leading-none mb-4">SalesCoach</h1>
-          <div className="w-12 h-1 bg-[#7D8461] rounded-full"></div>
+        <div className="md:w-1/2 p-16 flex flex-col justify-center items-center md:items-start border-b md:border-b-0 md:border-r border-[#E2E8F0]/50">
+          <h1 className="text-5xl font-extrabold text-[#1A2A3A] tracking-tighter leading-none mb-4">SalesCoach</h1>
+          <div className="w-12 h-1 bg-[#2C5282] rounded-full"></div>
         </div>
 
         {/* Right Side: Authentication */}
-        <div className="md:w-1/2 p-16 flex flex-col justify-center bg-[#F6F1E8]/30 backdrop-blur-sm">
+        <div className="md:w-1/2 p-16 flex flex-col justify-center bg-white backdrop-blur-sm">
           {error && (
-            <div className="alert p-5 bg-[#A06A5B]/10 border border-[#A06A5B]/20 rounded-2xl text-[#A06A5B] text-[12px] font-black uppercase tracking-widest mb-10 text-center">
+            <div className="alert p-5 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-[12px] font-black uppercase tracking-widest mb-10 text-center">
                {error}
             </div>
           )}
 
-          <div className="role-tabs flex gap-2 mb-10 bg-[#EFE7DC] p-1.5 rounded-2xl border border-[#D8CCBC]">
+          <div className="role-tabs flex gap-2 mb-10 bg-white p-1.5 rounded-2xl border border-[#E2E8F0]">
              <button 
                onClick={() => setRole('manager')}
-               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${role === 'manager' ? 'bg-[#7D8461] text-[#F6F1E8] shadow-md' : 'text-[#7B6F63] hover:text-[#3A2F28]'}`}
+               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${role === 'manager' ? 'bg-[#2C5282] text-white shadow-md' : 'text-[#64748B] hover:text-[#1A2A3A]'}`}
              >
                Manager
              </button>
              <button 
                onClick={() => setRole('rep')}
-               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${role === 'rep' ? 'bg-[#7D8461] text-[#F6F1E8] shadow-md' : 'text-[#7B6F63] hover:text-[#3A2F28]'}`}
+               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${role === 'rep' ? 'bg-[#2C5282] text-white shadow-md' : 'text-[#64748B] hover:text-[#1A2A3A]'}`}
              >
                Representative
              </button>
@@ -91,35 +90,35 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-8">
             <div className="space-y-3">
-              <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Email Identity</label>
+              <label className="text-[11px] font-black uppercase text-[#64748B] tracking-[0.3em] ml-1">Email Identity</label>
               <input 
                 type="email" 
                 placeholder="name@organization.com" 
-                className="w-full bg-[#F3EEE6] border border-[#D8CCBC] rounded-2xl py-3.5 px-6 text-base font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all placeholder:text-[#7B6F63]/30"
+                className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl py-3.5 px-6 text-base font-bold text-[#1A2A3A] focus:border-[#2C5282] outline-none transition-all placeholder:text-[#64748B]/30"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
             <div className="space-y-3">
-              <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Secret Access</label>
+              <label className="text-[11px] font-black uppercase text-[#64748B] tracking-[0.3em] ml-1">Secret Access</label>
               <input 
                 type="password" 
                 placeholder="••••••••" 
-                className="w-full bg-[#F3EEE6] border border-[#D8CCBC] rounded-2xl py-3.5 px-6 text-base font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all placeholder:text-[#7B6F63]/30"
+                className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl py-3.5 px-6 text-base font-bold text-[#1A2A3A] focus:border-[#2C5282] outline-none transition-all placeholder:text-[#64748B]/30"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
 
-            <button type="submit" disabled={loading} className="w-full py-5 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] font-black text-[12px] uppercase tracking-[0.25em] rounded-2xl shadow-xl shadow-[#7D8461]/20 transition-all active:scale-[0.98] mt-4">
+            <button type="submit" disabled={loading} className="w-full py-5 bg-[#2C5282] hover:bg-[#1A365D] text-white font-black text-[12px] uppercase tracking-[0.25em] rounded-2xl shadow-xl shadow-[#2C5282]/20 transition-all active:scale-[0.98] mt-4">
               {loading ? 'Verifying...' : 'Authorize Access'}
             </button>
           </form>
 
-          <div className="mt-12 text-center text-[12px] font-black uppercase tracking-widest text-[#7B6F63]">
-            New Client? <Link href="/signup" className="text-[#7D8461] hover:underline ml-2">Initialize Account</Link>
+          <div className="mt-12 text-center text-[12px] font-black uppercase tracking-widest text-[#64748B]">
+            New Client? <Link href="/signup" className="text-[#2C5282] hover:underline ml-2">Initialize Account</Link>
           </div>
         </div>
       </div>

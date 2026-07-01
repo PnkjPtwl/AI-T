@@ -2,22 +2,34 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 export default function RepTopbar() {
   const router = useRouter()
   const [userName, setUserName] = useState('')
+  const [orgName, setOrgName] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('token')
+    const orgId = localStorage.getItem('orgId')
+    
     if (token) {
       fetch(`${API}/api/users/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       .then(res => res.json())
       .then(user => setUserName(user.name))
+      .catch(() => {})
+    }
+
+    if (orgId && token) {
+      fetch(`${API}/api/users/org-details`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(org => setOrgName(org.name))
+      .catch(() => {})
     }
   }, [])
 
@@ -27,44 +39,29 @@ export default function RepTopbar() {
   }
 
   return (
-    <header className="h-20 bg-[#F6F1E8]/80 backdrop-blur-md border-b border-[#D8CCBC] flex items-center justify-between px-12 sticky top-0 z-40">
-      <div className="flex items-center gap-4">
-        <h2 className="text-[10px] font-black text-[#7B6F63] uppercase tracking-[0.2em] hidden sm:block">Representative /</h2>
-        <h2 className="text-xs font-extrabold text-[#7D8461] uppercase tracking-wider">Performance Workspace</h2>
+    <header className="h-16 bg-white border-b border-[#E2E8F0] flex items-center justify-between px-8 sticky top-0 z-40">
+      <div className="flex items-center gap-2 text-sm text-[#64748B]">
+        <span>{orgName || 'Organization'}</span>
       </div>
 
-      <div className="flex items-center gap-8">
-        {/* Quick Action */}
-        <Link 
-          href="/rep/train" 
-          className="hidden md:flex items-center gap-3 px-6 py-2.5 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-sm transition-all"
-        >
-          <span>🚀</span> Start Mission
-        </Link>
-
-
-
-        {/* Profile */}
+      <div className="flex items-center gap-4">
         <div className="relative group">
-          <button className="flex items-center gap-4 pl-4 pr-5 py-2.5 hover:bg-[#EAE2D6] rounded-2xl transition-all border border-transparent hover:border-[#D8CCBC]">
-            <div className="w-9 h-9 bg-[#7D8461] rounded-xl flex items-center justify-center text-xs font-black text-[#F6F1E8] shadow-sm">
+          <button className="flex items-center gap-3 px-3 py-2 hover:bg-[#F8FAFC] rounded-xl transition-all">
+            <div className="w-8 h-8 bg-[#2C5282] rounded-full flex items-center justify-center text-xs font-bold text-white">
               {userName ? userName.charAt(0).toUpperCase() : 'R'}
             </div>
-            <div className="text-left hidden md:block">
-              <p className="text-xs font-black text-[#3A2F28] leading-tight uppercase tracking-tight">{userName || 'Representative'}</p>
-              <p className="text-[9px] text-[#7B6F63] font-bold uppercase tracking-[0.2em] mt-0.5">Sales Agent</p>
-            </div>
+            <span className="text-sm font-medium text-[#1A2A3A] hidden md:block">{userName || 'Sales Rep'}</span>
+            <svg className="w-4 h-4 text-[#64748B]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
           </button>
 
-          {/* Dropdown with invisible hover bridge */}
-          <div className="absolute right-0 w-52 pt-3 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-200 z-50">
-            <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] shadow-2xl overflow-hidden p-2">
-              <Link href="/rep/settings" className="block px-6 py-4 text-[10px] font-black text-[#3A2F28] uppercase tracking-widest hover:bg-[#D8CCBC]/20 rounded-2xl transition-all">Settings</Link>
+          <div className="absolute right-0 w-44 pt-2 opacity-0 translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-150 z-50">
+            <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-lg overflow-hidden">
               <button 
                 onClick={handleLogout}
-                className="w-full text-left px-6 py-4 text-[10px] font-black text-[#A06A5B] uppercase tracking-widest hover:bg-[#A06A5B]/10 rounded-2xl transition-all flex items-center gap-3"
+                className="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition-all flex items-center gap-2"
               >
-                <span>🚪</span> Terminate
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                Logout
               </button>
             </div>
           </div>

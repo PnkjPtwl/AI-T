@@ -39,82 +39,27 @@ export const getScenarios = async (req: any, res: any) => {
 
     console.log(`Successfully fetched ${data?.length || 0} scenarios.`);
 
-    // Step 2: Auto-seed if empty (only if we have an orgId)
     let finalData = data || [];
-    if (finalData.length === 0 && orgId) {
-      console.log("No scenarios found. Attempting to seed default scenarios...");
-      const defaultScenarios = [
-        { 
-          persona_name: "Skeptical CFO", 
-          persona_type: "Analytical/Dismissive", 
-          difficulty: "Hard", 
-          context_text: "[SCENARIO: Pricing Negotiation] Focus on ROI and cost-benefit analysis.", 
-          evaluation_focus: "roi_justification, pricing_defense, logic",
-          objection_style: "Heavily pushes back on cost without clear proof of value.",
-          target_skills: "Negotiation, Financial Acumen",
-          org_id: orgId 
-        },
-        { 
-          persona_name: "Angry Customer", 
-          persona_type: "Emotional/Aggressive", 
-          difficulty: "Medium", 
-          context_text: "[SCENARIO: Angry Customer Resolution] Practice de-escalation and empathy.", 
-          evaluation_focus: "deescalation, empathy, resolution_pacing",
-          objection_style: "Emotional and prone to interrupting if they feel unheard.",
-          target_skills: "Conflict Resolution, Empathy",
-          org_id: orgId 
-        },
-        { 
-          persona_name: "Busy Executive", 
-          persona_type: "Direct/Fast-paced", 
-          difficulty: "Hard", 
-          context_text: "[SCENARIO: Executive Sales Pitch] Deliver a 5-minute value proposition.", 
-          evaluation_focus: "brevity, value_proposition, confidence",
-          objection_style: "Impatient; demands direct answers to 'What's the bottom line?'",
-          target_skills: "Executive Presence, Pitching",
-          org_id: orgId 
-        },
-        { 
-          persona_name: "New Prospect", 
-          persona_type: "Neutral/Interested", 
-          difficulty: "Easy", 
-          context_text: "[SCENARIO: Cold Outreach Call] Open the conversation and book a discovery meeting.", 
-          evaluation_focus: "hook, qualifying_questions, closing",
-          objection_style: "Uses common brush-offs like 'Just send me an email.'",
-          target_skills: "Cold Calling, Appointment Setting",
-          org_id: orgId 
-        },
-        { 
-          persona_name: "Existing Client", 
-          persona_type: "Collaborative/Concerned", 
-          difficulty: "Medium", 
-          context_text: "[SCENARIO: Renewal Retention Call] Address churn risks and highlight realized value.", 
-          evaluation_focus: "retention_strategy, relationship_building, expansion",
-          objection_style: "Concerned about recent service issues but open to solutions.",
-          target_skills: "Account Management, Retention",
-          org_id: orgId 
-        }
-      ];
-
-      const { data: seededData, error: seedError } = await supabase
-        .from('training_scenarios')
-        .insert(defaultScenarios)
-        .select();
-
-      if (seedError) {
-        console.error("SEEDING ERROR:", seedError);
-        // Don't crash here, just return empty if seeding fails
-      } else {
-        console.log("Seeding successful.");
-        finalData = seededData || [];
-      }
-    }
 
     // Step 3: Enhance data
     const enhanced = finalData.map(s => {
       const match = s.context_text?.match(/\[SCENARIO:\s*(.*?)\]/);
       const scenario_name = (match && match[1]) ? match[1] : s.persona_type || 'General Training';
-      return { ...s, scenario_name };
+      
+      let target_skills = '';
+      let personality_traits = s.personality_traits || '';
+      let objection_style = s.objection_style || '';
+      const metaMatch = s.context_text?.match(/\[SCENARIO_METADATA:\s*(\{.*?\})\]/);
+      if (metaMatch && metaMatch[1]) {
+        try {
+          const meta = JSON.parse(metaMatch[1]);
+          target_skills = meta.target_skills || '';
+          if (!personality_traits) personality_traits = meta.personality_traits || '';
+          if (!objection_style) objection_style = meta.objection_style || '';
+        } catch (e) {}
+      }
+
+      return { ...s, scenario_name, target_skills, personality_traits, objection_style };
     });
 
     console.log("Returning enhanced scenarios to frontend.");
@@ -144,7 +89,9 @@ export const createScenario = async (req: any, res: any) => {
     objection_style,
     conversation_expectations,
     target_skills,
-    custom_prompt
+    custom_prompt,
+    assigned_reps,
+    evaluation_questions
   } = req.body
 
   if (!persona_name || !persona_type || !context_text || !difficulty) {
@@ -177,6 +124,42 @@ export const createScenario = async (req: any, res: any) => {
 
   if (error) {
     return res.status(500).json({ error: error.message })
+  }
+  
+  const newScenarioId = data.id;
+
+  // Handle evaluation questions if provided
+  if (evaluation_questions && Array.isArray(evaluation_questions) && evaluation_questions.length > 0) {
+    const questionsToInsert = evaluation_questions.map((q: any) => ({
+      scenario_id: newScenarioId,
+      category: q.category || 'General',
+      question_text: q.question_text,
+      question_type: q.question_type || 'boolean',
+      confidence_score: q.confidence_score || null
+    }));
+    
+    const { error: eqError } = await supabase
+      .from('scenario_evaluation_questions')
+      .insert(questionsToInsert);
+      
+    if (eqError) console.error("Error inserting evaluation questions:", eqError);
+  }
+
+  // Handle rep assignments if provided
+  if (assigned_reps && Array.isArray(assigned_reps) && assigned_reps.length > 0) {
+    const assignmentsToInsert = assigned_reps.map((repId: string) => ({
+      rep_id: repId,
+      manager_id: req.user.id,
+      scenario_id: newScenarioId,
+      status: 'Pending',
+      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // Default 7 days
+    }));
+    
+    const { error: assignError } = await supabase
+      .from('training_assignments')
+      .insert(assignmentsToInsert);
+      
+    if (assignError) console.error("Error inserting training assignments:", assignError);
   }
 
   res.json(data)
@@ -348,5 +331,82 @@ export const deleteScenario = async (req: any, res: any) => {
     res.json({ message: 'Scenario deleted successfully' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
+  }
+}
+
+export const assignRepsToScenario = async (req: any, res: any) => {
+  const { scenarioId } = req.params;
+  const { repIds } = req.body; // array of UUIDs
+  const managerId = req.user.id;
+
+  if (!repIds || !Array.isArray(repIds)) {
+    return res.status(400).json({ error: 'repIds must be an array' });
+  }
+
+  try {
+    const { data: existing } = await supabase
+      .from('training_assignments')
+      .select('rep_id')
+      .eq('scenario_id', scenarioId)
+      .in('rep_id', repIds);
+
+    const existingRepIds = new Set((existing || []).map((e: any) => e.rep_id));
+    const newRepIds = repIds.filter((id: string) => !existingRepIds.has(id));
+
+    if (newRepIds.length > 0) {
+      const assignmentsToInsert = newRepIds.map((repId: string) => ({
+        rep_id: repId,
+        manager_id: managerId,
+        scenario_id: scenarioId,
+        status: 'Pending',
+        deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      }));
+
+      const { error: assignError } = await supabase
+        .from('training_assignments')
+        .insert(assignmentsToInsert);
+
+      if (assignError) throw assignError;
+    }
+
+    res.json({ message: 'Reps assigned successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export const getScenarioAssignments = async (req: any, res: any) => {
+  const { scenarioId } = req.params;
+  const orgId = req.user.org_id;
+
+  try {
+    // get all reps in org
+    const { data: reps, error: repsError } = await supabase
+      .from('users')
+      .select('id, name, email, role')
+      .eq('org_id', orgId)
+      .eq('role', 'rep');
+
+    if (repsError) throw repsError;
+
+    // get assignments for this scenario
+    const { data: assignments, error: assignError } = await supabase
+      .from('training_assignments')
+      .select('rep_id, status')
+      .eq('scenario_id', scenarioId);
+
+    if (assignError) throw assignError;
+
+    const assignedRepIds = new Set((assignments || []).map((a: any) => a.rep_id));
+
+    const result = (reps || []).map((rep: any) => ({
+      ...rep,
+      isAssigned: assignedRepIds.has(rep.id),
+      status: (assignments || []).find((a: any) => a.rep_id === rep.id)?.status || null
+    }));
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 }

@@ -1,63 +1,92 @@
-import fs from 'fs'
-import path from 'path'
+import { Request, Response } from 'express'
 
-// Load configurations
-const evaluationsPath = path.join(__dirname, '../data/evaluations.json')
-const scenariosPath = path.join(__dirname, '../data/scenarios.json')
+const SCORECARD_CATEGORIES: Record<string, { description: string; high: string; low: string }> = {
+  'Communication & Professionalism': {
+    description: 'How clearly, professionally and confidently the rep communicates throughout the call.',
+    high: 'Clear articulation, professional tone, confident delivery, no filler words.',
+    low: 'Rambling, unprofessional language, lacks confidence or clarity.',
+  },
+  'Customer Understanding': {
+    description: 'How well the rep discovers and understands the prospect\'s situation, needs, and context.',
+    high: 'Asks deep discovery questions, listens actively, reflects back accurately.',
+    low: 'Generic questions, misses key context, talks more than listens.',
+  },
+  'Active Listening & Engagement': {
+    description: 'Whether the rep actively acknowledges what the prospect says and keeps them engaged.',
+    high: 'Responds to specifics, builds on prospect answers, uses their language.',
+    low: 'Ignores prospect input, jumps ahead, follows a rigid script.',
+  },
+  'Value Communication': {
+    description: 'How well the rep articulates the value of their solution in terms of the prospect\'s pain points.',
+    high: 'Ties features to specific business outcomes, uses prospect\'s language.',
+    low: 'Feature-dumps, fails to connect to prospect pain, abstract value claims.',
+  },
+  'Objection & Concern Handling': {
+    description: 'The rep\'s ability to handle objections with empathy and a clear response.',
+    high: 'Acknowledges concern, reframes clearly, provides evidence or examples.',
+    low: 'Gets defensive, ignores objection, or gives a generic dismissive response.',
+  },
+  'Next Steps & Call Effectiveness': {
+    description: 'Whether the rep drives toward a clear, agreed-upon next step before ending the call.',
+    high: 'Proposes a specific next step, confirms agreement, sets a clear date.',
+    low: 'Call ends ambiguously, no follow-up planned, no urgency created.',
+  },
+}
 
-export function generateEvaluationPrompt(scenarioName: string, transcript: string): string {
-  const evaluations = JSON.parse(fs.readFileSync(evaluationsPath, 'utf8'))
-  const scenarios = JSON.parse(fs.readFileSync(scenariosPath, 'utf8'))
-  const scenario = scenarios.find((s: any) => s.scenario_name === scenarioName) || scenarios[0]
+export function generateEvaluationPrompt(scenarioName: string, transcript: string, evaluationFocus?: string): string {
+  // Determine which metrics to use
+  let metricsToUse: string[]
 
-  // Focus areas for this scenario
-  const focusAreas = scenario.coaching_focus_areas || []
-  
-  // Format the evaluation criteria
-  const evaluationCriteriaText = Object.keys(evaluations).map(key => {
-    const isFocusArea = focusAreas.includes(key) ? '(CRITICAL FOCUS FOR THIS SCENARIO)' : ''
-    const ev = evaluations[key]
-    return `
-- ${key} ${isFocusArea}:
-  Description: ${ev.description}
-  High Score Indicator: ${ev.high_score_indicators}
-  Low Score Indicator: ${ev.low_score_indicators}`
-  }).join('\n')
+  if (evaluationFocus && evaluationFocus.trim().length > 0) {
+    // Use manager-specified metrics
+    const specified = evaluationFocus.split(',').map(s => s.trim()).filter(Boolean)
+    // Map them to our known scorecard keys
+    metricsToUse = specified.filter(m => SCORECARD_CATEGORIES[m])
+    // Fallback to all if none match
+    if (metricsToUse.length === 0) metricsToUse = Object.keys(SCORECARD_CATEGORIES)
+  } else {
+    // Default: all metrics
+    metricsToUse = Object.keys(SCORECARD_CATEGORIES)
+  }
+
+  const criteriaText = metricsToUse.map(key => {
+    const cat = SCORECARD_CATEGORIES[key]
+    if (!cat) return ''
+    return `- ${key}:\n  Description: ${cat.description}\n  High Score Indicator: ${cat.high}\n  Low Score Indicator: ${cat.low}`
+  }).filter(Boolean).join('\n')
+
+  const scoreKeys = metricsToUse.map(m => `"${m.toLowerCase().replace(/[^a-z]/g, '_').replace(/__+/g, '_')}": <number 0-100>`).join(',\n    ')
 
   return `You are an expert Sales Coach Analyst. You are evaluating a sales practice conversation between an AI Persona (acting as the buyer) and a human Sales Rep.
 
 --- EVALUATION CRITERIA ---
-Evaluate the rep strictly on the following metrics:
-${evaluationCriteriaText}
+Evaluate the rep strictly on the following metrics that the manager has selected:
+${criteriaText}
 
---- SCENARIO CONTEXT ---
-The rep was supposed to achieve this goal: ${scenario.sales_rep_goal}
-Expected Success Outcome: ${scenario.expected_success_outcome}
-Failure Conditions: ${scenario.failure_conditions}
+--- SCENARIO ---
+Scenario Name: ${scenarioName}
 
 --- TRANSCRIPT ---
 ${transcript}
 
+--- STRICT SCORING RULES ---
+1. EVIDENCE-BASED: You MUST ONLY award points for skills explicitly demonstrated in the transcript. 
+2. SHORT CONVERSATIONS: If the transcript is extremely short (e.g. the rep only spoke 1 or 2 lines), they have NOT demonstrated most skills. Any skill NOT explicitly demonstrated MUST receive a score of 0. Do not give "neutral" scores (like 50) for unobserved skills.
+3. NO HALLUCINATIONS: Do not invent objections, highlights, or feedback for things that did not actually happen in the transcript.
+
 --- INSTRUCTIONS ---
-Analyse the transcript deeply. Identify specific moments where the rep succeeded or failed.
-Return ONLY a raw JSON object with no markdown formatting, no backticks, and no extra text.
-The JSON must follow this exact structure:
+Analyse the transcript deeply based on the rules above. Return ONLY a raw JSON object with no markdown, no backticks, no extra text.
 {
   "scores": {
-    "empathy": <number 0-100>,
-    "objection_handling": <number 0-100>,
-    "confidence": <number 0-100>,
-    "listening": <number 0-100>,
-    "executive_communication": <number 0-100>,
-    "questioning_ability": <number 0-100>
+    ${scoreKeys}
   },
-  "overall_score": <average of the 6 scores above (number 0-100)>,
+  "overall_score": <average of the above scores, number 0-100>,
   "summary": "<concise narrative summary of the interaction>",
   "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
   "improvements": ["<improvement 1>", "<improvement 2>", "<improvement 3>"],
   "objections_analysis": [
     {
-      "objection": "<the specific objection raised by the customer>",
+      "objection": "<the specific objection raised>",
       "rep_response": "<how the rep responded>",
       "is_effective": <boolean>,
       "feedback": "<why it was or wasn't effective>"
@@ -68,16 +97,10 @@ The JSON must follow this exact structure:
       "type": "strong" | "weak",
       "rep_quote": "<exact quote from the rep>",
       "context": "<why this was a strong or weak moment>",
-      "suggestion": "<for weak moments, provide a suggested better response; for strong moments, leave empty>"
+      "suggestion": "<for weak moments only>"
     }
   ],
-  "emotional_tracking": [
-    {
-      "moment": "<specific point in the conversation>",
-      "customer_reaction": "<how the customer felt: e.g. frustrated, engaged, trusting, annoyed>"
-    }
-  ],
-  "outcome_analysis": "<explanation of why the conversation succeeded or failed and the major turning points>",
+  "outcome_analysis": "<explanation of why the conversation succeeded or failed>",
   "next_practice_recommendation": "<suggested specific scenario or skill to practice next>"
 }
 `

@@ -53,7 +53,6 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
       if (res.ok) {
         const data = await res.json()
         const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}`
-        console.log(`[Briefing] Navigating to simulation: ${targetUrl}`);
         router.push(targetUrl)
       } else {
         alert('Failed to start session. Please try again.')
@@ -69,7 +68,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
   if (loading || !scenario) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#7D8461]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#2C5282]"></div>
       </div>
     )
   }
@@ -88,170 +87,124 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
   } = scenario
 
   return (
-    <div className="max-w-6xl mx-auto space-y-12 pb-24 text-left">
+    <div className="max-w-6xl mx-auto space-y-8 pb-12 text-left">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-[#D8CCBC]/50 pb-10">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-[#E2E8F0] pb-6">
         <div>
-          <Link href="/rep/train" className="text-[#7D8461] hover:underline text-[10px] font-black uppercase tracking-widest mb-4 inline-block">&larr; Return to Library</Link>
-          <h1 className="text-4xl font-extrabold text-[#3A2F28] tracking-tight">Intelligence Briefing</h1>
-          <p className="text-[#7B6F63] font-medium mt-2 text-base">Review the following tactical data before authorizing the mission.</p>
+          <Link href="/rep/train" className="text-[#2C5282] hover:underline text-sm font-medium mb-4 inline-block">&larr; Back to Library</Link>
+          <h1 className="text-3xl font-bold text-[#1A2A3A]">Training Briefing</h1>
+          <p className="text-[#64748B] text-sm mt-1">Review the following details before starting your session.</p>
         </div>
         <div className="text-right">
-          <span className={`inline-block px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
-            difficulty === 'beginner' ? 'bg-[#7D8461]/10 text-[#7D8461] border-[#7D8461]/20' :
-            difficulty === 'intermediate' ? 'bg-[#D6C2A8]/20 text-[#3A2F28] border-[#D8CCBC]' :
-            'bg-[#A06A5B]/10 text-[#A06A5B] border-[#A06A5B]/20'
+          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${
+            difficulty === 'Hard' ? 'bg-red-50 text-red-600 border-red-200' :
+            difficulty === 'Medium' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+            'bg-green-50 text-green-700 border-green-200'
           }`}>
-            Difficulty: {difficulty}
+            Difficulty: {difficulty || 'Medium'}
           </span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column */}
-        <div className="lg:col-span-2 space-y-12">
+        <div className="lg:col-span-2 space-y-8">
           
           {/* Customer Profile */}
-          <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2rem] overflow-hidden shadow-sm">
-            <div className="bg-[#EAE2D6]/50 px-10 py-6 border-b border-[#D8CCBC]/50">
-              <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em]">Customer Profile</h3>
+          <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden shadow-sm">
+            <div className="bg-[#F8FAFC] px-6 py-4 border-b border-[#E2E8F0]">
+              <h3 className="text-sm font-semibold text-[#1A2A3A]">Contact Persona</h3>
             </div>
-            <div className="p-10">
-              <div className="grid grid-cols-2 gap-y-10 gap-x-12">
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-y-6 gap-x-8">
                 <div>
-                  <p className="text-[9px] text-[#7B6F63] uppercase tracking-widest font-black mb-1">Target Name</p>
-                  <p className="text-lg font-bold text-[#3A2F28] tracking-tight">{customer_info?.name || scenario.persona_name}</p>
+                  <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-1">Name</p>
+                  <p className="text-base font-bold text-[#1A2A3A]">{customer_info?.name || scenario.persona_name}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-[#7B6F63] uppercase tracking-widest font-black mb-1">Functional Role</p>
-                  <p className="text-lg font-bold text-[#3A2F28] tracking-tight">{customer_info?.role || 'Executive'}</p>
+                  <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-1">Title</p>
+                  <p className="text-base font-bold text-[#1A2A3A]">{scenario.contact_title || customer_info?.role || 'Executive'}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-[#7B6F63] uppercase tracking-widest font-black mb-1">Organization</p>
-                  <p className="text-sm font-bold text-[#3A2F28] tracking-tight">{customer_info?.company || 'Prospect Entity'}</p>
+                  <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-1">Company</p>
+                  <p className="text-sm font-semibold text-[#1A2A3A]">{scenario.contact_company || customer_info?.company || 'Prospect Co.'}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-[#7B6F63] uppercase tracking-widest font-black mb-1">Sector</p>
-                  <p className="text-sm font-bold text-[#3A2F28] tracking-tight">{customer_info?.industry || 'Enterprise Technology'}</p>
+                  <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-1">Type</p>
+                  <p className="text-sm font-semibold text-[#1A2A3A]">{persona_type}</p>
                 </div>
-                <div className="col-span-2 pt-6 border-t border-[#D8CCBC]/30">
-                  <p className="text-[9px] text-[#7B6F63] uppercase tracking-widest font-black mb-2">Psychological Archetype</p>
-                  <p className="text-sm font-bold text-[#7D8461] uppercase tracking-tight">{persona_type}</p>
-                  <p className="text-sm text-[#3A2F28]/80 mt-2 leading-relaxed">{personality_traits}</p>
+                <div className="col-span-2 pt-4 border-t border-[#E2E8F0]">
+                  <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-2">Motivations & Priorities</p>
+                  <p className="text-sm text-[#1A2A3A] leading-relaxed">{personality_traits}</p>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Context */}
-          <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2rem] overflow-hidden shadow-sm">
-            <div className="bg-[#EAE2D6]/50 px-10 py-6 border-b border-[#D8CCBC]/50">
-              <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em]">Tactical Context</h3>
+          <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden shadow-sm">
+            <div className="bg-[#F8FAFC] px-6 py-4 border-b border-[#E2E8F0]">
+              <h3 className="text-sm font-semibold text-[#1A2A3A]">Meeting Context</h3>
             </div>
-            <div className="p-10 space-y-10">
+            <div className="p-6 space-y-6">
               <div>
-                <h4 className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest mb-3">Operational Background</h4>
-                <p className="text-sm text-[#3A2F28]/80 leading-relaxed italic">"{scenario.context_text.replace(/\[SCENARIO:.*?\]\s*/g, '').replace(/\[SCENARIO_METADATA:\s*({.*?})\]/s, '').trim()}"</p>
+                <h4 className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-2">Background for Trainee</h4>
+                <p className="text-sm text-[#1A2A3A] leading-relaxed italic">"{scenario.background_for_trainee || scenario.context_text.replace(/\[SCENARIO:.*?\]\s*/g, '').replace(/\[SCENARIO_METADATA:\s*({[\s\S]*?})\]/, '').trim()}"</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                <div className="bg-[#F6F1E8] rounded-2xl p-6 border border-[#D8CCBC]/30">
-                  <h4 className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest mb-2">Customer Outcome</h4>
-                  <p className="text-sm font-medium text-[#3A2F28]">{customer_goal}</p>
-                </div>
-                <div className="bg-[#7D8461]/5 rounded-2xl p-6 border border-[#7D8461]/20">
-                  <h4 className="text-[9px] font-black text-[#7D8461] uppercase tracking-widest mb-2">Assigned Objective</h4>
-                  <p className="text-sm font-bold text-[#3A2F28]">{sales_rep_goal}</p>
-                </div>
+              <div className="bg-[#F8FAFC] rounded-lg p-5 border border-[#E2E8F0]">
+                <h4 className="text-xs font-semibold text-[#2C5282] uppercase tracking-wider mb-2">Rep Objective</h4>
+                <p className="text-sm font-bold text-[#1A2A3A]">{scenario.conversation_expectations || sales_rep_goal}</p>
               </div>
             </div>
           </div>
-
-          {/* Questions */}
-          {suggested_discovery_questions?.length > 0 && (
-            <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2rem] overflow-hidden shadow-sm">
-              <div className="bg-[#EAE2D6]/50 px-10 py-6 border-b border-[#D8CCBC]/50">
-                <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em]">Discovery Roadmap</h3>
-              </div>
-              <div className="p-10">
-                <ul className="space-y-4">
-                  {suggested_discovery_questions.map((q: string, i: number) => (
-                    <li key={i} className="flex gap-4 text-[#3A2F28] text-sm font-medium items-start p-4 bg-[#F6F1E8]/50 rounded-xl border border-[#D8CCBC]/20">
-                      <span className="text-[#7D8461] font-black">?</span>
-                      <span className="italic leading-relaxed">"{q}"</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Right Column */}
-        <div className="space-y-12">
+        <div className="space-y-8">
           
-          {/* Objections */}
-          <div className="bg-[#EFE7DC] border border-[#A06A5B]/20 rounded-[2rem] overflow-hidden shadow-sm">
-            <div className="bg-[#A06A5B]/5 px-8 py-6 border-b border-[#A06A5B]/20">
-              <h3 className="text-[10px] font-black text-[#A06A5B] uppercase tracking-[0.2em]">Expected Objections</h3>
+          {/* Coaching Focus */}
+          <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden shadow-sm">
+            <div className="bg-[#F8FAFC] px-6 py-4 border-b border-[#E2E8F0]">
+              <h3 className="text-sm font-semibold text-[#1A2A3A]">Scorecard Metrics</h3>
             </div>
-            <div className="p-8">
-              <div className="flex flex-wrap gap-2">
-                {likely_objections?.map((obj: string, i: number) => (
-                  <span key={i} className="px-3 py-1.5 bg-[#F6F1E8] border border-[#D8CCBC] rounded-lg text-[9px] font-black text-[#7B6F63] uppercase tracking-widest">
-                    {obj}
-                  </span>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-[#64748B] font-semibold leading-relaxed">You will be evaluated on these specific criteria:</p>
+              <div className="flex flex-col gap-2">
+                {(scenario.evaluation_focus ? scenario.evaluation_focus.split(',') : (coaching_focus_areas || [])).map((focus: string, i: number) => (
+                  <div key={i} className="flex items-center gap-2">
+                     <svg className="w-4 h-4 text-[#2C5282]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                     <span className="text-sm font-medium text-[#1A2A3A]">
+                       {focus.trim()}
+                     </span>
+                  </div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Preparation Tips */}
-          {preparation_tips?.length > 0 && (
-            <div className="bg-[#EFE7DC] border border-[#7D8461]/20 rounded-[2rem] overflow-hidden shadow-sm">
-              <div className="bg-[#7D8461]/5 px-8 py-6 border-b border-[#7D8461]/20">
-                <h3 className="text-[10px] font-black text-[#7D8461] uppercase tracking-[0.2em]">Deployment Advice</h3>
+          {/* Expected Objections */}
+          {scenario.objection_style && (
+            <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-[#F8FAFC] px-6 py-4 border-b border-[#E2E8F0]">
+                <h3 className="text-sm font-semibold text-[#1A2A3A]">Communication Style</h3>
               </div>
-              <div className="p-8">
-                <ul className="space-y-4">
-                  {preparation_tips.map((tip: string, i: number) => (
-                    <li key={i} className="flex gap-3 text-[#3A2F28] text-xs font-bold items-start uppercase tracking-tight">
-                      <span className="text-[#7D8461]">✓</span>
-                      <span className="leading-relaxed">{tip}</span>
-                    </li>
-                  ))}
-                </ul>
+              <div className="p-6">
+                <p className="text-sm text-[#1A2A3A] leading-relaxed">{scenario.objection_style}</p>
               </div>
             </div>
           )}
 
-          {/* Coaching Focus */}
-          <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2rem] overflow-hidden shadow-sm">
-            <div className="bg-[#EAE2D6]/50 px-8 py-6 border-b border-[#D8CCBC]/50">
-              <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em]">Evaluation Focus</h3>
-            </div>
-            <div className="p-8 space-y-6">
-              <p className="text-[10px] text-[#7B6F63] font-bold uppercase tracking-widest leading-relaxed">Intelligence will grade strictly on these vectors:</p>
-              <div className="flex flex-wrap gap-2">
-                {coaching_focus_areas?.map((focus: string, i: number) => (
-                  <span key={i} className="px-4 py-2 bg-[#F6F1E8] border border-[#D8CCBC]/50 text-[#3A2F28] rounded-xl text-[9px] font-black uppercase tracking-widest">
-                    {focus.replace('_', ' ')}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-
           {/* CTA */}
-          <div className="pt-6">
+          <div className="pt-2">
             <button
               onClick={handleBeginConversation}
               disabled={starting}
-              className="w-full py-6 bg-[#7D8461] hover:bg-[#6B7252] disabled:opacity-50 text-[#F6F1E8] text-xs font-black uppercase tracking-[0.2em] rounded-[1.5rem] shadow-lg shadow-[#7D8461]/30 transition-all flex items-center justify-center gap-4"
+              className="w-full py-4 bg-[#2C5282] hover:bg-[#2A4A75] disabled:opacity-50 text-white text-sm font-bold uppercase tracking-wider rounded-lg shadow-sm transition-all flex items-center justify-center gap-3"
             >
               {starting ? (
-                <div className="w-4 h-4 border-2 border-[#F6F1E8]/30 border-t-[#F6F1E8] rounded-full animate-spin"></div>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
-                <>Authorize Mission ⚡</>
+                <>Start Training</>
               )}
             </button>
           </div>

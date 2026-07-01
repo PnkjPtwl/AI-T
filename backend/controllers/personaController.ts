@@ -1,7 +1,7 @@
 import { AssemblyAI } from 'assemblyai'
 import { Groq } from 'groq-sdk'
+import { getSecret } from '../lib/secrets'
 
-// Endpoint: POST /api/persona/from-audio
 export const generatePersonaFromAudio = async (req: any, res: any) => {
   try {
     const audioFile = req.file
@@ -10,7 +10,7 @@ export const generatePersonaFromAudio = async (req: any, res: any) => {
       return res.status(400).json({ error: 'Audio/video file is required.' })
     }
 
-    const assemblyApiKey = process.env.ASSEMBLYAI_API_KEY
+    const assemblyApiKey = await getSecret('ASSEMBLYAI_API_KEY')
     if (!assemblyApiKey || assemblyApiKey === 'your_key_here') {
       return res.status(500).json({
         error: 'AssemblyAI API Key is missing or invalid. Please configure it in the backend .env file.'
@@ -19,7 +19,6 @@ export const generatePersonaFromAudio = async (req: any, res: any) => {
 
     const aai = new AssemblyAI({ apiKey: assemblyApiKey })
 
-    // 1. Transcribe with Speaker Diarization
     const transcript = await aai.transcripts.transcribe({
       audio: audioFile.buffer,
       speaker_labels: true,
@@ -34,13 +33,12 @@ export const generatePersonaFromAudio = async (req: any, res: any) => {
       return res.status(400).json({ error: 'No speech detected in the audio file.' })
     }
 
-    // Format diarized transcript
     const formattedTranscript = transcript.utterances
       .map(u => `Speaker ${u.speaker}: ${u.text}`)
       .join('\n')
 
-    // 2. Extract Persona using Groq
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' })
+    const groqApiKey = await getSecret('GROQ_API_KEY')
+    const groq = new Groq({ apiKey: groqApiKey })
 
     const extractionPrompt = `
 You are an expert sales coach and persona designer.
@@ -48,6 +46,7 @@ Read the following diarized transcript of a sales call.
 Your task is to:
 1. Identify which speaker is the client/buyer (the prospect being sold to).
 2. Extract detailed persona information about this client/buyer.
+3. Suggest 3-5 specific evaluation questions the sales manager should use to grade the rep in this scenario based on the transcript content.
 
 Transcript:
 """
@@ -64,7 +63,14 @@ Return ONLY a valid JSON object matching this exact structure:
   "objection_style": "string (detailed explanation of how they object, with examples from the transcript)",
   "decision_drivers": "string (explain what influences their decisions and why, based on transcript context)",
   "target_skills": "string (comma separated list of 2-3 sales skills the rep should practice with this persona, e.g. Discovery, Objection Handling, Closing)",
-  "evaluation_focus": "string (comma separated list of what the manager should evaluate the rep on for this specific persona)"
+  "evaluation_focus": "string (comma separated list of what the manager should evaluate the rep on for this specific persona)",
+  "recommended_evaluation_questions": [
+    {
+      "category": "string (e.g. Next Steps & Call Effectiveness, Objection & Concern Handling, Customer Understanding)",
+      "question_text": "string (The actual evaluation question)",
+      "question_type": "string (boolean or scale)"
+    }
+  ]
 }
 `
 
@@ -82,7 +88,6 @@ Return ONLY a valid JSON object matching this exact structure:
 
     const personaData = JSON.parse(resultText)
 
-    // Generate preview prompt (default custom_prompt)
     const generatedPrompt = `You are a ${personaData.persona_type} named ${personaData.persona_name}.
 You are highly ${personaData.personality_traits}.
 Your communication style is: ${personaData.communication_style}.

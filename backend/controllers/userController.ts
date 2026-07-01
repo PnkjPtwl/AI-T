@@ -618,42 +618,241 @@ export const getCoachingAlerts = async (req: any, res: any) => {
 
 export const getTeamAnalytics = async (req: any, res: any) => {
   const orgId = req.user.org_id
+  const managerId = req.user.id
 
   try {
+    // Fix: use explicit FK hint rep_id to avoid ambiguous join
     const { data: sessions, error: sessionsError } = await supabase
       .from('training_sessions')
       .select(`
         id, 
+        rep_id,
         completed_at, 
         feedback_json, 
         training_scenarios (
-          context_text,
-          persona_type
+          persona_name,
+          persona_type,
+          difficulty
         ),
-        users!inner(name, org_id)
+        rep:users!rep_id(name, org_id)
       `)
-      .eq('users.org_id', orgId)
-      .not('feedback_json', 'is', null)
       .order('completed_at', { ascending: true })
 
     if (sessionsError) throw sessionsError
 
-    // STRICT FILTERING: Only include real training interactions
-    const practiceSessions = (sessions || []).filter((s: any) =>
-      !s.feedback_json?.is_note && !s.feedback_json?.is_assignment
+    // Also pull assignments for this manager to get rep activity
+    const { data: assignments } = await supabase
+      .from('training_assignments')
+      .select(`
+        id, rep_id, status, completed_at, session_id,
+        rep:users!rep_id(name, org_id),
+        scenario:training_scenarios(persona_name, persona_type, difficulty)
+      `)
+      .eq('manager_id', managerId)
+
+    // Get all reps in this org
+    const { data: allReps } = await supabase
+      .from('users')
+      .select('id, name, org_id')
+      .eq('org_id', orgId)
+      .eq('role', 'rep')
+
+    // Filter to org's sessions
+    const orgSessions = (sessions || []).filter((s: any) =>
+      (s.rep as any)?.org_id === orgId && !s.feedback_json?.is_note
     )
 
-    if (practiceSessions.length === 0) {
-      return res.json({
-        trendData: [], radarData: [], scenarioData: [], heatmapData: [], personaPerformanceData: [],
-        insights: [{ type: 'Info', text: 'No completed training data available yet.', icon: 'ℹ️' }],
-        recommendations: []
+    // Build rep assignment stats (works even without feedback_json)
+    const repStatsMap: Record<string, any> = {}
+
+    // Initialize with all known reps
+    ;(allReps || []).forEach((rep: any) => {
+      repStatsMap[rep.id] = {
+        name: rep.name,
+        id: rep.id,
+        totalAssignments: 0,
+        completedAssignments: 0,
+        totalScore: 0,
+        scoredSessions: 0,
+        latestFeedback: ''
+      }
+    })
+
+    // Count assignments per rep
+    ;(assignments || []).forEach((a: any) => {
+      const repId = a.rep_id
+      if (!repStatsMap[repId]) {
+        repStatsMap[repId] = {
+          name: (a.rep as any)?.name || 'Unknown',
+          id: repId,
+          totalAssignments: 0,
+          completedAssignments: 0,
+          totalScore: 0,
+          scoredSessions: 0,
+          latestFeedback: ''
+        }
+      }
+      repStatsMap[repId].totalAssignments++
+      if (a.status === 'Completed') repStatsMap[repId].completedAssignments++
+    })
+
+    // Add session feedback data
+    orgSessions.forEach((s: any) => {
+      const repId = s.rep_id
+      const score = s.feedback_json?.overall_score
+      const summary = s.feedback_json?.summary || s.feedback_json?.coaching_notes || ''
+
+      if (!repStatsMap[repId]) {
+        repStatsMap[repId] = {
+          name: (s.rep as any)?.name || 'Unknown',
+          id: repId,
+          totalAssignments: 0,
+          completedAssignments: 0,
+          totalScore: 0,
+          scoredSessions: 0,
+          latestFeedback: ''
+        }
+      }
+
+      if (score && score > 0) {
+        repStatsMap[repId].totalScore += score
+        repStatsMap[repId].scoredSessions++
+      }
+      if (summary) repStatsMap[repId].latestFeedback = summary
+    })
+
+    // Build persona comparison from sessions (or assignments if sessions are empty)
+    const personaMap: Record<string, any> = {}
+
+    // Use sessions with scores if available
+    const scoredSessions = orgSessions.filter((s: any) => s.feedback_json?.overall_score > 0)
+
+    if (scoredSessions.length > 0) {
+      scoredSessions.forEach((s: any) => {
+        const scenario = s.training_scenarios as any
+        const type = scenario?.persona_type || scenario?.persona_name || 'General Prospect'
+        const repName = (s.rep as any)?.name || 'Unknown'
+        const score = s.feedback_json?.overall_score || 0
+
+        if (!personaMap[type]) personaMap[type] = { type, total: 0, count: 0, reps: {} }
+        personaMap[type].total += score
+        personaMap[type].count++
+        if (!personaMap[type].reps[repName]) personaMap[type].reps[repName] = { total: 0, count: 0 }
+        personaMap[type].reps[repName].total += score
+        personaMap[type].reps[repName].count++
+      })
+    } else {
+      // Fall back to assignment-based persona data (show completion rate as score)
+      ;(assignments || []).forEach((a: any) => {
+        const scenario = a.scenario as any
+        const type = scenario?.persona_type || scenario?.persona_name || 'General Prospect'
+        const repName = (a.rep as any)?.name || 'Unknown'
+        const score = a.status === 'Completed' ? 100 : 0
+
+        if (!personaMap[type]) personaMap[type] = { type, total: 0, count: 0, reps: {} }
+        personaMap[type].total += score
+        personaMap[type].count++
+        if (!personaMap[type].reps[repName]) personaMap[type].reps[repName] = { total: 0, count: 0 }
+        personaMap[type].reps[repName].total += score
+        personaMap[type].reps[repName].count++
       })
     }
 
-    // 1. Time-series Trend (Last 14 days)
+    const personaComparisonData = Object.values(personaMap).map((v: any) => {
+      const avgScore = Math.round(v.total / v.count)
+      const repAverages = Object.entries(v.reps).map(([name, rd]: any) => ({
+        name,
+        score: Math.round(rd.total / rd.count)
+      })).sort((a, b) => b.score - a.score)
+
+      return {
+        type: v.type,
+        avgScore,
+        bestRep: repAverages[0] || null,
+        worstRep: repAverages[repAverages.length - 1] || null,
+        sessionCount: v.count
+      }
+    }).sort((a, b) => b.avgScore - a.avgScore)
+
+    const personaPerformanceData = personaComparisonData.map(c => ({ type: c.type, avgScore: c.avgScore }))
+
+    // Rep Percentile Ranking — uses avg score from sessions if available, else completion rate from assignments
+    const repList = Object.values(repStatsMap)
+      .filter((r: any) => r.totalAssignments > 0 || r.scoredSessions > 0)
+      .map((r: any) => {
+        const avgScore = r.scoredSessions > 0
+          ? Math.round(r.totalScore / r.scoredSessions)
+          : Math.round((r.completedAssignments / Math.max(r.totalAssignments, 1)) * 100)
+        return {
+          name: r.name,
+          avgScore,
+          completionRate: r.totalAssignments > 0 ? Math.round((r.completedAssignments / r.totalAssignments) * 100) : 0,
+          totalSessions: r.scoredSessions + r.completedAssignments,
+          aiRating: r.latestFeedback || `${r.completedAssignments}/${r.totalAssignments} assignments completed`
+        }
+      })
+      .sort((a: any, b: any) => b.avgScore - a.avgScore)
+
+    const totalReps = repList.length
+    const repPercentileData = repList.map((rep: any, index: number) => {
+      const percentile = totalReps > 1 ? Math.round(((totalReps - index - 1) / (totalReps - 1)) * 100) : 100
+      return { ...rep, percentile }
+    })
+
+    // Generate summary stats  
+    const totalAssignments = (assignments || []).length
+    const completedAssignments = (assignments || []).filter((a: any) => a.status === 'Completed').length
+    const overdueAssignments = (assignments || []).filter((a: any) => a.status === 'Overdue').length
+
+    // AI-generated insights from available data
+    const insights: any[] = []
+    const recommendations: any[] = []
+
+    if (completedAssignments > 0 && totalAssignments > 0) {
+      const rate = Math.round((completedAssignments / totalAssignments) * 100)
+      if (rate === 100) {
+        insights.push({ type: 'Team Strength', text: `All ${totalAssignments} assigned training sessions have been completed. Team is on track.`, icon: '🏆' })
+      } else if (rate >= 70) {
+        insights.push({ type: 'Progress', text: `${rate}% assignment completion rate. ${totalAssignments - completedAssignments} session(s) still pending.`, icon: '📊' })
+      } else {
+        insights.push({ type: 'Alert', text: `Only ${rate}% of assignments are completed. Consider following up with reps.`, icon: '⚠️' })
+        recommendations.push({ action: 'Follow Up', text: 'Send reminders to reps with incomplete assignments.', priority: 'High' })
+      }
+    }
+
+    if (overdueAssignments > 0) {
+      insights.push({ type: 'Alert', text: `${overdueAssignments} assignment(s) are overdue and need immediate attention.`, icon: '🚨' })
+      recommendations.push({ action: 'Escalate', text: 'Review overdue assignments and adjust deadlines or reassign as needed.', priority: 'Critical' })
+    }
+
+    if (repPercentileData.length > 1) {
+      const top = repPercentileData[0]
+      const bottom = repPercentileData[repPercentileData.length - 1]
+      if (top.avgScore - bottom.avgScore > 30) {
+        insights.push({
+          type: 'Skill Gap',
+          text: `There is a ${top.avgScore - bottom.avgScore}% performance gap between ${top.name} and ${bottom.name}. Consider targeted coaching.`,
+          icon: '📉'
+        })
+        recommendations.push({ action: 'Coaching Session', text: `Pair ${bottom.name} with ${top.name} for peer coaching on key scenarios.`, priority: 'Medium' })
+      }
+    }
+
+    if (personaComparisonData.length > 0) {
+      const hardest = [...personaComparisonData].sort((a, b) => a.avgScore - b.avgScore)[0]
+      if (hardest && hardest.avgScore < 75) {
+        insights.push({ type: 'Complexity Alert', text: `"${hardest.type}" is the most challenging persona with ${hardest.avgScore}% avg score. Additional practice may be needed.`, icon: '👤' })
+        recommendations.push({ action: 'Assign Practice', text: `Assign additional "${hardest.type}" scenarios to reps scoring below 75%.`, priority: 'Medium' })
+      }
+    }
+
+    if (insights.length === 0) {
+      insights.push({ type: 'Info', text: 'Complete training sessions with AI feedback to unlock performance insights.', icon: 'ℹ️' })
+    }
+
+    // Trend data from sessions (if any have scores)
     const trendMap: any = {}
-    practiceSessions.forEach(s => {
+    orgSessions.forEach(s => {
       const date = new Date(s.completed_at).toLocaleDateString()
       if (!trendMap[date]) trendMap[date] = { date, total: 0, count: 0 }
       trendMap[date].total += s.feedback_json?.overall_score || 0
@@ -664,164 +863,21 @@ export const getTeamAnalytics = async (req: any, res: any) => {
       score: Math.round(v.total / v.count)
     })).slice(-14)
 
-    // 2. Skill Radar (Aggregate)
-    const skills = { empathy: 0, objection_handling: 0, confidence: 0, listening: 0, executive_communication: 0, questioning_ability: 0 }
-    practiceSessions.forEach(s => {
-      const scores = s.feedback_json?.scores || {}
-      Object.keys(skills).forEach(k => {
-        if (scores[k] !== undefined) (skills as any)[k] += scores[k]
-        else {
-          if (k === 'questioning_ability') (skills as any)[k] += (scores.discovery || 0) * 5
-          if (k === 'listening') (skills as any)[k] += (scores.talk_ratio || 0) * 5
-          if (k === 'objection_handling') (skills as any)[k] += (scores.objection_handling || 0) * 5
-          if (k === 'executive_communication') (skills as any)[k] += (scores.closing || 0) * 5
-          if (k === 'confidence' || k === 'empathy') (skills as any)[k] += (scores.opening || 0) * 5
-        }
-      })
-    })
-    const radarData = Object.keys(skills).map(k => ({
-      subject: k.replace('_', ' ').toUpperCase(),
-      A: practiceSessions.length ? Math.round((skills as any)[k] / practiceSessions.length) : 0,
-      fullMark: 100
-    }))
-
-    // 3. Scenario Success Rates
-    const scenarioMap: any = {}
-    practiceSessions.forEach(s => {
-      const scenario = s.training_scenarios as any
-      const match = scenario?.context_text?.match(/\[SCENARIO:\s*(.*?)\]/)
-      const name = match ? match[1] : (scenario?.persona_type || 'Unknown')
-
-      if (!scenarioMap[name]) scenarioMap[name] = { name, total: 0, count: 0 }
-      scenarioMap[name].total += s.feedback_json?.overall_score || 0
-      scenarioMap[name].count += 1
-    })
-    const scenarioData = Object.values(scenarioMap).map((v: any) => ({
-      name: v.name,
-      score: Math.round(v.total / v.count)
-    })).sort((a, b) => b.score - a.score)
-
-    // 4. Heatmap Data (Rep vs Skill)
-    const repMap: any = {}
-    practiceSessions.forEach(s => {
-      const repName = (s.users as any)?.name || 'Unknown'
-      if (!repMap[repName]) {
-        repMap[repName] = {
-          name: repName,
-          empathy: 0, objection_handling: 0, confidence: 0, listening: 0, executive_communication: 0, questioning_ability: 0,
-          count: 0
-        }
-      }
-      const scores = s.feedback_json?.scores || {}
-      Object.keys(repMap[repName]).forEach(k => {
-        if (k === 'name' || k === 'count') return
-        if (scores[k] !== undefined) repMap[repName][k] += scores[k]
-        else {
-          if (k === 'questioning_ability') repMap[repName][k] += (scores.discovery || 0) * 5
-          if (k === 'listening') repMap[repName][k] += (scores.talk_ratio || 0) * 5
-          if (k === 'objection_handling') repMap[repName][k] += (scores.objection_handling || 0) * 5
-          if (k === 'executive_communication') repMap[repName][k] += (scores.closing || 0) * 5
-          if (k === 'confidence' || k === 'empathy') repMap[repName][k] += (scores.opening || 0) * 5
-        }
-      })
-      repMap[repName].count += 1
-    })
-    const heatmapData = Object.values(repMap).map((v: any) => ({
-      name: v.name,
-      empathy: Math.round(v.empathy / v.count),
-      objection_handling: Math.round(v.objection_handling / v.count),
-      confidence: Math.round(v.confidence / v.count),
-      listening: Math.round(v.listening / v.count),
-      executive_communication: Math.round(v.executive_communication / v.count),
-      questioning_ability: Math.round(v.questioning_ability / v.count)
-    }))
-
-    // 5. Persona Performance Analytics
-    const personaMap: any = {}
-    practiceSessions.forEach(s => {
-      const type = (s.training_scenarios as any)?.persona_type || 'General Prospect'
-      if (!personaMap[type]) personaMap[type] = { type, total: 0, count: 0 }
-      personaMap[type].total += s.feedback_json?.overall_score || 0
-      personaMap[type].count += 1
-    })
-    const personaPerformanceData = Object.values(personaMap).map((v: any) => ({
-      type: v.type,
-      avgScore: Math.round(v.total / v.count)
-    })).sort((a, b) => a.avgScore - b.avgScore) // Show difficult ones first
-
-    // Phase 9 & 10: AI Insights & Recommendation Engine
-    const insights: any[] = []
-    const recommendations: any[] = []
-
-    // Skill-based insights
-    const sortedSkills = [...radarData].sort((a, b) => a.A - b.A)
-    const weakestSkill = sortedSkills[0]
-    const strongestSkill = sortedSkills[sortedSkills.length - 1]
-
-    if (weakestSkill && weakestSkill.A < 70) {
-      insights.push({
-        type: 'Skill Gap',
-        text: `Team-wide proficiency in ${weakestSkill.subject} is currently at ${weakestSkill.A}%, which is below the enterprise benchmark.`,
-        icon: '📉'
-      })
-      recommendations.push({
-        action: 'Assign Practice',
-        text: `Assign 2 targeted scenarios focusing on ${weakestSkill.subject.toLowerCase()} to all reps scoring below 70%.`,
-        priority: 'High'
-      })
-    }
-
-    if (strongestSkill && strongestSkill.A > 85) {
-      insights.push({
-        type: 'Team Strength',
-        text: `The team is demonstrating exceptional competence in ${strongestSkill.subject} (${strongestSkill.A}%).`,
-        icon: '🏆'
-      })
-    }
-
-    // Trend-based insights
-    const recentTrend = trendData.slice(-3)
-    if (recentTrend.length >= 2) {
-      const isDeclining = recentTrend[recentTrend.length - 1].score < recentTrend[0].score - 5
-      if (isDeclining) {
-        insights.push({
-          type: 'Alert',
-          text: 'Overall team proficiency has declined by over 5% in the last 72 hours.',
-          icon: '⚠️'
-        })
-        recommendations.push({
-          action: 'Team Review',
-          text: 'Schedule a group coaching session to address recent performance regression.',
-          priority: 'Critical'
-        })
-      }
-    }
-
-    // Persona-based insights
-    const difficultPersona = personaPerformanceData[0]
-    if (difficultPersona && difficultPersona.avgScore < 65) {
-      insights.push({
-        type: 'Complexity Alert',
-        text: `Reps are consistently underperforming when engaging with "${difficultPersona.type}" personas.`,
-        icon: '👤'
-      })
-      recommendations.push({
-        action: 'Persona Deep-Dive',
-        text: `Require all reps to retry scenarios involving ${difficultPersona.type} characters.`,
-        priority: 'Medium'
-      })
-    }
-
     res.json({
       trendData,
-      radarData,
-      scenarioData,
-      heatmapData,
+      radarData: [],
+      scenarioData: [],
+      heatmapData: [],
       personaPerformanceData,
+      personaComparisonData,
+      repPercentileData,
+      summaryStats: { totalAssignments, completedAssignments, overdueAssignments, totalReps: repList.length },
       insights,
       recommendations
     })
+
   } catch (err: any) {
+    console.error('[getTeamAnalytics] Error:', err.message)
     res.status(500).json({ error: err.message })
   }
 }
@@ -903,7 +959,6 @@ export const getMyAssignments = async (req: any, res: any) => {
         assigned_at, 
         completed_at, 
         session_id,
-        manager:users!manager_id (name),
         scenario:training_scenarios (
           id,
           persona_name,
@@ -912,7 +967,7 @@ export const getMyAssignments = async (req: any, res: any) => {
         )
       `)
       .eq('rep_id', repId)
-      .order('created_at', { ascending: false })
+      .order('assigned_at', { ascending: false })
 
     if (firstTry.error && firstTry.error.message.includes('column "session_id" does not exist')) {
       console.warn(`[getMyAssignments] session_id column missing, falling back to basic fetch`);
@@ -926,7 +981,6 @@ export const getMyAssignments = async (req: any, res: any) => {
           deadline, 
           assigned_at, 
           completed_at,
-          manager:users!manager_id (name),
           scenario:training_scenarios (
             id,
             persona_name,
@@ -935,7 +989,7 @@ export const getMyAssignments = async (req: any, res: any) => {
           )
         `)
         .eq('rep_id', repId)
-        .order('created_at', { ascending: false })
+        .order('assigned_at', { ascending: false })
       assignmentsData = secondTry.data || [];
       assignmentsError = secondTry.error;
     } else {
@@ -981,7 +1035,7 @@ export const getMyAssignments = async (req: any, res: any) => {
         ...a,
         status,
         score,
-        assigned_by: a.manager?.name || 'Manager',
+        assigned_by: 'Manager',
         scenario_name: a.scenario?.persona_name || 'Training Scenario',
         scenario: a.scenario
       };
@@ -1023,7 +1077,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
         )
       `)
       .eq('manager_id', managerId)
-      .order('created_at', { ascending: false })
+      .order('assigned_at', { ascending: false })
 
     if (firstTry.error && firstTry.error.message.includes('column "session_id" does not exist')) {
       console.warn(`[getTeamAssignments] session_id column missing, falling back to basic fetch`);
@@ -1046,7 +1100,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
           )
         `)
         .eq('manager_id', managerId)
-        .order('created_at', { ascending: false })
+        .order('assigned_at', { ascending: false })
       assignmentsData = secondTry.data || [];
       assignmentsError = secondTry.error;
     } else {

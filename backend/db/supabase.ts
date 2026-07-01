@@ -1,30 +1,54 @@
-import { createClient } from '@supabase/supabase-js'
-import dotenv from 'dotenv'
+// =============================================================================
+// db/supabase.ts — Lazy-initialized Supabase clients
+// =============================================================================
 
-dotenv.config()
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { getSecret } from '../lib/secrets'
 
-const supabaseUrl      = process.env.SUPABASE_URL!
-const serviceRoleKey   = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const anonKey          = process.env.SUPABASE_ANON_KEY!
+let _supabase: SupabaseClient | null = null
+let _supabaseAuth: SupabaseClient | null = null
 
-if (!supabaseUrl) throw new Error('Missing SUPABASE_URL')
+export async function getSupabase(): Promise<SupabaseClient> {
+  if (!_supabase) {
+    const url = await getSecret('SUPABASE_URL')
+    const key = await getSecret('SUPABASE_SERVICE_ROLE_KEY')
 
-// ── Service-role client (used for DB inserts — bypasses RLS) ──
-// ⚠️  Never expose this key to the browser
-if (!serviceRoleKey || serviceRoleKey === 'your-service-role-key-here') {
-  throw new Error(
-    '❌  SUPABASE_SERVICE_ROLE_KEY is not set.\n' +
-    '   Go to Supabase → Project Settings → API → service_role → copy the secret key\n' +
-    '   Then paste it in backend/.env as SUPABASE_SERVICE_ROLE_KEY=<key>'
-  )
+    if (!url || !key) {
+      throw new Error(
+        '❌ SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set.\n' +
+        '   Check AWS Secrets Manager or your local .env file.'
+      )
+    }
+
+    _supabase = createClient(url, key, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+  }
+  return _supabase
 }
 
-export const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession:   false
+export async function getSupabaseAuth(): Promise<SupabaseClient> {
+  if (!_supabaseAuth) {
+    const url = await getSecret('SUPABASE_URL')
+    const key = await getSecret('SUPABASE_ANON_KEY')
+    _supabaseAuth = createClient(url, key)
+  }
+  return _supabaseAuth
+}
+
+let _syncSupabase: SupabaseClient | null = null
+
+export function setSyncSupabase(client: SupabaseClient) {
+  _syncSupabase = client
+}
+
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    if (!_syncSupabase) {
+      throw new Error(
+        'supabase used before initSecrets(). Use getSupabase() instead, or await initSecrets() first.'
+      )
+    }
+    return (_syncSupabase as any)[prop]
   }
 })
-
-// ── Anon client (used only for auth.signUp / signInWithPassword) ──
-export const supabaseAuth = createClient(supabaseUrl, anonKey)

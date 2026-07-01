@@ -17,7 +17,7 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
 
   useEffect(() => {
     if (!sessionId) {
-      router.push('/rep/reports')
+      router.back()
       return
     }
 
@@ -31,7 +31,7 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
           const data = await res.json()
           setSession(data)
         } else {
-          router.push('/rep/reports')
+          router.back()
         }
       } catch (err) {
         console.error(err)
@@ -46,7 +46,7 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
   if (loading || !session) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#7D8461]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#2C5282]"></div>
       </div>
     )
   }
@@ -57,53 +57,51 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
   const score = feedback.overall_score || 0
 
   const getOutcome = (s: number) => {
-    if (s >= 85) return { label: 'Highly Effective', color: 'text-[#7D8461]', bg: 'bg-[#7D8461]/10' }
-    if (s >= 70) return { label: 'Effective', color: 'text-[#7D8461]', bg: 'bg-[#7D8461]/5' }
-    if (s >= 50) return { label: 'Needs Improvement', color: 'text-[#3A2F28]', bg: 'bg-[#D6C2A8]/20' }
-    return { label: 'Focus Area', color: 'text-[#A06A5B]', bg: 'bg-[#A06A5B]/10' }
+    if (s >= 85) return { label: 'Highly Effective', color: 'text-green-600', bg: 'bg-green-50' }
+    if (s >= 70) return { label: 'Effective', color: 'text-blue-600', bg: 'bg-blue-50' }
+    if (s >= 50) return { label: 'Needs Improvement', color: 'text-yellow-600', bg: 'bg-yellow-50' }
+    return { label: 'Focus Area', color: 'text-red-600', bg: 'bg-red-50' }
   }
   const outcome = getOutcome(score)
 
   return (
-    <div className="max-w-7xl mx-auto space-y-12 pb-24 text-left">
+    <div className="max-w-7xl mx-auto space-y-8 pb-12 text-left">
       {/* Navigation */}
       <div className="flex items-center justify-between">
-        <Link href="/rep/reports" className="text-[#7D8461] hover:underline text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-          &larr; Back to Intelligence Repository
-        </Link>
-        <div className="text-[#7B6F63] text-[9px] font-black uppercase tracking-widest">
-          Report ID: {sessionId?.substring(0, 12)}
+        <button onClick={() => router.back()} className="text-[#64748B] hover:text-[#1A2A3A] text-sm font-medium flex items-center gap-2">
+          &larr; Back
+        </button>
+        <div className="text-[#64748B] text-xs font-medium">
+          Session ID: {sessionId?.substring(0, 12)}
         </div>
       </div>
 
       {/* Header Section */}
-      <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 md:p-12 shadow-sm relative overflow-hidden">
-        <div className="relative z-10 flex flex-col lg:flex-row justify-between items-center gap-10">
-          <div className="space-y-6 max-w-2xl">
-            <div className="flex items-center gap-4">
-              <span className="px-4 py-1.5 bg-[#F6F1E8] text-[#7D8461] text-[9px] font-black uppercase tracking-[0.2em] rounded-full border border-[#D8CCBC]">
-                {scenario.difficulty || 'Professional'}
+      <div className="bg-white border border-[#E2E8F0] rounded-xl p-8 shadow-sm">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+          <div className="space-y-4 max-w-2xl">
+            <div className="flex items-center gap-3">
+              <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full border ${scenario.difficulty === 'Hard' ? 'bg-red-50 text-red-600 border-red-200' : scenario.difficulty === 'Easy' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                {scenario.difficulty || 'Medium'}
               </span>
-              <span className="text-[#D8CCBC]">|</span>
-              <span className="text-[#7B6F63] text-[10px] font-bold uppercase tracking-widest">{new Date(session.completed_at).toLocaleDateString()}</span>
+              <span className="text-[#E2E8F0]">|</span>
+              <span className="text-[#64748B] text-xs font-medium">{new Date(session.completed_at).toLocaleDateString()}</span>
             </div>
-            <h1 className="text-4xl font-extrabold text-[#3A2F28] tracking-tight leading-tight">
-              {scenario.persona_name || 'Strategic Interaction'}
+            <h1 className="text-3xl font-bold text-[#1A2A3A]">
+              {scenario.persona_name || 'Training Interaction'}
             </h1>
-            <p className="text-[#7B6F63] text-base leading-relaxed">
-              Tactical review of the interaction with <span className="text-[#3A2F28] font-bold">{scenario.persona_name}</span>. 
-              {feedback.summary?.split('.')[0]}.
+            <p className="text-[#64748B] text-sm leading-relaxed">
+              Review of the interaction with <span className="font-semibold">{scenario.persona_name}</span>. 
+              {(feedback.summary || feedback.evaluation_summary || '')?.split('.')[0]}.
             </p>
           </div>
 
-          <div className="flex items-center gap-8 bg-[#F6F1E8] p-8 rounded-[2rem] border border-[#D8CCBC] shadow-inner">
-            <div className="text-center">
-              <div className={`text-6xl font-black ${outcome.color} tracking-tighter`}>
-                {score}%
-              </div>
-              <div className="text-[10px] font-black uppercase tracking-widest text-[#7B6F63] mt-2">Overall Proficiency</div>
+          <div className="flex flex-col items-center gap-2 bg-[#F8FAFC] p-6 rounded-xl border border-[#E2E8F0]">
+            <div className={`text-5xl font-bold ${outcome.color}`}>
+              {score}%
             </div>
-            <div className={`px-6 py-3 rounded-2xl border ${outcome.bg} ${outcome.color} text-xs font-black uppercase tracking-widest`}>
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">Overall Score</div>
+            <div className={`mt-2 px-3 py-1 rounded-md border border-[#E2E8F0] ${outcome.bg} ${outcome.color} text-xs font-semibold`}>
               {outcome.label}
             </div>
           </div>
@@ -111,20 +109,20 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
       </div>
 
       {/* Tabs */}
-      <div className="flex bg-[#EAE2D6] border border-[#D8CCBC] rounded-[1.5rem] p-1.5 gap-2 w-fit">
+      <div className="flex bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-1 gap-1 w-fit">
         {[
-          { id: 'overview', label: 'Analysis Overview' },
-          { id: 'transcript', label: 'Tactical Replay' },
-          { id: 'skills', label: 'Proficiency Matrix' },
-          { id: 'objections', label: 'Objection Handling' }
+          { id: 'overview', label: 'Overview' },
+          { id: 'transcript', label: 'Transcript' },
+          { id: 'skills', label: 'Scorecard' },
+          { id: 'objections', label: 'Objections' }
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`px-8 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+            className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === tab.id 
-                ? 'bg-[#EFE7DC] text-[#7D8461] shadow-sm border border-[#D8CCBC]' 
-                : 'text-[#7B6F63] hover:text-[#3A2F28]'
+                ? 'bg-white text-[#2C5282] shadow-sm border border-[#E2E8F0]' 
+                : 'text-[#64748B] hover:text-[#1A2A3A]'
             }`}
           >
             {tab.label}
@@ -133,72 +131,66 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
       </div>
 
       {/* Tab Content */}
-      <div className="space-y-12">
+      <div className="space-y-8">
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-            <div className="lg:col-span-2 space-y-12">
-              <section className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 space-y-6 shadow-sm">
-                <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Operational Summary</h3>
-                <p className="text-[#3A2F28] text-lg leading-relaxed font-medium italic">
-                  "{feedback.summary || "No detailed summary available for this session."}"
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-8">
+              <section className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm">
+                <h3 className="text-sm font-semibold text-[#1A2A3A] mb-4">Summary</h3>
+                <p className="text-[#1A2A3A] text-sm leading-relaxed italic">
+                  "{feedback.summary || "No summary available."}"
                 </p>
-                <div className="pt-8 border-t border-[#D8CCBC]/50">
-                   <h4 className="text-[9px] font-black text-[#7D8461] uppercase tracking-widest mb-4">Strategic Assessment</h4>
-                   <p className="text-base text-[#7B6F63] leading-relaxed">
-                     {feedback.outcome_analysis || "The interaction provided critical baseline data. Focus on recommended vectors to optimize future sessions."}
+                <div className="mt-6 pt-6 border-t border-[#E2E8F0]">
+                   <h4 className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-2">Outcome Analysis</h4>
+                   <p className="text-sm text-[#1A2A3A] leading-relaxed">
+                     {feedback.outcome_analysis || "The interaction provided baseline data."}
                    </p>
                 </div>
               </section>
 
-              <section className="space-y-6">
-                <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em] px-4">Tactical Highlights</h3>
-                <div className="grid grid-cols-1 gap-6">
+              <section className="space-y-4">
+                <h3 className="text-sm font-semibold text-[#1A2A3A]">Highlights</h3>
+                <div className="grid grid-cols-1 gap-4">
                   {feedback.highlights?.map((h: any, i: number) => (
-                    <div key={i} className={`p-10 rounded-[2.5rem] border ${
+                    <div key={i} className={`p-6 rounded-xl border ${
                       h.type === 'strong' 
-                        ? 'bg-[#7D8461]/5 border-[#7D8461]/20' 
-                        : 'bg-[#A06A5B]/5 border-[#A06A5B]/20'
+                        ? 'bg-green-50/50 border-green-200' 
+                        : 'bg-yellow-50/50 border-yellow-200'
                     }`}>
-                      <div className="flex justify-between items-start mb-6">
-                        <span className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-full border ${
-                          h.type === 'strong' ? 'bg-[#7D8461]/10 text-[#7D8461] border-[#7D8461]/20' : 'bg-[#A06A5B]/10 text-[#A06A5B] border-[#A06A5B]/20'
+                      <div className="flex justify-between items-start mb-4">
+                        <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full border ${
+                          h.type === 'strong' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'
                         }`}>
-                          {h.type === 'strong' ? 'Strategic Excellence' : 'Optimization Vector'}
+                          {h.type === 'strong' ? 'Good Moment' : 'Area to Improve'}
                         </span>
                       </div>
-                      <p className="text-[#3A2F28] italic text-xl font-bold mb-6">“{h.rep_quote}”</p>
-                      <p className="text-[#7B6F63] text-base mb-6 leading-relaxed">{h.context}</p>
-                      {h.suggestion && (
-                        <div className="bg-[#F6F1E8] p-6 rounded-2xl border border-[#D8CCBC]">
-                          <p className="text-[9px] text-[#7D8461] font-black uppercase tracking-widest mb-2">Recommended Revision:</p>
-                          <p className="text-[#3A2F28] text-base italic">“{h.suggestion}”</p>
-                        </div>
-                      )}
+                      <p className="text-[#1A2A3A] italic text-lg font-semibold mb-3">“{h.rep_quote}”</p>
+                      <p className="text-[#64748B] text-sm mb-4 leading-relaxed">{h.context}</p>
                     </div>
                   ))}
                 </div>
               </section>
             </div>
 
-            <div className="space-y-12">
-              <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 space-y-10 shadow-sm">
-                <div>
-                  <h4 className="text-[9px] font-black text-[#7D8461] uppercase tracking-widest mb-6">Tactical Strengths</h4>
-                  <ul className="space-y-4">
+            <div className="space-y-8">
+              <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm">
+                <div className="mb-6">
+                  <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Strengths</h4>
+                  <ul className="space-y-2">
                     {feedback.strengths?.map((s: string, i: number) => (
-                      <li key={i} className="flex gap-4 text-sm text-[#3A2F28] font-bold uppercase tracking-tight items-start">
-                        <span className="text-[#7D8461]">✓</span>
+                      <li key={i} className="flex gap-2 text-sm text-[#1A2A3A] items-start">
+                        <span className="text-green-500">✓</span>
                         <span>{s}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
-                <div className="pt-10 border-t border-[#D8CCBC]/50">
-                  <h4 className="text-[9px] font-black text-[#A06A5B] uppercase tracking-widest mb-6">Optimization Focus</h4>
-                  <ul className="space-y-4">
+                <div className="pt-6 border-t border-[#E2E8F0]">
+                  <h4 className="text-xs font-semibold text-yellow-600 uppercase tracking-wider mb-3">To Improve</h4>
+                  <ul className="space-y-2">
                     {feedback.improvements?.map((s: string, i: number) => (
-                      <li key={i} className="flex gap-4 text-sm text-[#3A2F28] font-bold uppercase tracking-tight items-start">
-                        <span className="text-[#A06A5B]">!</span>
+                      <li key={i} className="flex gap-2 text-sm text-[#1A2A3A] items-start">
+                        <span className="text-yellow-500">!</span>
                         <span>{s}</span>
                       </li>
                     ))}
@@ -206,14 +198,14 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
                 </div>
               </div>
 
-              <div className="bg-[#7D8461] rounded-[2.5rem] p-10 shadow-lg shadow-[#7D8461]/20">
-                <h4 className="text-[#F6F1E8]/70 text-[9px] font-black uppercase tracking-widest mb-4">Recommended Module</h4>
-                <p className="text-[#F6F1E8] font-bold text-2xl mb-8 tracking-tight leading-tight">{feedback.next_practice_recommendation || "Strategic Closing Dynamics"}</p>
+              <div className="bg-[#2C5282] rounded-xl p-6 shadow-sm text-white">
+                <h4 className="text-blue-100 text-xs font-semibold uppercase tracking-wider mb-2">Next Practice</h4>
+                <p className="font-bold text-lg mb-6 leading-tight">{feedback.next_practice_recommendation || "Strategic Closing"}</p>
                 <Link 
                   href="/rep/train"
-                  className="block w-full py-5 bg-[#F6F1E8] text-[#7D8461] text-center font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-[#EAE2D6] transition-all"
+                  className="block w-full py-2 bg-white text-[#2C5282] text-center font-medium rounded-lg text-sm hover:bg-gray-50 transition-all"
                 >
-                  Authorize Mission →
+                  Start Practice →
                 </Link>
               </div>
             </div>
@@ -221,39 +213,34 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
         )}
 
         {activeTab === 'transcript' && (
-          <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 md:p-16 space-y-12 shadow-sm max-h-[800px] overflow-y-auto">
-            <div className="max-w-4xl mx-auto space-y-12">
+          <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 md:p-10 shadow-sm max-h-[800px] overflow-y-auto">
+            <div className="max-w-3xl mx-auto space-y-6">
               {messages.map((m: any, i: number) => {
                 const isUser = m.role === 'user'
                 const highlight = feedback.highlights?.find((h: any) => h.rep_quote === m.content)
                 
                 return (
                   <div key={i} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-                    <div className="flex items-center gap-4 mb-3 px-4">
-                       <span className="text-[9px] text-[#7B6F63] font-black uppercase tracking-[0.2em]">
-                         {isUser ? 'You' : (scenario.persona_name || 'Target')}
+                    <div className="flex items-center gap-2 mb-1 px-2">
+                       <span className="text-xs text-[#64748B] font-semibold">
+                         {isUser ? 'You' : (scenario.persona_name || 'AI')}
                        </span>
                        {highlight && (
-                         <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter border ${
-                           highlight.type === 'strong' ? 'bg-[#7D8461]/10 text-[#7D8461] border-[#7D8461]/20' : 'bg-[#A06A5B]/10 text-[#A06A5B] border-[#A06A5B]/20'
+                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                           highlight.type === 'strong' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'
                          }`}>
-                           AI {highlight.type}
+                           AI {highlight.type === 'strong' ? 'Good' : 'Flagged'}
                          </span>
                        )}
                     </div>
-                    <div className={`max-w-[85%] rounded-[2rem] px-8 py-5 text-base leading-relaxed shadow-sm font-medium ${
+                    <div className={`max-w-[85%] rounded-2xl px-5 py-3 text-sm leading-relaxed ${
                       isUser 
-                        ? `bg-[#7D8461] text-[#F6F1E8] rounded-tr-none ${highlight?.type === 'weak' ? 'border-4 border-[#A06A5B]/40' : ''}` 
-                        : 'bg-[#F6F1E8] text-[#3A2F28] border border-[#D8CCBC] rounded-tl-none'
+                        ? `bg-[#2C5282] text-white rounded-tr-none ${highlight?.type === 'weak' ? 'border-2 border-yellow-400' : ''}` 
+                        : 'bg-[#F8FAFC] text-[#1A2A3A] border border-[#E2E8F0] rounded-tl-none'
                     }`}>
                       {m.content}
                     </div>
-                    {highlight && highlight.type === 'weak' && (
-                      <div className="mt-4 w-full max-w-[80%] bg-[#F6F1E8] border border-[#D8CCBC] p-6 rounded-2xl shadow-sm">
-                         <p className="text-[9px] text-[#A06A5B] font-black uppercase tracking-widest mb-2">Tactical Correction</p>
-                         <p className="text-[#3A2F28] text-sm italic font-medium">“{highlight.suggestion}”</p>
-                      </div>
-                    )}
+                    {/* Suggestion block removed */}
                   </div>
                 )
               })}
@@ -262,79 +249,56 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
         )}
 
         {activeTab === 'skills' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-             <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-12 space-y-10 shadow-sm">
-                <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Proficiency Distribution</h3>
-                <div className="space-y-8">
-                  {Object.entries(feedback.scores || {}).map(([key, val]: [string, any]) => (
-                    <div key={key}>
-                      <div className="flex justify-between text-[10px] font-black uppercase tracking-widest mb-3">
-                        <span className="text-[#7B6F63]">{key.replace('_', ' ')}</span>
-                        <span className={val >= 75 ? 'text-[#7D8461]' : 'text-[#3A2F28]'}>{val}%</span>
-                      </div>
-                      <div className="w-full bg-[#EAE2D6] h-3 rounded-full overflow-hidden border border-[#D8CCBC]/30">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-1000 ${
-                            val >= 75 ? 'bg-[#7D8461]' : 'bg-[#D6C2A8]'
-                          }`}
-                          style={{ width: `${val}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
+          <div className="bg-white border border-[#E2E8F0] rounded-xl p-8 shadow-sm max-w-3xl mx-auto">
+            <h3 className="text-sm font-semibold text-[#1A2A3A] mb-6">Scorecard Metrics</h3>
+            <div className="space-y-6">
+              {Object.entries(feedback.scores || {}).map(([key, val]: [string, any]) => (
+                <div key={key}>
+                  <div className="flex justify-between text-xs font-semibold uppercase tracking-wider mb-2">
+                    <span className="text-[#64748B]">{key.replace(/_/g, ' ')}</span>
+                    <span className={val >= 80 ? 'text-green-600' : 'text-[#1A2A3A]'}>{val}%</span>
+                  </div>
+                  <div className="w-full bg-[#F8FAFC] h-2.5 rounded-full overflow-hidden border border-[#E2E8F0]">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-1000 ${
+                        val >= 80 ? 'bg-[#2C5282]' : val >= 60 ? 'bg-blue-400' : 'bg-yellow-400'
+                      }`}
+                      style={{ width: `${val}%` }}
+                    ></div>
+                  </div>
                 </div>
-             </div>
-
-             <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-12 space-y-10 shadow-sm">
-                <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Reaction Dynamics</h3>
-                <div className="space-y-6">
-                  {feedback.emotional_tracking?.map((e: any, i: number) => (
-                    <div key={i} className="flex items-center gap-6 p-6 bg-[#F6F1E8] rounded-2xl border border-[#D8CCBC]/50 shadow-sm">
-                       <div className="w-14 h-14 rounded-2xl bg-[#EAE2D6] flex items-center justify-center text-2xl shadow-inner border border-[#D8CCBC]/30">
-                         {e.customer_reaction.includes('frustrated') || e.customer_reaction.includes('annoyed') ? '😤' : 
-                          e.customer_reaction.includes('engaged') || e.customer_reaction.includes('trusting') ? '🤝' : '👤'}
-                       </div>
-                       <div>
-                         <p className="text-[9px] text-[#7B6F63] font-black uppercase tracking-widest mb-1">{e.moment}</p>
-                         <p className="text-base text-[#3A2F28] font-bold">Target felt <span className="text-[#7D8461]">{e.customer_reaction}</span></p>
-                       </div>
-                    </div>
-                  ))}
-                  {(!feedback.emotional_tracking || feedback.emotional_tracking.length === 0) && (
-                    <p className="text-[#7B6F63] text-sm text-center font-medium italic">Reaction data unavailable.</p>
-                  )}
-                </div>
-             </div>
+              ))}
+            </div>
           </div>
         )}
 
         {activeTab === 'objections' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
              {feedback.objections_analysis?.map((o: any, i: number) => (
-               <div key={i} className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 space-y-6 shadow-sm hover:shadow-md transition-all">
-                  <div className="flex justify-between items-start">
-                     <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                       o.is_effective ? 'bg-[#7D8461]/10 text-[#7D8461] border-[#7D8461]/20' : 'bg-[#A06A5B]/10 text-[#A06A5B] border-[#A06A5B]/20'
+               <div key={i} className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm hover:shadow-md transition-all">
+                  <div className="flex justify-between items-start mb-4">
+                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                       o.is_effective ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'
                      }`}>
-                       {o.is_effective ? 'Successfully Neutralized' : 'Tactical Friction'}
+                       {o.is_effective ? 'Handled Well' : 'Needs Work'}
                      </span>
                   </div>
-                  <h4 className="text-xl font-bold text-[#3A2F28] leading-tight uppercase tracking-tight">{o.objection}</h4>
-                  <div className="space-y-6 pt-6 border-t border-[#D8CCBC]/50">
+                  <h4 className="text-lg font-bold text-[#1A2A3A] mb-4">{o.objection}</h4>
+                  <div className="space-y-4 pt-4 border-t border-[#E2E8F0]">
                      <div>
-                       <p className="text-[9px] text-[#7B6F63] font-black uppercase tracking-widest mb-3">Counter Response</p>
-                       <p className="text-base text-[#3A2F28] italic font-medium leading-relaxed">“{o.rep_response}”</p>
+                       <p className="text-xs text-[#64748B] font-semibold mb-1">Your Response</p>
+                       <p className="text-sm text-[#1A2A3A] italic">“{o.rep_response}”</p>
                      </div>
-                     <div className="bg-[#F6F1E8] p-6 rounded-2xl border border-[#D8CCBC]/50 shadow-inner">
-                        <p className="text-[9px] text-[#7D8461] font-black uppercase tracking-widest mb-2">Tactical Feedback</p>
-                        <p className="text-sm text-[#7B6F63] font-medium leading-relaxed">{o.feedback}</p>
+                     <div className="bg-[#F8FAFC] p-4 rounded-lg border border-[#E2E8F0]">
+                        <p className="text-xs text-[#2C5282] font-semibold mb-1">Feedback</p>
+                        <p className="text-sm text-[#1A2A3A]">{o.feedback}</p>
                      </div>
                   </div>
                </div>
              ))}
              {(!feedback.objections_analysis || feedback.objections_analysis.length === 0) && (
-               <div className="md:col-span-2 bg-[#EFE7DC] border border-dashed border-[#D8CCBC] rounded-[2.5rem] p-24 text-center">
-                  <p className="text-[#7B6F63] font-black uppercase tracking-[0.2em] text-[10px]">No critical objections detected.</p>
+               <div className="md:col-span-2 bg-white border border-[#E2E8F0] rounded-xl p-16 text-center shadow-sm">
+                  <p className="text-[#64748B] text-sm">No objections were detected in this session.</p>
                </div>
              )}
           </div>

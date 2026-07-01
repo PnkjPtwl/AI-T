@@ -1,9 +1,9 @@
 import { supabase } from '../db/supabase'
+import { getSecret } from '../lib/secrets'
 
 export const getMySignals = async (req: any, res: any) => {
   const repId = req.user.id
 
-  // Fetch all coaching signals for the rep's calls
   const { data, error } = await supabase
     .from('coaching_signals')
     .select('signal_type, value, created_at, calls!inner(rep_id)')
@@ -34,7 +34,7 @@ export const getMySignals = async (req: any, res: any) => {
 
 export const generateStudyGuide = async (req: any, res: any) => {
   const { repName, weakestSkill, strongestSkill } = req.body
-  const apiKey = process.env.GROQ_API_KEY
+  const apiKey = await getSecret('GROQ_API_KEY')
 
   if (!apiKey) {
     return res.status(500).json({ error: 'AI Service not configured' })
