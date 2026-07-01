@@ -17,6 +17,7 @@ services:
       - PORT=4000
       - AWS_REGION=ap-south-1
       - SECRET_NAME=salescoach/demo/backend
+      - ALLOWED_ORIGIN=3.6.244.139
     # Log to AWS CloudWatch via the Docker awslogs driver
     logging:
       driver: awslogs
