@@ -36,6 +36,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('sessionId')
   const assignmentId = searchParams.get('assignmentId')
+  const avatarPref = searchParams.get('avatar')
 
   const [scenario, setScenario] = useState<any>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -120,9 +121,15 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
         const token = localStorage.getItem('token')
 
         // 1. Get a short-lived Anam session token from our backend
+        //    Only send avatarId — Anam renders the FACE only.
+        //    voiceId is NOT sent because enableAudioPassthrough=true means
+        //    ElevenLabs generates audio separately.
         const tokenRes = await fetch(`${API}/api/anam/session-token`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            avatarId: avatarPref === 'male' ? 'ccf00c0e-7302-455b-ace2-057e0cf58127' : undefined
+          })
         })
         if (!tokenRes.ok) throw new Error('Failed to get Anam session token')
         const { sessionToken } = await tokenRes.json()
@@ -182,7 +189,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       }
       audioStreamRef.current = null
     }
-  }, [sessionId])
+  }, [sessionId, avatarPref])
 
 
 
@@ -216,9 +223,11 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
     setIsSpeaking(true)
     try {
       const token   = localStorage.getItem('token')
-      const voiceId = scenario?.voice_id || 'EXAVITQu4vr4xnSDxMaL' // Bella (Female, Free Tier)
+      // ElevenLabs voice selection — this is the AUDIO the user hears
+      // Male: Antoni, Female: Bella (free tier default)
+      const targetVoiceId = avatarPref === 'male' ? 'ErXwobaYiN019PkySvjV' : (scenario?.voice_id || 'EXAVITQu4vr4xnSDxMaL')
 
-      const playFallback = async (fallbackText: string = text, fallbackVoiceId: string = voiceId) => {
+      const playFallback = async (fallbackText: string = text, fallbackVoiceId: string = targetVoiceId) => {
         const res = await fetch(`${API}/api/tts`, {
           method: 'POST',
           headers: {
@@ -248,7 +257,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
           },
-          body: JSON.stringify({ text, voice_id: voiceId }),
+          body: JSON.stringify({ text, voice_id: targetVoiceId }),
         })
         if (!res.ok) throw new Error('TTS base64 failed')
         const data = await res.json()
@@ -269,23 +278,23 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
             currentSpeechRef.current = null
           }, durationMs)
 
-          currentSpeechRef.current = { text, voiceId, timeoutId }
+          currentSpeechRef.current = { text, voiceId: targetVoiceId, timeoutId }
 
         } catch (anamErr) {
           console.warn('[ANAM] Mid-turn failure, falling back to ElevenLabs audio tag', anamErr)
           setAnamFailed(true)
           anamReadyRef.current = false
-          await playFallback(text, voiceId)
+          await playFallback(text, targetVoiceId)
         }
       } else {
         // ── Fallback path: audio/mpeg blob via <audio> tag ───────────────────
-        await playFallback(text, voiceId)
+        await playFallback(text, targetVoiceId)
       }
     } catch (err) {
       console.error('Failed to play TTS', err)
       setIsSpeaking(false)
     }
-  }, [scenario])
+  }, [scenario, avatarPref])
 
   // ─── Anam Video Error Handler ────────────────────────────────────────────────
   const handleVideoError = async () => {

@@ -81,7 +81,20 @@ export default function RepDashboard() {
       return timeA - timeB;
    });
 
+   const missedAssignments = assignments.filter(a => {
+      if (a.status === 'Completed') return false;
+      if (a.deadline) {
+         const dl = new Date(a.deadline);
+         dl.setHours(23, 59, 59, 999);
+         if (now > dl.getTime()) {
+            return true;
+         }
+      }
+      return false;
+   });
+
    const completedAssignments = assignments.filter(a => a.status === 'Completed')
+   const historyAssignments = [...completedAssignments, ...missedAssignments]
 
    const getDeadlineWarning = (deadlineStr: string) => {
       if (!deadlineStr) return { text: 'No deadline', color: 'text-gray-500' };
@@ -154,36 +167,44 @@ export default function RepDashboard() {
                      </div>
                   )}
  
-                  {/* Completed Sub-section */}
-                  {completedAssignments.length > 0 && (
+                  {/* Training History Sub-section */}
+                  {historyAssignments.length > 0 && (
                      <div className="space-y-[16px]">
-                        <h3 className="text-sm font-[600] text-gray-500 uppercase tracking-widest">Completed Trainings</h3>
+                        <h3 className="text-sm font-[600] text-gray-500 uppercase tracking-widest">Training History</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[24px]">
-                           {completedAssignments.map((assign) => (
-                              <div key={assign.id} className="bg-gray-50/50 border border-gray-900/10 rounded-[12px] p-[24px] flex flex-col opacity-80 hover:opacity-100 transition-all duration-200 hover:shadow-sm">
-                                 <div className="flex justify-between items-start mb-[16px]">
-                                    <span className="text-[12px] font-[600] px-[8px] py-[2px] rounded-[4px] border bg-green-50 text-green-700 border-green-100 uppercase tracking-[0.6px]">
-                                       {assign.status}
-                                    </span>
-                                    <span className="text-[13px] font-[700] text-gray-900">
-                                       Score: {assign.score || 0}%
-                                    </span>
+                           {historyAssignments.map((assign) => {
+                              const isMissed = assign.status !== 'Completed'
+                              
+                              return (
+                                 <div key={assign.id} className="bg-gray-50/50 border border-gray-900/10 rounded-[12px] p-[24px] flex flex-col opacity-80 hover:opacity-100 transition-all duration-200 hover:shadow-sm">
+                                    <div className="flex justify-between items-start mb-[16px]">
+                                       <span className={`text-[12px] font-[600] px-[8px] py-[2px] rounded-[4px] border uppercase tracking-[0.6px] ${isMissed ? 'bg-red-50 text-red-700 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
+                                          {isMissed ? 'Missed' : assign.status}
+                                       </span>
+                                       {!isMissed && (
+                                          <span className="text-[13px] font-[700] text-gray-900">
+                                             Score: {assign.score || 0}%
+                                          </span>
+                                       )}
+                                    </div>
+                                    <h3 className="text-xl font-[600] text-gray-900 mb-[8px] flex-1 leading-[1.4]">{assign.scenario_name}</h3>
+    
+                                    <div className="flex items-center justify-between mt-[24px] pt-[20px] border-t border-gray-900/10">
+                                       <p className="text-sm text-gray-500">
+                                          {isMissed ? `Missed ${new Date(assign.deadline).toLocaleDateString()}` : `Done ${new Date(assign.completed_at).toLocaleDateString()}`}
+                                       </p>
+                                       {!isMissed && (
+                                          <Link
+                                             href={`/rep/train/${assign.scenario_id}/review?sessionId=${assign.session_id}`}
+                                             className="text-sm font-[600] text-[#2C5282] hover:underline"
+                                          >
+                                             Review →
+                                          </Link>
+                                       )}
+                                    </div>
                                  </div>
-                                 <h3 className="text-xl font-[600] text-gray-900 mb-[8px] flex-1 leading-[1.4]">{assign.scenario_name}</h3>
- 
-                                 <div className="flex items-center justify-between mt-[24px] pt-[20px] border-t border-gray-900/10">
-                                    <p className="text-sm text-gray-500">
-                                       Done {new Date(assign.completed_at).toLocaleDateString()}
-                                    </p>
-                                    <Link
-                                       href={`/rep/train/${assign.scenario_id}/review?sessionId=${assign.session_id}`}
-                                       className="text-sm font-[600] text-[#2C5282] hover:underline"
-                                    >
-                                       Review →
-                                    </Link>
-                                 </div>
-                              </div>
-                           ))}
+                              )
+                           })}
                         </div>
                      </div>
                   )}

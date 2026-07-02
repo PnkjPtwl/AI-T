@@ -15,6 +15,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
   const [scenario, setScenario] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
+  const [avatarType, setAvatarType] = useState<'female'|'male'>('female')
 
   useEffect(() => {
     const fetchBriefing = async () => {
@@ -52,7 +53,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
 
       if (res.ok) {
         const data = await res.json()
-        const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}`
+        const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}&avatar=${avatarType}`
         router.push(targetUrl)
       } else {
         alert('Failed to start session. Please try again.')
@@ -193,6 +194,29 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
               </div>
             </div>
           )}
+
+          {/* Avatar Selection */}
+          <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden shadow-sm mb-4">
+            <div className="bg-[#F8FAFC] px-6 py-4 border-b border-[#E2E8F0]">
+              <h3 className="text-sm font-semibold text-[#1A2A3A]">Avatar Preference</h3>
+            </div>
+            <div className="p-6">
+              <div className="flex bg-gray-100 p-1 rounded-lg w-full">
+                <button
+                  onClick={() => setAvatarType('female')}
+                  className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${avatarType === 'female' ? 'bg-white text-[#2C5282] shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  Female (Default)
+                </button>
+                <button
+                  onClick={() => setAvatarType('male')}
+                  className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${avatarType === 'male' ? 'bg-white text-[#2C5282] shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  Male
+                </button>
+              </div>
+            </div>
+          </div>
 
           {/* CTA */}
           <div className="pt-2">

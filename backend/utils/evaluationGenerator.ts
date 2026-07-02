@@ -55,7 +55,11 @@ export function generateEvaluationPrompt(scenarioName: string, transcript: strin
     return `- ${key}:\n  Description: ${cat.description}\n  High Score Indicator: ${cat.high}\n  Low Score Indicator: ${cat.low}`
   }).filter(Boolean).join('\n')
 
-  const scoreKeys = metricsToUse.map(m => `"${m.toLowerCase().replace(/[^a-z]/g, '_').replace(/__+/g, '_')}": <number 0-100>`).join(',\n    ')
+  const scoreKeys = metricsToUse.map(m => `"${m.toLowerCase().replace(/[^a-z]/g, '_').replace(/__+/g, '_')}": {
+      "score": <number 0-100>,
+      "actual_answer": "<Quote or summarize what the rep actually said/did regarding this criteria. If they didn't demonstrate it, state that.>",
+      "better_answer": "<What the rep should have said/did to score 100>"
+    }`).join(',\n    ')
 
   // Voice delivery section — only included when prosody data is available
   let voiceSection = ''
@@ -97,7 +101,7 @@ Analyse the transcript deeply based on the rules above. Return ONLY a raw JSON o
   "scores": {
     ${scoreKeys}
   },
-  "overall_score": <average of the above scores, number 0-100>,
+  "overall_score": <average of all the scores in the criteria above, number 0-100>,
   "summary": "<concise narrative summary of the interaction>",
   "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
   "improvements": ["<improvement 1>", "<improvement 2>", "<improvement 3>"],${voiceOutputKey}

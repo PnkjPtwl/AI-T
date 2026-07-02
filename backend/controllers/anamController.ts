@@ -7,8 +7,16 @@ import { getSecret } from '../lib/secrets'
 
 export const getAnamSessionToken = async (req: Request, res: Response) => {
   try {
+    // Only avatarId matters for Anam — it controls which face renders.
+    // voiceId is a placeholder because enableAudioPassthrough=true means
+    // ElevenLabs generates the actual audio, not Anam.
+    const { avatarId: reqAvatarId } = req.body || {}
+
     const apiKey   = await getSecret('ANAM_API_KEY')
-    const avatarId = await getSecret('ANAM_AVATAR_ID')
+    const avatarId = reqAvatarId || await getSecret('ANAM_AVATAR_ID')
+    const voiceId  = '6bfbe25a-979d-40f3-a92b-5394170af54b' // Anam default (Cara) — ignored during passthrough
+
+    console.log(`[ANAM] Generating session token for avatarId: ${avatarId}`)
 
     if (!apiKey || !avatarId) {
       return res.status(500).json({ error: 'Anam API key or Avatar ID not configured' })
@@ -24,7 +32,7 @@ export const getAnamSessionToken = async (req: Request, res: Response) => {
         personaConfig: {
           name: 'Sales Coach Avatar',
           avatarId,
-          voiceId: '6bfbe25a-979d-40f3-a92b-5394170af54b',
+          voiceId,
           systemPrompt: 'You are a visual avatar renderer only. Do not speak autonomously.',
           enableAudioPassthrough: true,
         },

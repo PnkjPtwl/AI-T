@@ -292,22 +292,40 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
           <div className="bg-white border border-[#E2E8F0] rounded-xl p-8 shadow-sm max-w-3xl mx-auto">
             <h3 className="text-sm font-semibold text-[#1A2A3A] mb-6">Scorecard Metrics</h3>
             <div className="space-y-6">
-              {Object.entries(feedback.scores || {}).map(([key, val]: [string, any]) => (
-                <div key={key}>
-                  <div className="flex justify-between text-xs font-semibold uppercase tracking-wider mb-2">
-                    <span className="text-[#64748B]">{key.replace(/_/g, ' ')}</span>
-                    <span className={val >= 80 ? 'text-green-600' : 'text-[#1A2A3A]'}>{val}%</span>
+              {Object.entries(feedback.scores || {}).map(([key, val]: [string, any]) => {
+                const score = typeof val === 'number' ? val : val.score || 0;
+                const actual = typeof val === 'object' ? val.actual_answer : null;
+                const better = typeof val === 'object' ? val.better_answer : null;
+                return (
+                <div key={key} className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-xs font-semibold uppercase tracking-wider mb-2">
+                      <span className="text-[#64748B]">{key.replace(/_/g, ' ')}</span>
+                      <span className={score >= 80 ? 'text-green-600' : 'text-[#1A2A3A]'}>{score}%</span>
+                    </div>
+                    <div className="w-full bg-[#F8FAFC] h-2.5 rounded-full overflow-hidden border border-[#E2E8F0]">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-1000 ${
+                          score >= 80 ? 'bg-[#2C5282]' : score >= 60 ? 'bg-blue-400' : 'bg-yellow-400'
+                        }`}
+                        style={{ width: `${score}%` }}
+                      ></div>
+                    </div>
                   </div>
-                  <div className="w-full bg-[#F8FAFC] h-2.5 rounded-full overflow-hidden border border-[#E2E8F0]">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-1000 ${
-                        val >= 80 ? 'bg-[#2C5282]' : val >= 60 ? 'bg-blue-400' : 'bg-yellow-400'
-                      }`}
-                      style={{ width: `${val}%` }}
-                    ></div>
-                  </div>
+                  {actual && better && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
+                      <div className="bg-[#F8FAFC] p-4 rounded-lg border border-[#E2E8F0]">
+                        <p className="text-xs text-[#64748B] font-semibold mb-2 uppercase tracking-wider">What you did</p>
+                        <p className="text-[#1A2A3A] italic">"{actual}"</p>
+                      </div>
+                      <div className="bg-[#F0FDF4] p-4 rounded-lg border border-[#BBF7D0]">
+                        <p className="text-xs text-green-700 font-semibold mb-2 uppercase tracking-wider">Better Approach</p>
+                        <p className="text-green-900">"{better}"</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         )}

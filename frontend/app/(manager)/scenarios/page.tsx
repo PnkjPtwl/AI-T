@@ -226,18 +226,18 @@ export default function ManagerScenariosPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-gray-900/10 rounded-[12px] overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+      <div className="bg-white border border-gray-900/10 rounded-[12px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
         {filteredScenarios.length === 0 ? (
           <div className="p-16 text-center text-sm text-[#64748B]">No scenarios found.</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-900/10 bg-gray-50/50">
-                <th className="text-left px-[24px] py-[16px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Persona</th>
+                <th className="rounded-tl-[12px] text-left px-[24px] py-[16px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Persona</th>
                 <th className="text-left px-[24px] py-[16px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Type</th>
                 <th className="text-left px-[24px] py-[16px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Difficulty</th>
                 <th className="text-left px-[24px] py-[16px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Target Skills</th>
-                <th className="px-[24px] py-[16px]"></th>
+                <th className="rounded-tr-[12px] px-[24px] py-[16px]"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-900/5">
@@ -254,7 +254,17 @@ export default function ManagerScenariosPage() {
                       'text-amber-600'
                     }`}>{s.difficulty || 'intermediate'}</span>
                   </td>
-                  <td className="px-[24px] py-[12px] text-[14px] text-gray-500">{s.target_skills || '—'}</td>
+                  <td className="px-[24px] py-[12px] text-[14px] text-gray-500 max-w-[300px] relative group">
+                    <div className="line-clamp-2">{s.target_skills || '—'}</div>
+                    {s.target_skills && s.target_skills.length > 50 && (
+                      <div 
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute left-[24px] top-1/2 -translate-y-1/2 hidden group-hover:block w-[400px] max-h-[150px] overflow-y-auto p-4 bg-white border border-gray-900/10 text-gray-700 text-[13px] leading-[1.6] rounded-[12px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-[9999] whitespace-normal pointer-events-auto"
+                      >
+                        {s.target_skills}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-[24px] py-[12px] text-right">
                     <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-[#2C5282] hover:bg-[#EBF8FF] transition-all cursor-pointer">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>

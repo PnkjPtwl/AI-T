@@ -220,8 +220,9 @@ export const endSession = async (req: any, res: any) => {
       if (!content && m.parts && m.parts.length > 0) {
         content = m.parts[0].text
       }
-      const role = (m.role === 'model') ? 'assistant' : m.role
-      return `${role}: ${content}`
+      // Use explicit labels to prevent LLM confusion
+      const roleName = (m.role === 'user') ? 'Human Sales Rep' : 'AI Prospect (Buyer)'
+      return `${roleName}: ${content}`
     }).join('\n')
     
     const scenario = session.training_scenarios

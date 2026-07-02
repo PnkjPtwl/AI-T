@@ -258,9 +258,15 @@ export default function TrainingPage() {
                 <select
                   value={selectedScenarioId}
                   onChange={(e) => {
-                    setSelectedScenarioId(e.target.value);
-                    // Clear selected reps when scenario changes to avoid assigning excluded reps
-                    setSelectedRepIds([]);
+                    const newScenarioId = e.target.value;
+                    setSelectedScenarioId(newScenarioId);
+                    if (newScenarioId) {
+                      const validReps = reps.filter(r => !assignments.some(a => a.rep_id === r.id && a.scenario_id === newScenarioId && a.status !== 'Completed'));
+                      const validRepIds = validReps.map(r => r.id);
+                      setSelectedRepIds(prev => prev.filter(id => validRepIds.includes(id)));
+                    } else {
+                      setSelectedRepIds([]);
+                    }
                   }}
                   className="w-full h-[40px] md:h-[44px] bg-white border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors"
                 >
@@ -274,6 +280,7 @@ export default function TrainingPage() {
                   <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block mb-[8px]">Deadline</label>
                   <input
                     type="date"
+                    min={new Date().toISOString().split('T')[0]}
                     value={deadline}
                     onChange={(e) => setDeadline(e.target.value)}
                     className="w-full h-[40px] md:h-[44px] bg-white border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors"

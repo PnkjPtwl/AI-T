@@ -313,7 +313,11 @@ export const getMyAnalytics = async (req: any, res: any) => {
     const skills = { opening: 0, discovery: 0, objection_handling: 0, talk_ratio: 0, closing: 0 }
     practiceSessions.forEach((s: any) => {
       const scores = s.feedback_json?.scores || {}
-      Object.keys(skills).forEach(k => (skills as any)[k] += scores[k] || 0)
+      Object.keys(skills).forEach(k => {
+        const val = scores[k];
+        const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0);
+        (skills as any)[k] += numVal;
+      })
     })
     const radarData = Object.keys(skills).map(k => ({
       subject: k.replace('_', ' ').toUpperCase(),
@@ -342,7 +346,9 @@ export const getMyAnalytics = async (req: any, res: any) => {
       personaMap[type].count += 1
 
       Object.keys(personaMap[type].skillTotals).forEach(skill => {
-        personaMap[type].skillTotals[skill] += scores[skill] || 0
+        const val = scores[skill];
+        const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0);
+        personaMap[type].skillTotals[skill] += numVal;
       })
     })
 
@@ -1146,6 +1152,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
         ...a,
         status,
         score,
+        feedback,
         rep_name: a.rep?.name || 'Unknown Rep',
         scenario_name: a.scenario?.persona_name || 'Unknown Scenario',
         difficulty: a.scenario?.difficulty || 'N/A'
