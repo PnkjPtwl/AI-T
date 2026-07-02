@@ -3,7 +3,6 @@ import Groq from 'groq-sdk'
 import { generateSystemInstruction } from '../utils/promptGenerator'
 import { generateEvaluationPrompt } from '../utils/evaluationGenerator'
 import { getSecret } from '../lib/secrets'
-import { analyzeVoice, VoiceMetrics } from '../services/voiceAiClient'
 
 const safeUpdateTrainingSession = async (sessionId: string, sessionUpdates: any) => {
   const { data: session } = await supabase.from('training_sessions').select('*').eq('id', sessionId).single();
@@ -201,93 +200,6 @@ export const sendMessage = async (req: any, res: any) => {
   }
 }
 
-export const sendVoiceMessage = async (req: any, res: any) => {
-  const { sessionId } = req.body
-  const audioFile = req.file
-
-  if (!sessionId || !audioFile) {
-    return res.status(400).json({ error: 'sessionId and audio file are required' })
-  }
-
-  try {
-    const groqApiKey = await getSecret('GROQ_API_KEY')
-    const groq = new Groq({ apiKey: groqApiKey || '' })
-
-    // Fan out: Whisper STT + voice prosody analysis in parallel
-    // analyzeVoice returns null if disabled/failed — never blocks the flow
-    const [transcription, voiceMetrics] = await Promise.all([
-      groq.audio.transcriptions.create({
-        file: new File([audioFile.buffer], 'audio.webm', { 
-          type: audioFile.mimetype 
-        }),
-        model: 'whisper-large-v3',
-        language: 'en'
-      }),
-      analyzeVoice(audioFile.buffer, 'turn.webm'),
-    ])
-
-    const userText = transcription.text
-    if (!userText) throw new Error("Transcription failed")
-
-    const { data: session, error: sessionErr } = await supabase
-      .from('training_sessions')
-      .select('*, training_scenarios(*)')
-      .eq('id', sessionId)
-      .single()
-
-    if (sessionErr || !session) throw new Error('Session not found')
-    
-    const scenario = session.training_scenarios
-    const systemInstruction = generateSystemInstruction(scenario)
-
-    const history = session.messages_json || []
-    const normalizedHistory = history.map((m: any) => {
-      let content = m.content
-      if (!content && m.parts && m.parts.length > 0) {
-        content = m.parts[0].text
-      }
-      const role = (m.role === 'model') ? 'assistant' : m.role
-      return { role, content: content || '' }
-    })
-
-    const userTurns = normalizedHistory.filter((m: any) => m.role === 'user').length + 1
-    const messagesPayload: any[] = [
-      { role: 'system', content: systemInstruction },
-      ...normalizedHistory
-    ]
-
-    if (userTurns >= 18) {
-      messagesPayload.push({
-        role: 'system',
-        content: 'SYSTEM NOTIFICATION: The meeting time is almost up.'
-      })
-    }
-    messagesPayload.push({ role: 'user', content: userText })
-
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: messagesPayload,
-      max_tokens: 80,
-      temperature: 0.7
-    })
-
-    const replyText = completion.choices[0].message.content
-    if (!replyText) throw new Error("Empty response from Groq")
-
-    // Attach voiceMetrics to the user message (null-safe — old messages won't have it)
-    const userMsg: any = { role: 'user', content: userText }
-    if (voiceMetrics && voiceMetrics.status === 'ok' && voiceMetrics.prosody) {
-      userMsg.voiceMetrics = voiceMetrics
-    }
-    const updatedHistory = [...normalizedHistory, userMsg, { role: 'assistant', content: replyText }]
-    await safeUpdateTrainingSession(sessionId, { messages_json: updatedHistory })
-
-    return res.json({ userText, reply: replyText, voiceMetrics: voiceMetrics || undefined })
-  } catch (err: any) {
-    console.error("Voice message error:", err)
-    return res.status(500).json({ error: err.message })
-  }
-}
 
 export const endSession = async (req: any, res: any) => {
   const { sessionId } = req.body

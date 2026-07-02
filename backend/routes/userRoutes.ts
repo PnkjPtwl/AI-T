@@ -22,7 +22,7 @@ router.get('/reps', authenticate, managerOnly, getReps)
 
 // GET /api/users/organization (and alias org-details)
 router.get('/organization', authenticate, managerOnly, getOrganizationDetails)
-router.get('/org-details', authenticate, managerOnly, getOrganizationDetails)
+router.get('/org-details', authenticate, getOrganizationDetails)
 
 // GET /api/users/dashboard-stats
 router.get('/dashboard-stats', authenticate, managerOnly, getDashboardStats)

@@ -176,6 +176,8 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       anamReadyRef.current = false
       if (anamClientRef.current) {
         try { anamClientRef.current.stopStreaming?.() } catch (_) {}
+        try { anamClientRef.current.stop?.() } catch (_) {}
+        try { anamClientRef.current.leave?.() } catch (_) {}
         anamClientRef.current = null
       }
       audioStreamRef.current = null
@@ -324,91 +326,76 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
     }
   }
 
-  // ─── Mic recording ────────────────────────────────────────────────────────────
+  // ─── Browser Native STT ────────────────────────────────────────────────────────────
+  const recognitionRef = useRef<any>(null)
+
   const handleMicClick = async () => {
     if (isRecording) {
-      mediaRecorder?.stop()
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
+      }
       setIsRecording(false)
-    } else {
-      // ── Interruption: user starts speaking while avatar is talking ────────
-      if (isSpeaking) {
-        // Interrupt Anam avatar lip-sync immediately
-        if (anamClientRef.current) {
-          try { anamClientRef.current.interruptPersona() } catch (_) {}
-        }
-        if (audioRef.current) {
-          audioRef.current.pause()
-        }
-        setIsSpeaking(false)
-      }
-
-      chunksRef.current = []
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const recorder = new MediaRecorder(stream)
-
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) chunksRef.current.push(e.data)
-        }
-
-        recorder.onstop = async () => {
-          stream.getTracks().forEach(t => t.stop())
-          const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-          await sendVoiceMessage(blob)
-        }
-
-        recorder.start()
-        setMediaRecorder(recorder)
-        setIsRecording(true)
-      } catch (err) {
-        console.error('Microphone error:', err)
-        alert('Microphone access denied. Please allow microphone access in your browser settings.')
-      }
+      return
     }
-  }
 
-  // ─── Send voice message → Groq Whisper STT → Groq LLM → TTS ─────────────────
-  const sendVoiceMessage = async (audioBlob: Blob) => {
-    setIsProcessing(true)
-    setIsThinking(true)
+    if (isSpeaking) {
+      if (anamClientRef.current) {
+        try { anamClientRef.current.interruptPersona() } catch (_) {}
+      }
+      if (audioRef.current) {
+        audioRef.current.pause()
+      }
+      setIsSpeaking(false)
+    }
+
     try {
-      const formData = new FormData()
-      formData.append('audio', audioBlob, 'recording.webm')
-      formData.append('sessionId', sessionId || '')
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      if (!SpeechRecognition) {
+        alert("Speech recognition is not supported in this browser. Please use Chrome or Edge.")
+        return
+      }
 
-      const token = localStorage.getItem('token')
-      const res = await fetch(`${API}/api/sessions/voice-message`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      })
+      const recognition = new SpeechRecognition()
+      recognitionRef.current = recognition
+      recognition.lang = 'en-US'
+      recognition.interimResults = false
+      recognition.maxAlternatives = 1
 
-      if (!res.ok) throw new Error('Voice request failed')
-      const data = await res.json()
+      recognition.onstart = () => {
+        setIsRecording(true)
+      }
 
-      setMessages(prev => [...prev,
-        { role: 'user', content: data.userText },
-        { role: 'assistant', content: data.reply }
-      ])
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript
+        if (transcript) {
+           handleSend(null, transcript)
+        }
+      }
 
-      // Groq replied — stop thinking, start speaking
-      speakText(data.reply)
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error)
+        setIsRecording(false)
+      }
+
+      recognition.onend = () => {
+        setIsRecording(false)
+      }
+
+      recognition.start()
     } catch (err) {
-      console.error('Voice error:', err)
-      alert('Failed to process voice. Try again.')
-    } finally {
-      setIsProcessing(false)
+      console.error('Speech recognition setup error:', err)
+      setIsRecording(false)
     }
   }
 
   // ─── Text message → Groq LLM → TTS ──────────────────────────────────────────
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!inputText.trim() || isTyping) return
+  const handleSend = async (e?: React.FormEvent | null, directText?: string) => {
+    if (e) e.preventDefault()
+    const textToSend = directText || inputText.trim()
+    if (!textToSend || isTyping) return
 
-    const userMessage = inputText.trim()
-    setInputText('')
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }])
+    if (!directText) setInputText('')
+    setMessages(prev => [...prev, { role: 'user', content: textToSend }])
     setIsTyping(true)
     setIsThinking(true)
 
@@ -420,7 +407,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ sessionId, message: userMessage })
+        body: JSON.stringify({ sessionId, message: textToSend })
       })
 
       if (res.ok) {
