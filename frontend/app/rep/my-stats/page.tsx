@@ -2,12 +2,17 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+
+const scoreColor = (score: number) =>
+  score >= 80 ? 'text-green-600' : score >= 60 ? 'text-amber-600' : 'text-red-500'
+
+const scoreBg = (score: number) =>
+  score >= 80 ? 'bg-green-50 border-green-200' : score >= 60 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
 
 export default function PerformancePage() {
   const router = useRouter()
@@ -20,14 +25,11 @@ export default function PerformancePage() {
       try {
         const token = localStorage.getItem('token')
         if (!token) return
-
         const headers = { 'Authorization': `Bearer ${token}` }
-
         const [analyticsRes, sessionsRes] = await Promise.all([
           fetch(`${API}/api/users/my-analytics`, { headers }),
           fetch(`${API}/api/sessions/my-sessions`, { headers })
         ])
-
         if (analyticsRes.ok) setAnalytics(await analyticsRes.json())
         if (sessionsRes.ok) {
           const sessions = await sessionsRes.json()
@@ -39,109 +41,134 @@ export default function PerformancePage() {
         setLoading(false)
       }
     }
-
     fetchData()
   }, [])
 
   if (loading) {
     return (
       <div className="h-[60vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#2C5282]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#2C5282]"></div>
       </div>
     )
   }
 
+  // Build chart data from recent sessions sorted by date
+  const chartData = [...recentSessions]
+    .sort((a, b) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime())
+    .map((s, i) => ({
+      idx: i + 1,
+      date: new Date(s.completed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+      score: s.feedback_json.overall_score,
+      scenario: s.scenario_name,
+    }))
+
+  const avgScore = recentSessions.length > 0
+    ? Math.round(recentSessions.reduce((sum, s) => sum + s.feedback_json.overall_score, 0) / recentSessions.length)
+    : 0
+
+  const best = recentSessions.length > 0
+    ? Math.max(...recentSessions.map(s => s.feedback_json.overall_score))
+    : 0
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const item = payload[0].payload
+      return (
+        <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-lg text-sm">
+          <p className="text-gray-400 text-xs mb-1">{item.date}</p>
+          <p className={`font-bold text-lg ${scoreColor(item.score)}`}>{item.score}%</p>
+          {item.scenario && <p className="text-gray-400 text-xs mt-1 truncate max-w-[160px]">{item.scenario}</p>}
+        </div>
+      )
+    }
+    return null
+  }
+
   return (
-    <div className="max-w-7xl mx-auto space-y-12 pb-24 text-left">
+    <div className="space-y-8 pb-12">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-4xl font-extrabold text-[#1A2A3A] tracking-tight">Performance Analytics</h1>
-        <p className="text-[#64748B] font-medium text-base">Comprehensive growth review and multi-dimensional proficiency mapping.</p>
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">My Stats</h1>
+        <p className="text-base text-gray-500 mt-1">Your training performance over time.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        {/* Growth Trajectory */}
-        <section className="bg-white border border-[#E2E8F0] rounded-[2.5rem] p-10 shadow-sm space-y-10">
-           <div className="flex justify-between items-center px-2">
-              <h2 className="text-[10px] font-black text-[#1A2A3A] uppercase tracking-[0.2em]">Growth Trajectory</h2>
-              <span className="text-[10px] text-[#2C5282] font-black uppercase tracking-widest">+18% Optimization Index</span>
-           </div>
-           <div className="h-[350px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={analytics?.trendData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#D8CCBC" vertical={false} />
-                  <XAxis dataKey="date" stroke="#7B6F63" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#7B6F63" fontSize={10} tickLine={false} axisLine={false} domain={[0, 100]} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#F6F1E8', border: '1px solid #D8CCBC', borderRadius: '1.5rem' }} 
-                    itemStyle={{ color: '#7D8461', fontWeight: 'bold' }} 
-                  />
-                  <Line type="monotone" dataKey="score" stroke="#7D8461" strokeWidth={4} dot={{ r: 4, fill: '#7D8461', stroke: '#F6F1E8', strokeWidth: 2 }} activeDot={{ r: 6, stroke: '#7D8461', strokeWidth: 2 }} />
-                </LineChart>
-              </ResponsiveContainer>
-           </div>
-        </section>
+      {/* KPI Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Sessions Completed</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{recentSessions.length}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Average Score</p>
+          <p className={`text-3xl font-bold mt-2 ${scoreColor(avgScore)}`}>{avgScore}%</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Best Score</p>
+          <p className={`text-3xl font-bold mt-2 ${scoreColor(best)}`}>{best}%</p>
+        </div>
+      </div>
 
-        {/* Skill Matrix */}
-        <section className="bg-white border border-[#E2E8F0] rounded-[2.5rem] p-10 shadow-sm space-y-10">
-           <div className="flex justify-between items-center px-2">
-              <h2 className="text-[10px] font-black text-[#1A2A3A] uppercase tracking-[0.2em]">Proficiency Radar</h2>
-              <span className="text-[10px] text-[#64748B] font-black uppercase tracking-widest">Aggregate Analysis</span>
-           </div>
-           <div className="h-[350px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={analytics?.radarData}>
-                  <PolarGrid stroke="#D8CCBC" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#7B6F63', fontSize: 10, fontWeight: 'bold' }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                  <Radar name="My Avg" dataKey="A" stroke="#7D8461" fill="#7D8461" fillOpacity={0.15} />
-                </RadarChart>
-              </ResponsiveContainer>
-           </div>
-        </section>
+      {/* Chart — full width */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <h2 className="text-base font-semibold text-gray-900 mb-6">Score Over Time</h2>
+        {chartData.length === 0 ? (
+          <div className="h-[300px] flex items-center justify-center text-gray-400 text-sm">No session data yet.</div>
+        ) : (
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="idx" tick={{ fontSize: 12, fill: '#9CA3AF' }} tickLine={false} axisLine={false} label={{ value: 'Session #', position: 'insideBottomRight', offset: -4, fontSize: 11, fill: '#9CA3AF' }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: '#9CA3AF' }} tickLine={false} axisLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#2C5282"
+                  strokeWidth={2.5}
+                  dot={{ r: 4, fill: '#2C5282', stroke: '#fff', strokeWidth: 2 }}
+                  activeDot={{ r: 6, stroke: '#2C5282', strokeWidth: 2, fill: '#fff' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* Persona Breakdown */}
-      <section className="bg-white border border-[#E2E8F0] rounded-[2.5rem] p-12 shadow-sm space-y-12">
-         <h2 className="text-[10px] font-black text-[#1A2A3A] uppercase tracking-[0.3em] px-2">Persona Intelligence Correlation</h2>
-         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10">
-            {analytics?.personaPerformanceData?.map((p: any, idx: number) => (
-              <div key={idx} className="bg-white border border-[#E2E8F0] rounded-[2rem] p-10 hover:border-[#2C5282]/40 transition-all group shadow-sm">
-                 <div className="flex justify-between items-start mb-8">
-                    <div>
-                       <h4 className="text-xl font-bold text-[#1A2A3A] uppercase tracking-tight leading-tight">{p.type}</h4>
-                       <p className="text-[9px] text-[#64748B] uppercase font-black tracking-[0.2em] mt-1">{p.persona_name}</p>
-                    </div>
-                    <div className={`text-3xl font-extrabold tracking-tighter ${p.avgScore >= 80 ? 'text-[#2C5282]' : p.avgScore >= 60 ? 'text-[#1A2A3A]' : 'text-[#64748B]'}`}>
-                       {p.avgScore}%
-                    </div>
-                 </div>
-
-                 <div className="space-y-4 pt-8 border-t border-[#E2E8F0]/50">
-                    <div className="flex justify-between items-center">
-                       <span className="text-[9px] text-[#64748B] font-black uppercase tracking-widest">Sessions</span>
-                       <span className="text-xs text-[#1A2A3A] font-extrabold">{p.sessionsCompleted}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                       <span className="text-[9px] text-[#64748B] font-black uppercase tracking-widest">Peak Strength</span>
-                       <span className="text-[10px] text-[#2C5282] font-black uppercase tracking-widest">{p.strongestSkill}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                       <span className="text-[9px] text-[#64748B] font-black uppercase tracking-widest">Growth Vector</span>
-                       <span className="text-[10px] text-[#64748B] font-black uppercase tracking-widest">{p.weakestSkill}</span>
-                    </div>
-                 </div>
-                 
-                 <div className="mt-8 w-full bg-[#F8FAFC]/50 h-2 rounded-full overflow-hidden border border-[#E2E8F0]/30">
-                    <div 
-                       className={`h-full transition-all duration-1000 ${p.avgScore >= 80 ? 'bg-[#2C5282]' : p.avgScore >= 60 ? 'bg-[#D6C2A8]' : 'bg-red-500'}`} 
-                       style={{ width: `${p.avgScore}%` }}
-                    ></div>
-                 </div>
-              </div>
-            ))}
-         </div>
-      </section>
+      {analytics?.personaPerformanceData?.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="text-base font-semibold text-gray-900">Performance by Persona</h2>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Persona</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
+                <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Peak Strength</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Growth Area</th>
+                <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Avg Score</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {analytics.personaPerformanceData.map((p: any, idx: number) => (
+                <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 font-medium text-gray-900">{p.persona_name}</td>
+                  <td className="px-6 py-4 text-gray-500">{p.type}</td>
+                  <td className="px-6 py-4 text-right text-gray-700 font-semibold">{p.sessionsCompleted}</td>
+                  <td className="px-6 py-4 text-[#2C5282] text-xs font-semibold uppercase tracking-wide">{p.strongestSkill}</td>
+                  <td className="px-6 py-4 text-gray-500 text-xs uppercase tracking-wide">{p.weakestSkill}</td>
+                  <td className="px-6 py-4 text-right">
+                    <span className={`font-bold text-base ${scoreColor(p.avgScore)}`}>{p.avgScore}%</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

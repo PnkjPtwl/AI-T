@@ -40,9 +40,7 @@ export default function RepTopbar() {
 
   return (
     <header className="h-16 bg-white border-b border-[#E2E8F0] flex items-center justify-between px-8 sticky top-0 z-40">
-      <div className="flex items-center gap-2 text-sm text-[#64748B]">
-        <span>{orgName || 'Organization'}</span>
-      </div>
+      <div />
 
       <div className="flex items-center gap-4">
         <div className="relative group">

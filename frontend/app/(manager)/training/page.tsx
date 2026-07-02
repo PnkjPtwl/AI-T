@@ -85,10 +85,10 @@ export default function TrainingPage() {
     }
   }
   const statusColor: Record<string, string> = {
-    'Completed': 'bg-green-50 text-green-700 border-green-200',
-    'Overdue': 'bg-red-50 text-red-600 border-red-200',
-    'In Progress': 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    'Pending': 'bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0]',
+    'Completed': 'text-green-600',
+    'Overdue': 'text-red-600',
+    'In Progress': 'text-yellow-600',
+    'Pending': 'text-gray-500',
   }
 
   if (loading) {
@@ -100,12 +100,12 @@ export default function TrainingPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-[24px] pb-[48px]">
+    <div className="space-y-[24px] pb-[48px]">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-[16px]">
         <div>
-          <h1 className="text-[24px] md:text-[28px] font-[700] tracking-[-0.3px] text-gray-900">Training Management</h1>
-          <p className="text-[14px] md:text-[15px] font-[400] text-gray-500 mt-1 leading-[1.6]">Deploy and monitor team training assignments.</p>
+          <h1 className="text-3xl font-bold text-gray-900">Training Management</h1>
+          <p className="text-base text-gray-500 mt-1">Deploy and monitor team training assignments.</p>
         </div>
         <button 
           onClick={() => setShowAssignModal(true)}
@@ -125,16 +125,16 @@ export default function TrainingPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-[24px]">
         <div className="bg-white border border-gray-900/10 rounded-[12px] p-[24px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-          <p className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70">Active Missions</p>
-          <p className="text-[32px] md:text-[36px] font-[700] tracking-[-1px] text-gray-900 mt-[8px]">{assignments.filter(a => a.status !== 'Completed').length}</p>
+          <p className="text-sm font-semibold uppercase tracking-wider text-gray-900/70">Active Assignments</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{assignments.filter(a => a.status !== 'Completed').length}</p>
         </div>
         <div className="bg-white border border-gray-900/10 rounded-[12px] p-[24px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-          <p className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70">Total Assignments</p>
-          <p className="text-[32px] md:text-[36px] font-[700] tracking-[-1px] text-[#2C5282] mt-[8px]">{assignments.length}</p>
+          <p className="text-sm font-semibold uppercase tracking-wider text-gray-900/70">Total Assignments</p>
+          <p className="text-3xl font-bold text-[#2C5282] mt-2">{assignments.length}</p>
         </div>
         <div className="bg-white border border-gray-900/10 rounded-[12px] p-[24px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-          <p className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70">Success Rate</p>
-          <p className="text-[32px] md:text-[36px] font-[700] tracking-[-1px] text-green-600 mt-[8px]">
+          <p className="text-sm font-semibold uppercase tracking-wider text-gray-900/70">Success Rate</p>
+          <p className="text-3xl font-bold text-green-600 mt-2">
             {assignments.length > 0 ? Math.round((assignments.filter(a => a.status === 'Completed').length / assignments.length) * 100) : 0}%
           </p>
         </div>
@@ -143,22 +143,23 @@ export default function TrainingPage() {
       {/* Assignment Table */}
       <div className="bg-white border border-gray-900/10 rounded-[12px] overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
         <div className="px-[24px] py-[16px] border-b border-gray-900/10 bg-gray-50/50">
-          <h2 className="text-[14px] md:text-[15px] font-[600] text-gray-900">Assignment Tracking</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Assignment Tracking</h2>
         </div>
         
         {assignments.length === 0 ? (
-          <div className="p-[64px] text-center text-[14px] md:text-[15px] text-gray-500 font-[400]">No assignments yet. Click "Assign Training" to get started.</div>
+          <div className="p-[64px] text-center text-base text-gray-500">No assignments yet. Click "Assign Training" to get started.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[14px]">
+            <table className="w-full text-base">
               <thead>
                 <tr className="border-b border-gray-900/10 bg-gray-50/30">
-                  <th className="text-left px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Rep</th>
-                  <th className="text-left px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Scenario</th>
-                  <th className="text-left px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Status</th>
-                  <th className="text-left px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Deadline</th>
-                  <th className="text-right px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Score</th>
-                  <th className="text-right px-[24px] py-[12px] text-[12px] font-[600] text-gray-900/70 uppercase tracking-[0.6px]">Actions</th>
+                  <th className="text-left px-[24px] py-[12px] text-sm font-semibold text-gray-900/70 uppercase tracking-wider">Rep</th>
+                  <th className="text-left px-[24px] py-[12px] text-sm font-semibold text-gray-900/70 uppercase tracking-wider">Scenario</th>
+                  <th className="text-left px-[24px] py-[12px] text-sm font-semibold text-gray-900/70 uppercase tracking-wider whitespace-nowrap">Status</th>
+                  <th className="text-left px-[24px] py-[12px] text-sm font-semibold text-gray-900/70 uppercase tracking-wider whitespace-nowrap">Deadline</th>
+                  <th className="text-center px-[24px] py-[12px] text-sm font-semibold text-gray-900/70 uppercase tracking-wider whitespace-nowrap">Score</th>
+                  <th className="text-center px-[16px] py-[12px] text-sm font-semibold text-gray-900/70 uppercase tracking-wider w-[60px]">View</th>
+                  <th className="text-center px-[16px] py-[12px] text-sm font-semibold text-gray-900/70 uppercase tracking-wider w-[60px]">Del</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-900/5">
@@ -166,41 +167,47 @@ export default function TrainingPage() {
                   <tr key={assign.id} className="hover:bg-gray-50/50 transition-colors duration-150">
                     <td className="px-[24px] py-[16px]">
                       <p className="font-[500] text-gray-900 text-[14px] md:text-[15px]">{assign.rep_name}</p>
-                      <p className="text-[13px] text-gray-500 mt-[2px]">Sales Rep</p>
                     </td>
                     <td className="px-[24px] py-[16px]">
                       <p className="font-[500] text-gray-900 text-[14px] md:text-[15px]">{assign.scenario_name}</p>
-                      <p className="text-[13px] text-gray-500 mt-[2px]">{assign.difficulty}</p>
                     </td>
                     <td className="px-[24px] py-[16px]">
-                      <span className={`inline-flex items-center px-[10px] py-[2px] rounded-full text-[12px] font-[600] tracking-[0.6px] uppercase border ${statusColor[assign.status] || 'bg-gray-50 text-gray-500 border-gray-900/10'}`}>
+                      <span className={`text-[12px] font-[600] tracking-[0.6px] uppercase ${statusColor[assign.status] || 'text-gray-500'}`}>
                         {assign.status}
                       </span>
                     </td>
-                    <td className="px-[24px] py-[16px] text-[14px] text-gray-500 font-[400]">
+                    <td className="px-[24px] py-[16px] text-[14px] text-gray-500 font-[400] whitespace-nowrap">
                       {new Date(assign.deadline).toLocaleDateString()}
                     </td>
-                    <td className="px-[24px] py-[16px] text-right">
+                    <td className="px-[24px] py-[16px] text-center whitespace-nowrap">
                       {assign.status === 'Completed' ? (
-                        <span className="text-[18px] md:text-[20px] font-[700] tracking-[-0.3px] text-green-600">{assign.score}%</span>
+                        <span className="text-[14px] md:text-[15px] font-[600] text-green-600">{assign.score}%</span>
                       ) : (
                         <span className="text-[13px] text-gray-500 font-[400]">Pending</span>
                       )}
                     </td>
-                    <td className="px-[24px] py-[16px] text-right space-x-[12px]">
-                      {assign.status === 'Completed' && assign.session_id && (
-                        <button 
+                    {/* View icon */}
+                    <td className="px-[16px] py-[16px] text-center">
+                      {assign.status === 'Completed' && assign.session_id ? (
+                        <button
                           onClick={() => router.push(`/training/review/${assign.session_id}`)}
-                          className="text-green-600 hover:text-green-700 hover:underline text-[13px] font-[600] transition-colors"
+                          title="View Review"
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-[#2C5282] hover:bg-[#EBF8FF] transition-all"
                         >
-                          Review
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
                         </button>
+                      ) : (
+                        <span className="w-8 h-8 inline-block"/>
                       )}
-                      <button 
-                        onClick={() => handleDelete(assign.id)} 
-                        className="text-red-600 hover:text-red-700 hover:underline text-[13px] font-[600] transition-colors"
+                    </td>
+                    {/* Delete icon */}
+                    <td className="px-[16px] py-[16px] text-center">
+                      <button
+                        onClick={() => handleDelete(assign.id)}
+                        title="Delete"
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-all"
                       >
-                        Delete
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                       </button>
                     </td>
                   </tr>

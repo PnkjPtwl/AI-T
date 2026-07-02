@@ -33,7 +33,7 @@ const SCORECARD_CATEGORIES: Record<string, { description: string; high: string; 
   },
 }
 
-export function generateEvaluationPrompt(scenarioName: string, transcript: string, evaluationFocus?: string): string {
+export function generateEvaluationPrompt(scenarioName: string, transcript: string, evaluationFocus?: string, voiceAggregate?: any): string {
   // Determine which metrics to use
   let metricsToUse: string[]
 
@@ -57,6 +57,23 @@ export function generateEvaluationPrompt(scenarioName: string, transcript: strin
 
   const scoreKeys = metricsToUse.map(m => `"${m.toLowerCase().replace(/[^a-z]/g, '_').replace(/__+/g, '_')}": <number 0-100>`).join(',\n    ')
 
+  // Voice delivery section — only included when prosody data is available
+  let voiceSection = ''
+  let voiceOutputKey = ''
+  if (voiceAggregate) {
+    voiceSection = `
+--- VOICE DELIVERY DATA (from audio analysis) ---
+The rep's voice was analyzed across ${voiceAggregate.turnCount} voice turns:
+- Average Pitch: ${voiceAggregate.avgPitchMean} Hz (std deviation: ${voiceAggregate.avgPitchStd} Hz)
+- Average Energy Level: ${voiceAggregate.avgEnergyMean}
+- Pause/Hesitation Ratio: ${Math.round(voiceAggregate.avgPauseRatio * 100)}% of speaking time was silence/hesitation
+- Total Speaking Duration: ${voiceAggregate.totalDurationSec} seconds
+
+Use this data to comment on the rep's vocal delivery — confidence (steady pitch, good energy), hesitation (high pause ratio suggests uncertainty), and engagement (pitch variation shows expressiveness vs monotone).
+`
+    voiceOutputKey = `\n  "voice_delivery_feedback": "<1-2 sentence natural language observation about the rep's vocal delivery based on the voice data above>",`
+  }
+
   return `You are an expert Sales Coach Analyst. You are evaluating a sales practice conversation between an AI Persona (acting as the buyer) and a human Sales Rep.
 
 --- EVALUATION CRITERIA ---
@@ -68,7 +85,7 @@ Scenario Name: ${scenarioName}
 
 --- TRANSCRIPT ---
 ${transcript}
-
+${voiceSection}
 --- STRICT SCORING RULES ---
 1. EVIDENCE-BASED: You MUST ONLY award points for skills explicitly demonstrated in the transcript. 
 2. SHORT CONVERSATIONS: If the transcript is extremely short (e.g. the rep only spoke 1 or 2 lines), they have NOT demonstrated most skills. Any skill NOT explicitly demonstrated MUST receive a score of 0. Do not give "neutral" scores (like 50) for unobserved skills.
@@ -83,7 +100,7 @@ Analyse the transcript deeply based on the rules above. Return ONLY a raw JSON o
   "overall_score": <average of the above scores, number 0-100>,
   "summary": "<concise narrative summary of the interaction>",
   "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
-  "improvements": ["<improvement 1>", "<improvement 2>", "<improvement 3>"],
+  "improvements": ["<improvement 1>", "<improvement 2>", "<improvement 3>"],${voiceOutputKey}
   "objections_analysis": [
     {
       "objection": "<the specific objection raised>",
@@ -105,3 +122,4 @@ Analyse the transcript deeply based on the rules above. Return ONLY a raw JSON o
 }
 `
 }
+

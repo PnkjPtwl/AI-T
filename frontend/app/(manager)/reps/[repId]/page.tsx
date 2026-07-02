@@ -135,7 +135,7 @@ export default function RepDetailPage() {
   if (!rep) return <div className="text-center py-20 text-[#64748B] font-bold">Agent intelligence not found.</div>
 
   return (
-    <div className="space-y-12 pb-24 relative max-w-7xl mx-auto">
+    <div className="space-y-12 pb-24 relative">
       {/* Intelligence Report Full Screen Overlay */}
       {selectedSession && (
         <div className="fixed inset-0 z-[1000] bg-[#F8FAFC] flex flex-col overflow-y-auto scrollbar-hide animate-in fade-in duration-300">

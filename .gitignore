@@ -22,3 +22,8 @@ yarn-error.log*
 # IDE files
 .vscode/
 .idea/
+
+# Python
+venv/
+__pycache__/
+*.pyc

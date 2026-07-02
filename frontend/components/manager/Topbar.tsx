@@ -40,17 +40,15 @@ export default function Topbar() {
 
   return (
     <header className="h-16 bg-white border-b border-[#E2E8F0] flex items-center justify-between px-8 sticky top-0 z-40">
-      <div className="flex items-center gap-2 text-sm text-[#64748B]">
-        <span>{orgName || 'Organization'}</span>
-      </div>
+      <div />
 
       <div className="flex items-center gap-4">
         <div className="relative group">
-          <button className="flex items-center gap-3 px-3 py-2 hover:bg-[#F8FAFC] rounded-xl transition-all">
-            <div className="w-8 h-8 bg-[#2C5282] rounded-full flex items-center justify-center text-xs font-bold text-white">
+          <button className="flex items-center gap-3 px-4 py-2.5 hover:bg-[#F8FAFC] rounded-xl transition-all border border-transparent hover:border-[#E2E8F0]">
+            <div className="w-10 h-10 bg-[#2C5282] rounded-full flex items-center justify-center text-sm font-bold text-white">
               {userName ? userName.charAt(0).toUpperCase() : 'M'}
             </div>
-            <span className="text-sm font-medium text-[#1A2A3A] hidden md:block">{userName || 'Manager'}</span>
+            <span className="text-base font-semibold text-[#1A2A3A] hidden md:block">{userName || 'Manager'}</span>
             <svg className="w-4 h-4 text-[#64748B]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
           </button>
 

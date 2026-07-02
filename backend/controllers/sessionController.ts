@@ -3,6 +3,7 @@ import Groq from 'groq-sdk'
 import { generateSystemInstruction } from '../utils/promptGenerator'
 import { generateEvaluationPrompt } from '../utils/evaluationGenerator'
 import { getSecret } from '../lib/secrets'
+import { analyzeVoice, VoiceMetrics } from '../services/voiceAiClient'
 
 const safeUpdateTrainingSession = async (sessionId: string, sessionUpdates: any) => {
   const { data: session } = await supabase.from('training_sessions').select('*').eq('id', sessionId).single();
@@ -212,13 +213,18 @@ export const sendVoiceMessage = async (req: any, res: any) => {
     const groqApiKey = await getSecret('GROQ_API_KEY')
     const groq = new Groq({ apiKey: groqApiKey || '' })
 
-    const transcription = await groq.audio.transcriptions.create({
-      file: new File([audioFile.buffer], 'audio.webm', { 
-        type: audioFile.mimetype 
+    // Fan out: Whisper STT + voice prosody analysis in parallel
+    // analyzeVoice returns null if disabled/failed — never blocks the flow
+    const [transcription, voiceMetrics] = await Promise.all([
+      groq.audio.transcriptions.create({
+        file: new File([audioFile.buffer], 'audio.webm', { 
+          type: audioFile.mimetype 
+        }),
+        model: 'whisper-large-v3',
+        language: 'en'
       }),
-      model: 'whisper-large-v3',
-      language: 'en'
-    })
+      analyzeVoice(audioFile.buffer, 'turn.webm'),
+    ])
 
     const userText = transcription.text
     if (!userText) throw new Error("Transcription failed")
@@ -268,10 +274,15 @@ export const sendVoiceMessage = async (req: any, res: any) => {
     const replyText = completion.choices[0].message.content
     if (!replyText) throw new Error("Empty response from Groq")
 
-    const updatedHistory = [...normalizedHistory, { role: 'user', content: userText }, { role: 'assistant', content: replyText }]
+    // Attach voiceMetrics to the user message (null-safe — old messages won't have it)
+    const userMsg: any = { role: 'user', content: userText }
+    if (voiceMetrics && voiceMetrics.status === 'ok' && voiceMetrics.prosody) {
+      userMsg.voiceMetrics = voiceMetrics
+    }
+    const updatedHistory = [...normalizedHistory, userMsg, { role: 'assistant', content: replyText }]
     await safeUpdateTrainingSession(sessionId, { messages_json: updatedHistory })
 
-    return res.json({ userText, reply: replyText })
+    return res.json({ userText, reply: replyText, voiceMetrics: voiceMetrics || undefined })
   } catch (err: any) {
     console.error("Voice message error:", err)
     return res.status(500).json({ error: err.message })
@@ -346,9 +357,28 @@ export const endSession = async (req: any, res: any) => {
       console.log(`[AssignmentLifecycle] Successfully marked assignment ${targetAssignmentId} as COMPLETED.`);
     }
 
+    // 2.5 AGGREGATE VOICE METRICS (if any user messages have voiceMetrics)
+    const userMessagesWithVoice = (session.messages_json || [])
+      .filter((m: any) => m.role === 'user' && m.voiceMetrics?.prosody)
+    
+    let voiceAggregate: any = null
+    if (userMessagesWithVoice.length > 0) {
+      const prosodies = userMessagesWithVoice.map((m: any) => m.voiceMetrics.prosody)
+      const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length
+      
+      voiceAggregate = {
+        turnCount: prosodies.length,
+        avgPitchMean: Math.round(avg(prosodies.map((p: any) => p.pitchMean)) * 100) / 100,
+        avgPitchStd: Math.round(avg(prosodies.map((p: any) => p.pitchStd)) * 100) / 100,
+        avgEnergyMean: Math.round(avg(prosodies.map((p: any) => p.energyMean)) * 1000000) / 1000000,
+        avgPauseRatio: Math.round(avg(prosodies.map((p: any) => p.pauseRatio)) * 1000) / 1000,
+        totalDurationSec: Math.round(prosodies.reduce((sum: number, p: any) => sum + p.durationSec, 0) * 100) / 100,
+      }
+    }
+
     // 3. AI EVALUATION
     const evaluationFocus = scenario?.evaluation_focus || ''
-    const prompt = generateEvaluationPrompt(scenarioName, transcript, evaluationFocus)
+    const prompt = generateEvaluationPrompt(scenarioName, transcript, evaluationFocus, voiceAggregate)
     
     let feedback;
     
@@ -398,7 +428,12 @@ export const endSession = async (req: any, res: any) => {
     }
     }
     
-    // 4. Final Session Update
+    // 4. Attach voice aggregate to feedback (additive — null-safe)
+    if (voiceAggregate) {
+      feedback.voice_delivery = voiceAggregate
+    }
+
+    // 5. Final Session Update
     await safeUpdateTrainingSession(sessionId, { 
       feedback_json: feedback,
       completed_at: new Date().toISOString()

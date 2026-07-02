@@ -187,7 +187,7 @@ export default function ManagerScenariosPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-[32px] md:space-y-[40px] pb-12">
+    <div className="space-y-[32px] md:space-y-[40px] pb-12">
       {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-[16px]">
         <div>
@@ -248,14 +248,18 @@ export default function ManagerScenariosPage() {
                   </td>
                   <td className="px-[24px] py-[12px] text-[14px] text-gray-500">{s.persona_type}</td>
                   <td className="px-[24px] py-[12px]">
-                    <span className={`inline-flex items-center px-[12px] py-[4px] rounded-full text-[10px] md:text-[11px] font-[600] uppercase tracking-[0.6px] ${
-                      s.difficulty === 'advanced' ? 'bg-red-500/15 text-red-700' :
-                      s.difficulty === 'beginner' ? 'bg-green-500/15 text-green-700' :
-                      'bg-yellow-500/15 text-yellow-700'
+                    <span className={`text-[11px] font-[600] uppercase tracking-[0.6px] ${
+                      s.difficulty === 'advanced' ? 'text-red-600' :
+                      s.difficulty === 'beginner' ? 'text-green-600' :
+                      'text-amber-600'
                     }`}>{s.difficulty || 'intermediate'}</span>
                   </td>
                   <td className="px-[24px] py-[12px] text-[14px] text-gray-500">{s.target_skills || '—'}</td>
-                  <td className="px-[24px] py-[12px] text-right text-[14px] text-[#2C5282] font-[600]">View →</td>
+                  <td className="px-[24px] py-[12px] text-right">
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-[#2C5282] hover:bg-[#EBF8FF] transition-all cursor-pointer">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>

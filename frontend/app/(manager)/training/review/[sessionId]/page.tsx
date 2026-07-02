@@ -64,7 +64,7 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
   const outcome = getOutcome(score)
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 pb-12 text-left">
+    <div className="space-y-8 pb-12 text-left">
       {/* Navigation */}
       <div className="flex items-center justify-between">
         <button onClick={() => router.back()} className="text-[#64748B] hover:text-[#1A2A3A] text-sm font-medium flex items-center gap-2">
@@ -196,6 +196,46 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
                   </ul>
                 </div>
               </div>
+
+              {/* Vocal Delivery — only rendered when voice data exists (null-safe) */}
+              {feedback.voice_delivery && (
+                <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm">
+                  <h4 className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <span>🎙</span> Vocal Delivery
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="bg-[#F8FAFC] rounded-lg p-3 border border-[#E2E8F0]">
+                      <p className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Pitch Variation</p>
+                      <p className="text-lg font-bold text-[#1A2A3A]">
+                        {feedback.voice_delivery.avgPitchStd > 30 ? 'Expressive' : feedback.voice_delivery.avgPitchStd > 15 ? 'Moderate' : 'Monotone'}
+                      </p>
+                    </div>
+                    <div className="bg-[#F8FAFC] rounded-lg p-3 border border-[#E2E8F0]">
+                      <p className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Hesitation</p>
+                      <p className="text-lg font-bold text-[#1A2A3A]">
+                        {feedback.voice_delivery.avgPauseRatio > 0.4 ? 'High' : feedback.voice_delivery.avgPauseRatio > 0.2 ? 'Moderate' : 'Low'}
+                      </p>
+                    </div>
+                    <div className="bg-[#F8FAFC] rounded-lg p-3 border border-[#E2E8F0]">
+                      <p className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Energy</p>
+                      <p className="text-lg font-bold text-[#1A2A3A]">
+                        {feedback.voice_delivery.avgEnergyMean > 0.05 ? 'Strong' : feedback.voice_delivery.avgEnergyMean > 0.02 ? 'Steady' : 'Low'}
+                      </p>
+                    </div>
+                    <div className="bg-[#F8FAFC] rounded-lg p-3 border border-[#E2E8F0]">
+                      <p className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Speaking Time</p>
+                      <p className="text-lg font-bold text-[#1A2A3A]">
+                        {Math.round(feedback.voice_delivery.totalDurationSec)}s
+                      </p>
+                    </div>
+                  </div>
+                  {feedback.voice_delivery_feedback && (
+                    <p className="text-sm text-[#64748B] italic leading-relaxed border-t border-[#E2E8F0] pt-3">
+                      {feedback.voice_delivery_feedback}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

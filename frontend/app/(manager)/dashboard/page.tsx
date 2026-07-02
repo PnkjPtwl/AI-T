@@ -46,7 +46,7 @@ export default function ManagerDashboardPage() {
   const completionPct = totalAssignments > 0 ? Math.round((completedAssignments / totalAssignments) * 100) : 0
 
   return (
-    <div className="max-w-7xl mx-auto space-y-10 pb-12">
+    <div className="space-y-10 pb-12">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -216,10 +216,10 @@ export default function ManagerDashboardPage() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-sm font-semibold ${
-                          rep.avgScore >= 80 ? 'bg-green-100 text-green-700' :
-                          rep.avgScore >= 60 ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-red-100 text-red-700'
+                        <span className={`text-base font-medium ${
+                          rep.avgScore >= 80 ? 'text-green-600' :
+                          rep.avgScore >= 60 ? 'text-yellow-600' :
+                          'text-red-500'
                         }`}>
                           {rep.avgScore}%
                         </span>

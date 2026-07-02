@@ -77,7 +77,7 @@ export default function CoachingPage() {
   }
 
   return (
-    <div className="space-y-12 max-w-7xl mx-auto">
+    <div className="space-y-12">
       {/* Header */}
       <div className="space-y-1">
         <h1 className="text-4xl font-extrabold text-[#1A2A3A] tracking-tight">Coaching Intelligence</h1>
