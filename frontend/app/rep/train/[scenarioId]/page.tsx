@@ -74,7 +74,11 @@ function DraggableCoachingPanel({ sentiment, onClose }: { sentiment: any, onClos
           <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Live AI Coach</span>
         </div>
-        <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="text-gray-400 hover:text-gray-600 transition-colors">
+        <button 
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onClose(); }} 
+          className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+        >
           ✕
         </button>
       </div>

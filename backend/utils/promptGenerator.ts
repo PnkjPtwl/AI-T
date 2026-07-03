@@ -1,10 +1,16 @@
 import fs from 'fs'
 import path from 'path'
 
-// Load configurations
-const personasPath = path.join(__dirname, '../data/personas.json')
-const scenariosPath = path.join(__dirname, '../data/scenarios.json')
-const objectionsPath = path.join(__dirname, '../data/objections.json')
+// Resolve paths safely for both dev (ts-node) and prod (dist/)
+const getDataPath = (filename: string) => {
+  const devPath = path.join(__dirname, '../data', filename);
+  const prodPath = path.join(__dirname, '../../data', filename);
+  return fs.existsSync(devPath) ? devPath : prodPath;
+};
+
+const personasPath = getDataPath('personas.json');
+const scenariosPath = getDataPath('scenarios.json');
+const objectionsPath = getDataPath('objections.json');
 
 export function generateSystemInstruction(scenario: any): string {
   let basePrompt = "";
@@ -32,8 +38,21 @@ Your communication style is: ${metadata.communication_style}.
 You frequently raise objections such as: ${metadata.objection_style || 'General hesitation based on value'}.
 You make decisions based on: ${metadata.decision_drivers || 'ROI and cost-effectiveness'}.
 Maintain this behavior consistently and challenge vague responses.`;
+    } else if (scenario.persona_name && scenario.context_text) {
+      // 4. Use DB fields directly for custom/dynamic personas
+      basePrompt = `You are acting as a specific buyer persona in a sales coaching simulation.
+--- PERSONA DETAILS ---
+Name: ${scenario.persona_name}
+Role: ${scenario.persona_type || 'Customer'}
+
+--- SCENARIO DETAILS ---
+Context: ${scenario.context_text}
+
+--- DIFFICULTY BEHAVIOR ---
+Difficulty Level: ${scenario.difficulty?.toUpperCase() || 'UNKNOWN'}
+You should adjust your resistance and objections based on this difficulty level.`;
     } else {
-      // 4. Fallback to hardcoded JSON configurations (Original Logic)
+      // 5. Fallback to hardcoded JSON configurations (Original Logic for extremely legacy data)
       const personas = JSON.parse(fs.readFileSync(personasPath, 'utf8'));
       const scenarios = JSON.parse(fs.readFileSync(scenariosPath, 'utf8'));
       const objections = JSON.parse(fs.readFileSync(objectionsPath, 'utf8'));
