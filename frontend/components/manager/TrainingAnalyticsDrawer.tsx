@@ -199,7 +199,7 @@ export default function TrainingAnalyticsDrawer({ assignments }: { assignments: 
                       {/* Status Info */}
                       <div className="flex items-center gap-4 w-1/3 justify-end">
                         <span className="text-sm font-medium text-[#64748B]">
-                          {isCompleted ? `5/5 - ${a.score}` : isOverdue ? '1/5 —' : isPending ? '0/5 —' : '2/5 —'}
+                          {isCompleted ? `Score: ${a.score || 0}%` : ''}
                         </span>
                         <span className={`px-3 py-1 rounded-md text-xs font-semibold ${
                           isCompleted ? 'bg-green-100 text-green-700' : 

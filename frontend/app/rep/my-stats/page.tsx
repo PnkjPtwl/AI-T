@@ -33,7 +33,7 @@ export default function PerformancePage() {
         if (analyticsRes.ok) setAnalytics(await analyticsRes.json())
         if (sessionsRes.ok) {
           const sessions = await sessionsRes.json()
-          setRecentSessions(sessions.filter((s: any) => s.feedback_json && s.feedback_json.overall_score).slice(0, 10))
+          setRecentSessions(sessions.filter((s: any) => s.feedback_json && s.feedback_json.overall_score !== undefined).slice(0, 10))
         }
       } catch (err) {
         console.error('Failed to fetch performance data', err)

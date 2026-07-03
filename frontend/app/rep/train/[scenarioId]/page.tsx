@@ -31,6 +31,77 @@ interface ChatMessage {
   content: string
 }
 
+
+
+// --- Draggable Coaching Panel ---
+function DraggableCoachingPanel({ sentiment, onClose }: { sentiment: any, onClose: () => void }) {
+  const [pos, setPos] = useState({ x: typeof window !== 'undefined' ? window.innerWidth / 2 - 170 : 100, y: typeof window !== 'undefined' ? window.innerHeight - 200 : 500 })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragRef = useRef<{ startX: number, startY: number, initialX: number, initialY: number } | null>(null)
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+    dragRef.current = { startX: e.clientX, startY: e.clientY, initialX: pos.x, initialY: pos.y }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging || !dragRef.current) return
+    const dx = e.clientX - dragRef.current.startX
+    const dy = e.clientY - dragRef.current.startY
+    setPos({ x: dragRef.current.initialX + dx, y: dragRef.current.initialY + dy })
+  }
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false)
+    e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+
+  if (!sentiment) return null
+
+  return (
+    <div
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      style={{ left: pos.x, top: pos.y, touchAction: 'none' }}
+      className="fixed z-[100] cursor-grab active:cursor-grabbing bg-white/95 backdrop-blur-md border border-gray-200 rounded-2xl p-5 shadow-2xl w-[340px] select-none text-gray-800"
+    >
+      <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Live AI Coach</span>
+        </div>
+        <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="text-gray-400 hover:text-gray-600 transition-colors">
+          ✕
+        </button>
+      </div>
+      
+      <div className="flex items-center gap-4 mb-4">
+        <div className="flex-1 bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+          <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1">Cust Sentiment</div>
+          <div className={`text-xl font-black ${sentiment.customer_sentiment >= 70 ? 'text-green-500' : sentiment.customer_sentiment <= 40 ? 'text-red-500' : 'text-amber-500'}`}>
+            {sentiment.customer_sentiment}%
+          </div>
+        </div>
+        <div className="flex-1 bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+          <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1">Rep Tone</div>
+          <div className={`text-xl font-black capitalize ${sentiment.rep_tone_type === 'good' ? 'text-green-500' : 'text-amber-500'}`}>
+            {sentiment.rep_tone_type}
+          </div>
+        </div>
+      </div>
+
+      <div className={`flex items-start gap-3 p-3.5 rounded-xl border ${sentiment.rep_tone_type === 'good' ? 'bg-green-50 border-green-200 text-green-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+        <div className="mt-0.5 text-lg">{sentiment.rep_tone_type === 'good' ? '✅' : '⚠️'}</div>
+        <p className="text-sm leading-relaxed font-semibold">{sentiment.coaching_hint}</p>
+      </div>
+    </div>
+  )
+}
+
 export default function PracticeChatPage({ params }: { params: { scenarioId: string } }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -62,6 +133,14 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   const [showEndConfirm, setShowEndConfirm] = useState(false)
   const [anamFailed, setAnamFailed] = useState(false)
 
+  // Live AI Coaching state (LLM-powered per-turn sentiment)
+  const [liveSentiment, setLiveSentiment] = useState<{
+    customer_sentiment: number
+    rep_tone_type: 'good' | 'warn'
+    coaching_hint: string
+  } | null>(null)
+  const [showCoachingPanel, setShowCoachingPanel] = useState(true)
+
   // Ref to auto-scroll conversation
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   
@@ -81,6 +160,8 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping, isProcessing])
+
+  // (Live AI coaching is fetched inside handleSend after each exchange)
 
   // ─── Fetch scenario ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -337,6 +418,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
 
   // ─── Browser Native STT ────────────────────────────────────────────────────────────
   const recognitionRef = useRef<any>(null)
+  const recordingStartTimeRef = useRef<number>(0)
 
   const handleMicClick = async () => {
     if (isRecording) {
@@ -372,12 +454,14 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
 
       recognition.onstart = () => {
         setIsRecording(true)
+        recordingStartTimeRef.current = Date.now()
       }
 
       recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript
         if (transcript) {
-           handleSend(null, transcript)
+           const durationSec = (Date.now() - recordingStartTimeRef.current) / 1000
+           handleSend(null, transcript, durationSec)
         }
       }
 
@@ -398,7 +482,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   }
 
   // ─── Text message → Groq LLM → TTS ──────────────────────────────────────────
-  const handleSend = async (e?: React.FormEvent | null, directText?: string) => {
+  const handleSend = async (e?: React.FormEvent | null, directText?: string, durationSec?: number) => {
     if (e) e.preventDefault()
     const textToSend = directText || inputText.trim()
     if (!textToSend || isTyping) return
@@ -410,13 +494,18 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
 
     try {
       const token = localStorage.getItem('token')
+      const payload: any = { sessionId, message: textToSend }
+      if (durationSec !== undefined) {
+        payload.durationSec = durationSec
+      }
+      
       const res = await fetch(`${API}/api/sessions/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ sessionId, message: textToSend })
+        body: JSON.stringify(payload)
       })
 
       if (res.ok) {
@@ -424,6 +513,21 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
         setMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
         // Groq replied — stop thinking, start speaking
         speakText(data.reply)
+        // ── Fire-and-forget live sentiment call (non-blocking) ──────────────
+        ;(async () => {
+          try {
+            const lsRes = await fetch(`${API}/api/sessions/live-sentiment`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ repMessage: textToSend, customerReply: data.reply, sessionId })
+            })
+            if (lsRes.ok) {
+              const ls = await lsRes.json()
+              setLiveSentiment(ls)
+              setShowCoachingPanel(true)
+            }
+          } catch (_) { /* non-fatal */ }
+        })()
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: '(Error: Failed to get AI response)' }])
       }
@@ -897,6 +1001,26 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
             Chat ({messages.length})
           </button>
         )}
+
+        {/* ─── Live AI Coaching Bubble — draggable, collapsible ─── */}
+        {showCoachingPanel && liveSentiment ? (
+          <DraggableCoachingPanel
+            sentiment={liveSentiment}
+            onClose={() => setShowCoachingPanel(false)}
+          />
+        ) : !showCoachingPanel && liveSentiment ? (
+          /* Collapsed pill — click to re-open */
+          <button
+            onClick={() => setShowCoachingPanel(true)}
+            className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[100] bg-[#0F172A]/90 backdrop-blur-md border border-white/10 shadow-2xl rounded-full px-5 py-2.5 flex items-center gap-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/30 transition-all"
+          >
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            Live AI Coach
+            <span className={liveSentiment.customer_sentiment >= 70 ? 'text-emerald-400' : liveSentiment.customer_sentiment <= 40 ? 'text-red-400' : 'text-amber-400'}>
+              {liveSentiment.customer_sentiment}%
+            </span>
+          </button>
+        ) : null}
 
       </div>
 

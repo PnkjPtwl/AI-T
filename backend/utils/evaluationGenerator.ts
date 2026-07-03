@@ -1,6 +1,4 @@
-import { Request, Response } from 'express'
-
-const SCORECARD_CATEGORIES: Record<string, { description: string; high: string; low: string }> = {
+export const SCORECARD_CATEGORIES: Record<string, { description: string; high: string; low: string }> = {
   'Communication & Professionalism': {
     description: 'How clearly, professionally and confidently the rep communicates throughout the call.',
     high: 'Clear articulation, professional tone, confident delivery, no filler words.',
@@ -31,6 +29,21 @@ const SCORECARD_CATEGORIES: Record<string, { description: string; high: string; 
     high: 'Proposes a specific next step, confirms agreement, sets a clear date.',
     low: 'Call ends ambiguously, no follow-up planned, no urgency created.',
   },
+}
+
+/** Returns the canonical list of scorecard metric names */
+export function getScorecardMetricNames(): string[] {
+  return Object.keys(SCORECARD_CATEGORIES)
+}
+
+/** Converts a metric name to its snake_case score key (used in feedback_json.scores) */
+export function metricToScoreKey(metric: string): string {
+  return metric.toLowerCase().replace(/[^a-z]/g, '_').replace(/__+/g, '_')
+}
+
+/** Returns the canonical score keys that the AI evaluator will produce */
+export function getScorecardScoreKeys(): string[] {
+  return getScorecardMetricNames().map(metricToScoreKey)
 }
 
 export function generateEvaluationPrompt(scenarioName: string, transcript: string, evaluationFocus?: string, voiceAggregate?: any): string {
@@ -127,3 +140,98 @@ Analyse the transcript deeply based on the rules above. Return ONLY a raw JSON o
 `
 }
 
+/**
+ * Generates a focused prompt for Conversation Analytics (rep tone + customer sentiment arc).
+ * This is COMPLETELY SEPARATE from the scorecard evaluation and never affects scores.
+ *
+ * @param transcript - Full conversation transcript (Human Sales Rep / AI Prospect labels)
+ * @param voiceAggregate - Optional aggregated prosody data from the rep's voice turns
+ */
+export function generateConversationAnalyticsPrompt(transcript: string, voiceAggregate?: any): string {
+  // Build each exchange as a numbered step
+  const lines = transcript.split('\n').filter((l: string) => l.trim())
+  const steps: { step: number; rep: string; customer: string }[] = []
+  let step = 0
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('Human Sales Rep:')) {
+      const rep = lines[i].replace('Human Sales Rep:', '').trim()
+      const customer = (lines[i + 1] || '').replace('AI Prospect (Buyer):', '').trim()
+      step++
+      steps.push({ step, rep, customer })
+      i++ // skip next line (already consumed as customer)
+    }
+  }
+
+  const stepsJson = JSON.stringify(steps.map(s => ({
+    step: s.step,
+    rep_message: s.rep.substring(0, 300),
+    customer_message: s.customer.substring(0, 300)
+  })), null, 2)
+
+  // Build voice context section if available
+  let voiceContext = ''
+  if (voiceAggregate && voiceAggregate.totalDurationSec > 0) {
+    const repWordCount = lines
+      .filter((l: string) => l.startsWith('Human Sales Rep:'))
+      .map((l: string) => l.replace('Human Sales Rep:', '').trim().split(/\s+/).length)
+      .reduce((a: number, b: number) => a + b, 0)
+
+    const wpm = Math.round((repWordCount / voiceAggregate.totalDurationSec) * 60)
+
+    voiceContext = `
+--- REP COMMUNICATION DATA (from speech timing) ---
+- Total Speaking Duration: ${voiceAggregate.totalDurationSec.toFixed(1)}s
+- Computed WPM: ${wpm}
+
+Use this to populate avg_wpm accurately.
+`
+  }
+
+  return `You are an expert conversational AI analyst. Analyse the following sales conversation and produce a structured JSON report.
+
+IMPORTANT: Do NOT score the rep on sales skills — that is handled by a separate evaluator.
+Focus ONLY on:
+1. Rep's TONE and COMMUNICATION STYLE throughout the conversation
+2. Customer's SENTIMENT at each conversation step
+${voiceContext}
+--- CONVERSATION STEPS ---
+${stepsJson}
+
+--- INSTRUCTIONS ---
+Return ONLY a raw JSON object (no markdown, no backticks):
+
+{
+  "rep_tone_profile": {
+    "professional": <0-100>,
+    "friendly": <0-100>,
+    "confident": <0-100>,
+    "empathetic": <0-100>,
+    "calm": <0-100>,
+    "aggressive": <0-100, pushy/pressure tactics — ideally very low>,
+    "passive": <0-100, too non-committal — ideally low>
+  },
+  "rep_voice_stats": {
+    "avg_wpm": <number or null if no voice data>,
+    "communication_style": "Consultative" | "Direct" | "Passive" | "Assertive" | "Enthusiastic" | "Analytical",
+    "energy_label": "High" | "Medium" | "Low",
+    "warmth_score": <0-100>
+  },
+  "customer_sentiment_arc": [
+    {
+      "step": <step number>,
+      "sentiment_score": <0-100 where 0=very negative, 50=neutral, 100=very positive>,
+      "label": "Very Positive" | "Positive" | "Neutral" | "Negative" | "Very Negative",
+      "reason": "<1 short sentence explaining why>"
+    }
+  ],
+  "ai_conversation_summary": "<2-3 sentences of narrative insight about the overall conversational dynamic>"
+}
+
+RULES:
+- customer_sentiment_arc MUST have exactly one entry per step (${steps.length} steps total).
+- Sentiment MUST change naturally across steps — avoid identical scores.
+- INFER energy_label and warmth_score carefully from semantic enthusiasm, conversational momentum, word choice, and empathy shown in the text.
+- Be specific in the reason field — reference what was actually said.
+- If 0 steps, return empty arc and zeros everywhere.
+`
+}

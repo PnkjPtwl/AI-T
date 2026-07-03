@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -22,6 +22,10 @@ export default function NewScenarioPage() {
   const [questions, setQuestions] = useState<any[]>([])
   const [newQuestionText, setNewQuestionText] = useState('')
   const [newQuestionCategory, setNewQuestionCategory] = useState('Opening')
+
+  // Scorecard metrics from API
+  const [scorecardMetrics, setScorecardMetrics] = useState<string[]>([])
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>([])
 
   const [formData, setFormData] = useState({
     persona_name: '',
@@ -47,6 +51,26 @@ export default function NewScenarioPage() {
     if (expandedField.id === 'evaluation_focus') setFormData(prev => ({ ...prev, evaluation_focus: val }));
     if (expandedField.id === 'objection_style') setFormData(prev => ({ ...prev, objection_style: val }));
   }
+
+  // Fetch canonical scorecard metrics on mount
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const res = await fetch(`${API}/api/scenarios/scorecard-metrics`, { headers: { 'Authorization': `Bearer ${token}` } })
+        if (res.ok) {
+          const data = await res.json()
+          const names = data.map((m: any) => m.name)
+          setScorecardMetrics(names)
+          setSelectedMetrics(names) // Select all by default
+        }
+      } catch (err) {
+        console.error('Failed to fetch scorecard metrics', err)
+      }
+    }
+    fetchMetrics()
+  }, [])
 
   const handleAudioGenerate = async () => {
     if (!file) {
@@ -146,7 +170,7 @@ export default function NewScenarioPage() {
     setError('')
     try {
       const token = localStorage.getItem('token')
-      const finalFormData = { ...formData };
+      const finalFormData = { ...formData, evaluation_focus: selectedMetrics.join(', ') };
       
       const selectedQuestions = questions.filter(q => q.selected)
       if (selectedQuestions.length > 0) {
@@ -334,6 +358,42 @@ export default function NewScenarioPage() {
                 <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block">Scenario Context <span className="text-red-500 ml-1">*</span></label>
                 <textarea rows={4} value={formData.context_text} onChange={e => setFormData({...formData, context_text: e.target.value})} className="w-full bg-white border border-gray-900/10 rounded-[10px] p-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors resize-y" placeholder="Background details about the company, current stack, etc." />
               </div>
+
+              {/* Scorecard Metrics Selection */}
+              {scorecardMetrics.length > 0 && (
+                <div className="space-y-[12px] pt-[16px] border-t border-gray-900/10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block">Scorecard Metrics</label>
+                      <p className="text-[13px] text-gray-500 mt-1">{selectedMetrics.length} of {scorecardMetrics.length} selected — these define how the AI scores the rep.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMetrics(selectedMetrics.length === scorecardMetrics.length ? [] : [...scorecardMetrics])}
+                      className="border border-[#2C5282] text-[#2C5282] font-[600] py-[6px] px-[12px] rounded-[10px] transition-all duration-200 hover:bg-[#2C5282]/5 text-[12px]"
+                    >
+                      {selectedMetrics.length === scorecardMetrics.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
+                  <div className="space-y-[8px]">
+                    {scorecardMetrics.map((metric) => (
+                      <label key={metric} className={`flex items-center gap-[12px] px-[16px] py-[12px] border rounded-[10px] cursor-pointer transition-all duration-200 ${selectedMetrics.includes(metric) ? 'border-[#2C5282] bg-[#2C5282]/5' : 'border-gray-900/10 hover:border-gray-900/30'}`}>
+                        <input
+                          type="checkbox"
+                          checked={selectedMetrics.includes(metric)}
+                          onChange={() => {
+                            setSelectedMetrics(prev =>
+                              prev.includes(metric) ? prev.filter(m => m !== metric) : [...prev, metric]
+                            )
+                          }}
+                          className="w-[16px] h-[16px] rounded accent-[#2C5282]"
+                        />
+                        <span className={`text-[14px] font-[600] ${selectedMetrics.includes(metric) ? 'text-[#2C5282]' : 'text-gray-700'}`}>{metric}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -460,6 +520,16 @@ export default function NewScenarioPage() {
                 <div>
                   <p className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 mb-[4px]">Type</p>
                   <p className="text-[14px] md:text-[15px] text-gray-900 font-[500]">{formData.persona_type}</p>
+                </div>
+                <div className="col-span-1 md:col-span-2">
+                  <p className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 mb-[8px]">Scorecard Metrics</p>
+                  <div className="flex flex-wrap gap-[8px]">
+                    {selectedMetrics.length > 0 ? selectedMetrics.map(m => (
+                      <span key={m} className="px-[12px] py-[6px] bg-[#2C5282]/10 text-[#2C5282] rounded-[8px] text-[13px] font-[600]">{m}</span>
+                    )) : (
+                      <span className="text-gray-500 text-[14px]">All metrics will be used (default).</span>
+                    )}
+                  </div>
                 </div>
                 <div className="col-span-1 md:col-span-2">
                   <p className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 mb-[8px]">Selected Questions</p>

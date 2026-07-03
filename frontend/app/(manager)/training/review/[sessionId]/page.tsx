@@ -12,7 +12,7 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
 
   const [loading, setLoading] = useState(true)
   const [session, setSession] = useState<any>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'transcript' | 'skills' | 'objections'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'transcript' | 'skills' | 'objections' | 'conversation_analytics'>('overview')
 
   useEffect(() => {
     if (!sessionId) {
@@ -113,7 +113,8 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
           { id: 'overview', label: 'Overview' },
           { id: 'transcript', label: 'Transcript' },
           { id: 'skills', label: 'Scorecard' },
-          { id: 'objections', label: 'Objections' }
+          { id: 'objections', label: 'Objections' },
+          { id: 'conversation_analytics', label: '📊 Conversation Analytics' }
         ].map((tab) => (
           <button
             key={tab.id}
@@ -349,7 +350,186 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
              )}
           </div>
         )}
+
+        {activeTab === 'conversation_analytics' && (() => {
+          const ca = feedback.conversation_analytics || {}
+          const arc = ca.customer_sentiment_arc || []
+          const toneProfile = ca.rep_tone_profile || {}
+          const voiceStats = ca.rep_voice_stats || {}
+
+          // SVG Sentiment Chart helpers
+          const chartW = 560
+          const chartH = 180
+          const padL = 40
+          const padR = 20
+          const padT = 16
+          const padB = 30
+          const innerW = chartW - padL - padR
+          const innerH = chartH - padT - padB
+
+          const xOf = (i: number) => padL + (arc.length <= 1 ? innerW / 2 : (i / (arc.length - 1)) * innerW)
+          const yOf = (score: number) => padT + innerH - (score / 100) * innerH
+
+          const pathD = arc.length >= 2
+            ? arc.map((p: any, i: number) =>
+                `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(p.sentiment_score).toFixed(1)}`
+              ).join(' ')
+            : ''
+
+          const areaD = arc.length >= 2
+            ? `${pathD} L ${xOf(arc.length - 1).toFixed(1)} ${(padT + innerH).toFixed(1)} L ${padL} ${(padT + innerH).toFixed(1)} Z`
+            : ''
+
+          const sentimentColor = (score: number) =>
+            score >= 70 ? '#22C55E' : score >= 50 ? '#F59E0B' : '#EF4444'
+
+          const positiveTraits = ['professional', 'friendly', 'confident', 'empathetic', 'calm']
+          const negativeTraits = ['aggressive', 'passive']
+
+          return (
+            <div className="space-y-8">
+              {/* AI Conversation Summary */}
+              {ca.ai_conversation_summary && (
+                <div className="bg-gradient-to-r from-[#2C5282]/5 to-[#4299E1]/5 border border-[#2C5282]/20 rounded-xl p-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[#2C5282] text-lg">🤖</span>
+                    <h3 className="text-sm font-bold text-[#1A2A3A] uppercase tracking-wide">AI Conversation Insight</h3>
+                  </div>
+                  <p className="text-[#1A2A3A] text-sm leading-relaxed italic">"{ca.ai_conversation_summary}"</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Rep Tone Profile */}
+                <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm">
+                  <h3 className="text-sm font-bold text-[#1A2A3A] mb-5 uppercase tracking-wider">Rep Tone Profile</h3>
+                  <div className="space-y-3">
+                    {[...positiveTraits, ...negativeTraits].map(trait => {
+                      const val = toneProfile[trait] ?? 0
+                      const isNegative = negativeTraits.includes(trait)
+                      const barColor = isNegative
+                        ? (val > 30 ? '#EF4444' : '#94A3B8')
+                        : (val >= 70 ? '#22C55E' : val >= 50 ? '#F59E0B' : '#94A3B8')
+                      return (
+                        <div key={trait}>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-xs font-semibold text-[#64748B] capitalize">{trait}</span>
+                            <span className="text-xs font-bold text-[#1A2A3A]">{val}%</span>
+                          </div>
+                          <div className="h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{ width: `${val}%`, backgroundColor: barColor }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Communication Stats */}
+                <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm">
+                  <h3 className="text-sm font-bold text-[#1A2A3A] mb-5 uppercase tracking-wider">Communication Stats</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { label: 'Speaking Pace', value: voiceStats.avg_wpm ? `${voiceStats.avg_wpm} WPM` : 'N/A', sub: voiceStats.avg_wpm ? (voiceStats.avg_wpm < 120 ? 'Slow' : voiceStats.avg_wpm > 160 ? 'Fast' : 'Ideal') : 'From timing data' },
+                      { label: 'Style', value: voiceStats.communication_style || 'Unknown', sub: 'Primary approach' },
+                      { label: 'Energy', value: voiceStats.energy_label || 'Unknown', sub: 'Conversational momentum' },
+                      { label: 'Warmth Score', value: voiceStats.warmth_score != null ? `${voiceStats.warmth_score}%` : 'N/A', sub: 'Semantic empathy' },
+                    ].map((stat, i) => (
+                      <div key={i} className="bg-[#F8FAFC] rounded-xl p-4 border border-[#E2E8F0]">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-[#94A3B8] mb-1">{stat.label}</p>
+                        <p className="text-xl font-bold text-[#1A2A3A]">{stat.value}</p>
+                        <p className="text-[11px] text-[#64748B] mt-0.5">{stat.sub}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Customer Sentiment Arc Chart */}
+              <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-sm font-bold text-[#1A2A3A] uppercase tracking-wider">Customer Sentiment Arc</h3>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#94A3B8]">Per conversation step</span>
+                </div>
+                {arc.length === 0 ? (
+                  <p className="text-sm text-[#64748B] text-center py-8">No sentiment data available.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ minWidth: 320 }}>
+                      {/* Grid lines */}
+                      {[0, 25, 50, 75, 100].map(pct => {
+                        const y = yOf(pct)
+                        return (
+                          <g key={pct}>
+                            <line x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#E2E8F0" strokeWidth="1" strokeDasharray={pct === 50 ? '4 2' : undefined} />
+                            <text x={padL - 6} y={y + 4} fontSize="9" fill="#94A3B8" textAnchor="end">{pct}</text>
+                          </g>
+                        )
+                      })}
+                      {/* Area fill */}
+                      {areaD && <path d={areaD} fill="url(#sentGrad)" opacity="0.3" />}
+                      {/* Gradient */}
+                      <defs>
+                        <linearGradient id="sentGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#22C55E" stopOpacity="0.6" />
+                          <stop offset="100%" stopColor="#22C55E" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      {/* Line */}
+                      {pathD && <path d={pathD} fill="none" stroke="#2C5282" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
+                      {/* Dots + X labels */}
+                      {arc.map((pt: any, i: number) => {
+                        const x = xOf(i)
+                        const y = yOf(pt.sentiment_score)
+                        const color = sentimentColor(pt.sentiment_score)
+                        return (
+                          <g key={i}>
+                            <circle cx={x} cy={y} r="5" fill={color} stroke="white" strokeWidth="2" />
+                            <text x={x} y={padT + innerH + 16} fontSize="9" fill="#94A3B8" textAnchor="middle">Step {pt.step}</text>
+                          </g>
+                        )
+                      })}
+                    </svg>
+                  </div>
+                )}
+                {/* Sentiment Table */}
+                {arc.length > 0 && (
+                  <div className="mt-6 border-t border-[#E2E8F0] pt-4 overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-[#94A3B8] uppercase tracking-wider">
+                          <th className="text-left py-2 pr-4 font-semibold">Step</th>
+                          <th className="text-left py-2 pr-4 font-semibold">Sentiment</th>
+                          <th className="text-left py-2 font-semibold">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#F1F5F9]">
+                        {arc.map((pt: any, i: number) => (
+                          <tr key={i}>
+                            <td className="py-2 pr-4 font-bold text-[#1A2A3A]">#{pt.step}</td>
+                            <td className="py-2 pr-4">
+                              <span className={`font-semibold ${
+                                pt.label === 'Very Positive' || pt.label === 'Positive' ? 'text-green-600'
+                                : pt.label === 'Neutral' ? 'text-amber-600'
+                                : 'text-red-500'
+                              }`}>{pt.label}</span>
+                            </td>
+                            <td className="py-2 text-[#64748B]">{pt.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
       </div>
+
     </div>
   )
 }

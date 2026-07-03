@@ -56,15 +56,20 @@ export const getReps = async (req: any, res: any) => {
         : recentAvg
       const trend = recentAvg > olderAvg ? 'up' : recentAvg < olderAvg ? 'down' : 'stable'
 
-      // Skills calculation
-      const skillTotals: any = { opening: 0, discovery: 0, objection_handling: 0, talk_ratio: 0, closing: 0 }
+      // Skills calculation — dynamically extract score keys from feedback
+      const skillTotals: any = {}
       repSessions.forEach(s => {
         const scores = s.feedback_json?.scores || {}
-        Object.keys(skillTotals).forEach(k => skillTotals[k] += scores[k] || 0)
+        Object.keys(scores).forEach(k => {
+          const val = scores[k]
+          const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0)
+          skillTotals[k] = (skillTotals[k] || 0) + numVal
+        })
       })
-      const skillAvgs = Object.keys(skillTotals).map(k => ({ name: k.replace('_', ' ').toUpperCase(), avg: skillTotals[k] / count }))
-      const strongest = skillAvgs.sort((a, b) => b.avg - a.avg)[0].name
-      const weakest = skillAvgs.sort((a, b) => a.avg - b.avg)[skillAvgs.length - 1].name // Fix: lowest score is at index 0 after sort
+      const skillAvgs = Object.keys(skillTotals).map(k => ({ name: k.replace(/_/g, ' ').toUpperCase(), avg: skillTotals[k] / count }))
+      if (skillAvgs.length === 0) skillAvgs.push({ name: 'N/A', avg: 0 })
+      const strongest = [...skillAvgs].sort((a, b) => b.avg - a.avg)[0].name
+      const weakest = [...skillAvgs].sort((a, b) => a.avg - b.avg)[0].name
 
       // Re-sort correctly
       const sortedSkills = [...skillAvgs].sort((a, b) => a.avg - b.avg)
@@ -180,34 +185,19 @@ export const getRepSessions = async (req: any, res: any) => {
     score: s.feedback_json?.overall_score || 0
   })).reverse().slice(-10)
 
-  // 2. Skill Radar
-  const skills = {
-    empathy: 0,
-    objection_handling: 0,
-    confidence: 0,
-    listening: 0,
-    executive_communication: 0,
-    questioning_ability: 0
-  }
+  // 2. Skill Radar — dynamically extract score keys from actual feedback
+  const skills: Record<string, number> = {}
   practiceSessions.forEach((s: any) => {
     const scores = s.feedback_json?.scores || {}
-    Object.keys(skills).forEach(k => {
-      // Use new metric if exists, otherwise map from old if possible, or 0
-      if (scores[k] !== undefined) {
-        (skills as any)[k] += scores[k]
-      } else {
-        // Simple mapping for old data consistency
-        if (k === 'questioning_ability') (skills as any)[k] += (scores.discovery || 0) * 5
-        if (k === 'listening') (skills as any)[k] += (scores.talk_ratio || 0) * 5
-        if (k === 'objection_handling') (skills as any)[k] += (scores.objection_handling || 0) * 5
-        if (k === 'executive_communication') (skills as any)[k] += (scores.closing || 0) * 5
-        if (k === 'confidence' || k === 'empathy') (skills as any)[k] += (scores.opening || 0) * 5
-      }
+    Object.keys(scores).forEach(k => {
+      const val = scores[k];
+      const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0);
+      skills[k] = (skills[k] || 0) + numVal;
     })
   })
   const radarData = Object.keys(skills).map(k => ({
-    subject: k.replace('_', ' ').toUpperCase(),
-    A: practiceSessions.length ? Math.round((skills as any)[k] / practiceSessions.length) : 0,
+    subject: k.replace(/_/g, ' ').toUpperCase(),
+    A: practiceSessions.length ? Math.round(skills[k] / practiceSessions.length) : 0,
     fullMark: 100
   }))
 
@@ -224,24 +214,24 @@ export const getRepSessions = async (req: any, res: any) => {
         name,
         totalScore: 0,
         count: 0,
-        skillTotals: { empathy: 0, objection_handling: 0, confidence: 0, listening: 0, executive_communication: 0, questioning_ability: 0 }
+        skillTotals: {} as Record<string, number>
       }
     }
 
     personaMap[type].totalScore += s.feedback_json?.overall_score || 0
     personaMap[type].count += 1
 
-    Object.keys(personaMap[type].skillTotals).forEach(skill => {
-      if (scores[skill] !== undefined) {
-        personaMap[type].skillTotals[skill] += scores[skill]
-      }
+    Object.keys(scores).forEach(skill => {
+      const val = scores[skill];
+      const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0);
+      personaMap[type].skillTotals[skill] = (personaMap[type].skillTotals[skill] || 0) + numVal;
     })
   })
 
   const personaPerformanceData = Object.values(personaMap).map((v: any) => {
     const avgScore = Math.round(v.totalScore / v.count)
-    const skills = Object.entries(v.skillTotals).map(([name, total]) => ({
-      name: name.replace('_', ' ').toUpperCase(),
+    const skillsList = Object.entries(v.skillTotals).map(([name, total]) => ({
+      name: name.replace(/_/g, ' ').toUpperCase(),
       avg: Math.round((total as number) / v.count)
     })).sort((a, b) => b.avg - a.avg)
 
@@ -250,8 +240,8 @@ export const getRepSessions = async (req: any, res: any) => {
       persona_name: v.name,
       avgScore,
       sessionsCompleted: v.count,
-      strongestSkill: skills[0]?.name || 'N/A',
-      weakestSkill: skills[skills.length - 1]?.name || 'N/A'
+      strongestSkill: skillsList[0]?.name || 'N/A',
+      weakestSkill: skillsList[skillsList.length - 1]?.name || 'N/A'
     }
   })
 
@@ -309,19 +299,19 @@ export const getMyAnalytics = async (req: any, res: any) => {
       score: s.feedback_json?.overall_score || 0
     })).reverse().slice(-10)
 
-    // 2. Skill Radar
-    const skills = { opening: 0, discovery: 0, objection_handling: 0, talk_ratio: 0, closing: 0 }
+    // 2. Skill Radar — dynamically extract score keys from actual feedback
+    const skills: Record<string, number> = {}
     practiceSessions.forEach((s: any) => {
       const scores = s.feedback_json?.scores || {}
-      Object.keys(skills).forEach(k => {
+      Object.keys(scores).forEach(k => {
         const val = scores[k];
         const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0);
-        (skills as any)[k] += numVal;
+        skills[k] = (skills[k] || 0) + numVal;
       })
     })
     const radarData = Object.keys(skills).map(k => ({
-      subject: k.replace('_', ' ').toUpperCase(),
-      A: practiceSessions.length ? Math.round((skills as any)[k] / practiceSessions.length) : 0,
+      subject: k.replace(/_/g, ' ').toUpperCase(),
+      A: practiceSessions.length ? Math.round(skills[k] / practiceSessions.length) : 0,
       fullMark: 100
     }))
 
@@ -338,24 +328,24 @@ export const getMyAnalytics = async (req: any, res: any) => {
           name,
           totalScore: 0,
           count: 0,
-          skillTotals: { opening: 0, discovery: 0, objection_handling: 0, talk_ratio: 0, closing: 0 }
+          skillTotals: {} as Record<string, number>
         }
       }
 
       personaMap[type].totalScore += s.feedback_json?.overall_score || 0
       personaMap[type].count += 1
 
-      Object.keys(personaMap[type].skillTotals).forEach(skill => {
+      Object.keys(scores).forEach(skill => {
         const val = scores[skill];
         const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0);
-        personaMap[type].skillTotals[skill] += numVal;
+        personaMap[type].skillTotals[skill] = (personaMap[type].skillTotals[skill] || 0) + numVal;
       })
     })
 
     const personaPerformanceData = Object.values(personaMap).map((v: any) => {
       const avgScore = Math.round(v.totalScore / v.count)
       const skills = Object.entries(v.skillTotals).map(([name, total]) => ({
-        name: name.replace('_', ' ').toUpperCase(),
+        name: name.replace(/_/g, ' ').toUpperCase(),
         avg: Math.round((total as number) / v.count)
       })).sort((a, b) => b.avg - a.avg)
 
@@ -554,7 +544,12 @@ export const getCoachingAlerts = async (req: any, res: any) => {
       }
 
       // 3. Medium: Weak Objection Handling
-      const lowObjCount = recentSessions.filter(s => (s.feedback_json?.scores?.objection_handling || 0) < 10).length
+      const lowObjCount = recentSessions.filter(s => {
+        const scores = s.feedback_json?.scores || {}
+        const val = scores.objection___concern_handling ?? scores.objection_handling ?? 100
+        const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0)
+        return numVal < 50 // Changed from 10 since it's a 0-100 scale usually
+      }).length
       if (lowObjCount >= 2) {
         alerts.push({
           rep_name: rep.name,
@@ -566,8 +561,15 @@ export const getCoachingAlerts = async (req: any, res: any) => {
       }
 
       // 4. Medium: Low Customer Engagement
-      const avgEngagement = recentSessions.reduce((acc, s) => acc + ((s.feedback_json?.scores?.discovery || 0) + (s.feedback_json?.scores?.closing || 0)) / 2, 0) / recentSessions.length
-      if (avgEngagement < 10) {
+      const avgEngagement = recentSessions.reduce((acc, s) => {
+        const scores = s.feedback_json?.scores || {}
+        const disc = scores.customer_understanding ?? scores.discovery ?? 100
+        const discVal = typeof disc === 'object' ? (disc.score || 0) : (disc || 0)
+        const close = scores.next_steps___call_effectiveness ?? scores.closing ?? 100
+        const closeVal = typeof close === 'object' ? (close.score || 0) : (close || 0)
+        return acc + (discVal + closeVal) / 2
+      }, 0) / recentSessions.length
+      if (avgEngagement < 50) {
         alerts.push({
           rep_name: rep.name,
           severity: 'Medium',

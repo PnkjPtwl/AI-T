@@ -5,15 +5,6 @@ import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
-const SCORECARD_METRICS = [
-  'Communication & Professionalism',
-  'Customer Understanding',
-  'Active Listening & Engagement',
-  'Value Communication',
-  'Objection & Concern Handling',
-  'Next Steps & Call Effectiveness',
-]
-
 export default function ManagerScenariosPage() {
   const [scenarios, setScenarios] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -25,6 +16,7 @@ export default function ManagerScenariosPage() {
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [difficultyFilter, setDifficultyFilter] = useState('All')
+  const [SCORECARD_METRICS, setScorecardMetrics] = useState<string[]>([])
 
   const [editForm, setEditForm] = useState({
     persona_name: '',
@@ -59,7 +51,21 @@ export default function ManagerScenariosPage() {
     }
   }
 
-  useEffect(() => { fetchScenarios() }, [])
+  const fetchScorecardMetrics = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+      const res = await fetch(`${API}/api/scenarios/scorecard-metrics`, { headers: { 'Authorization': `Bearer ${token}` } })
+      if (res.ok) {
+        const data = await res.json()
+        setScorecardMetrics(data.map((m: any) => m.name))
+      }
+    } catch (err) {
+      console.error('Failed to fetch scorecard metrics', err)
+    }
+  }
+
+  useEffect(() => { fetchScenarios(); fetchScorecardMetrics() }, [])
 
   const filteredScenarios = useMemo(() => {
     let result = [...scenarios]
@@ -85,9 +91,9 @@ export default function ManagerScenariosPage() {
         const d = await res.json()
         setSelectedScenario(d)
 
-        // Parse metrics from evaluation_focus
+        // Parse metrics from evaluation_focus — match against canonical metrics
         const savedMetrics = d.evaluation_focus
-          ? SCORECARD_METRICS.filter(m => d.evaluation_focus.toLowerCase().includes(m.toLowerCase().slice(0, 8)))
+          ? SCORECARD_METRICS.filter(m => d.evaluation_focus.includes(m))
           : []
 
         setEditForm({
@@ -405,7 +411,12 @@ export default function ManagerScenariosPage() {
                   <div>
                     <h3 className="text-[18px] font-[600] text-gray-900">Scorecard Metrics</h3>
                     <p className="text-[13px] md:text-[14px] text-gray-500 font-[400] mt-0.5">
-                      {isEditing ? `${editForm.selected_metrics.length} of ${SCORECARD_METRICS.length} categories selected` : (selectedScenario.evaluation_focus || 'Not specified')}
+                      {isEditing ? `${editForm.selected_metrics.length} of ${SCORECARD_METRICS.length} categories selected` : (
+                        (() => {
+                          const matchedMetrics = SCORECARD_METRICS.filter(m => selectedScenario.evaluation_focus?.includes(m))
+                          return matchedMetrics.length > 0 ? matchedMetrics.join(', ') : (selectedScenario.evaluation_focus || 'Not specified')
+                        })()
+                      )}
                     </p>
                   </div>
                   {isEditing && (
@@ -434,7 +445,7 @@ export default function ManagerScenariosPage() {
                 ) : (
                   <div className="space-y-[8px]">
                     {SCORECARD_METRICS.map((metric) => {
-                      const isSelected = selectedScenario.evaluation_focus?.includes(metric.slice(0, 8)) || true
+                      const isSelected = selectedScenario.evaluation_focus?.includes(metric) || false
                       return (
                         <div key={metric} className="flex items-center gap-[12px] px-[16px] py-[12px] border border-gray-900/10 rounded-[10px]">
                           <div className={`w-[16px] h-[16px] rounded border-[2px] flex items-center justify-center ${isSelected ? 'border-[#2C5282] bg-[#2C5282]' : 'border-gray-300'}`}>

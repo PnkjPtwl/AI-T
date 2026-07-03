@@ -1,6 +1,15 @@
 import { supabase } from '../db/supabase'
 import fs from 'fs'
 import path from 'path'
+import { getScorecardMetricNames, SCORECARD_CATEGORIES } from '../utils/evaluationGenerator'
+
+export const getScorecardMetrics = async (_req: any, res: any) => {
+  const metrics = getScorecardMetricNames().map(name => ({
+    name,
+    description: SCORECARD_CATEGORIES[name].description,
+  }))
+  res.json(metrics)
+}
 
 export const getScenarios = async (req: any, res: any) => {
   console.log("--- GET SCENARIOS DEBUG START ---");
@@ -49,6 +58,7 @@ export const getScenarios = async (req: any, res: any) => {
       let target_skills = '';
       let personality_traits = s.personality_traits || '';
       let objection_style = s.objection_style || '';
+      let evaluation_focus = '';
       const metaMatch = s.context_text?.match(/\[SCENARIO_METADATA:\s*(\{.*?\})\]/);
       if (metaMatch && metaMatch[1]) {
         try {
@@ -56,10 +66,15 @@ export const getScenarios = async (req: any, res: any) => {
           target_skills = meta.target_skills || '';
           if (!personality_traits) personality_traits = meta.personality_traits || '';
           if (!objection_style) objection_style = meta.objection_style || '';
+          evaluation_focus = meta.evaluation_focus || '';
         } catch (e) {}
       }
 
-      return { ...s, scenario_name, target_skills, personality_traits, objection_style };
+      // We still fall back to legacy extraction if not in metadata for older formats
+      if (!evaluation_focus && s.evaluation_focus) evaluation_focus = s.evaluation_focus;
+      if (!evaluation_focus && s.context_text?.includes('roi_justification')) evaluation_focus = 'roi_justification, pricing_defense, logic'
+
+      return { ...s, scenario_name, target_skills, personality_traits, objection_style, evaluation_focus };
     });
 
     console.log("Returning enhanced scenarios to frontend.");
@@ -107,6 +122,7 @@ export const createScenario = async (req: any, res: any) => {
     target_skills
   }
   
+
   const finalContextText = `${context_text}\n\n[SCENARIO_METADATA: ${JSON.stringify(metadata)}]`
 
   const { data, error } = await supabase
