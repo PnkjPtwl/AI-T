@@ -112,8 +112,8 @@ export default function ManagerScenariosPage() {
 
   const handleUpdate = async () => {
     setSaving(true); setError('')
-    if (totalWeight > 100) {
-      setError(`Total weight is ${totalWeight}%. Please reduce to 100% or less.`)
+    if (totalWeight !== 100) {
+      setError(`Total weight is ${totalWeight}%. It must be exactly 100%.`)
       setSaving(false); return
     }
     try {

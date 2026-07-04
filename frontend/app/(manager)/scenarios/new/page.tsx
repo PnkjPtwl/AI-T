@@ -196,7 +196,7 @@ export default function NewScenarioPage() {
       if (!formData.context_text.trim()) { setError('Scenario Context is required.'); return }
     } else if (step === 3) {
       if (scorecardMetrics.length === 0) { setError('Please generate or add at least one scorecard metric.'); return }
-      if (totalWeight > 100) { setError(`Total weight is ${totalWeight}%. Please reduce weights to 100% or less.`); return }
+      if (totalWeight !== 100) { setError(`Total weight is ${totalWeight}%. It must be exactly 100%.`); return }
     } else if (step === 4) {
       const selectedQuestions = questions.filter(q => q.selected)
       if (selectedQuestions.length === 0) { setError('Please select or add at least one evaluation question.'); return }
