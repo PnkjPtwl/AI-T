@@ -36,7 +36,10 @@ export default function NewScenarioPage() {
     objection_style: '',
     personality_traits: '',
     context_text: '',
-    custom_prompt: ''
+    custom_prompt: '',
+    contact_title: '',
+    contact_company: '',
+    metric_weights: {} as Record<string, number>
   })
   
   const [expandedField, setExpandedField] = useState<{ id: string, title: string, value: string, readOnly: boolean } | null>(null)
@@ -171,6 +174,17 @@ export default function NewScenarioPage() {
     try {
       const token = localStorage.getItem('token')
       const finalFormData = { ...formData, evaluation_focus: selectedMetrics.join(', ') };
+      
+      const weightsSum = Object.entries(finalFormData.metric_weights)
+        .filter(([k]) => selectedMetrics.includes(k))
+        .reduce((sum, [_, v]) => sum + (v || 0), 0)
+        
+      if (weightsSum !== 100 && selectedMetrics.length > 0 && Object.keys(finalFormData.metric_weights).length > 0) {
+         if (!window.confirm(`Your metric weights sum to ${weightsSum}% (should be 100%). Do you want to save anyway?`)) {
+           setLoading(false)
+           return
+         }
+      }
       
       const selectedQuestions = questions.filter(q => q.selected)
       if (selectedQuestions.length > 0) {
@@ -310,6 +324,17 @@ export default function NewScenarioPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px]">
+                <div className="space-y-[8px]">
+                  <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block">Designation (Title)</label>
+                  <input type="text" value={formData.contact_title} onChange={e => setFormData({ ...formData, contact_title: e.target.value })} className="w-full h-[40px] md:h-[44px] bg-white border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors" />
+                </div>
+                <div className="space-y-[8px]">
+                  <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block">Company</label>
+                  <input type="text" value={formData.contact_company} onChange={e => setFormData({ ...formData, contact_company: e.target.value })} className="w-full h-[40px] md:h-[44px] bg-white border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors" placeholder="e.g. Acme Corp" />
+                </div>
+              </div>
+
               <div className="space-y-[8px]">
                 <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block">Persona Name <span className="text-red-500 ml-1">*</span></label>
                 <input type="text" required value={formData.persona_name} onChange={e => setFormData({ ...formData, persona_name: e.target.value })} className="w-full h-[40px] md:h-[44px] bg-white border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors" />
@@ -377,19 +402,40 @@ export default function NewScenarioPage() {
                   </div>
                   <div className="space-y-[8px]">
                     {scorecardMetrics.map((metric) => (
-                      <label key={metric} className={`flex items-center gap-[12px] px-[16px] py-[12px] border rounded-[10px] cursor-pointer transition-all duration-200 ${selectedMetrics.includes(metric) ? 'border-[#2C5282] bg-[#2C5282]/5' : 'border-gray-900/10 hover:border-gray-900/30'}`}>
-                        <input
-                          type="checkbox"
-                          checked={selectedMetrics.includes(metric)}
-                          onChange={() => {
-                            setSelectedMetrics(prev =>
-                              prev.includes(metric) ? prev.filter(m => m !== metric) : [...prev, metric]
-                            )
-                          }}
-                          className="w-[16px] h-[16px] rounded accent-[#2C5282]"
-                        />
-                        <span className={`text-[14px] font-[600] ${selectedMetrics.includes(metric) ? 'text-[#2C5282]' : 'text-gray-700'}`}>{metric}</span>
-                      </label>
+                      <div key={metric} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-[12px] px-[16px] py-[12px] border rounded-[10px] transition-all duration-200 ${selectedMetrics.includes(metric) ? 'border-[#2C5282] bg-[#2C5282]/5' : 'border-gray-900/10 hover:border-gray-900/30'}`}>
+                        <label className="flex items-center gap-[12px] cursor-pointer flex-1">
+                          <input
+                            type="checkbox"
+                            checked={selectedMetrics.includes(metric)}
+                            onChange={() => {
+                              setSelectedMetrics(prev =>
+                                prev.includes(metric) ? prev.filter(m => m !== metric) : [...prev, metric]
+                              )
+                            }}
+                            className="w-[16px] h-[16px] rounded accent-[#2C5282]"
+                          />
+                          <span className={`text-[14px] font-[600] ${selectedMetrics.includes(metric) ? 'text-[#2C5282]' : 'text-gray-700'}`}>{metric}</span>
+                        </label>
+                        {selectedMetrics.includes(metric) && (
+                          <div className="flex items-center gap-[8px] pl-[28px] sm:pl-0">
+                            <span className="text-[12px] text-gray-500 font-[500]">Weight:</span>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={formData.metric_weights[metric] || ''}
+                                onChange={(e) => setFormData(f => ({
+                                  ...f,
+                                  metric_weights: { ...f.metric_weights, [metric]: parseInt(e.target.value) || 0 }
+                                }))}
+                                className="w-[70px] h-[32px] border border-[#2C5282]/30 rounded-[6px] px-[8px] text-[14px] font-[600] text-[#2C5282] focus:outline-none focus:border-[#2C5282] bg-white text-right pr-[24px]"
+                              />
+                              <span className="absolute right-[8px] top-1/2 -translate-y-1/2 text-[12px] text-[#2C5282] font-[600] pointer-events-none">%</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>

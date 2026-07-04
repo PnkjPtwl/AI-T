@@ -10,6 +10,7 @@ export default function ManagerDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [analytics, setAnalytics] = useState<any>(null)
   const [assignments, setAssignments] = useState<any[]>([])
+  const [selectedRep, setSelectedRep] = useState<string>('all')
 
   const fetchData = async () => {
     try {
@@ -39,11 +40,18 @@ export default function ManagerDashboardPage() {
     )
   }
 
-  const summary = analytics?.summaryStats || {}
+  const uniqueReps = Array.from(new Set(assignments.map(a => a.rep_id))).map(id => {
+    const rep = assignments.find(a => a.rep_id === id)
+    return { id, name: rep?.rep_name || 'Unknown' }
+  })
 
-  const totalAssignments = summary.totalAssignments ?? 0
-  const completedAssignments = summary.completedAssignments ?? 0
-  const overdueAssignments = summary.overdueAssignments ?? 0
+  const filteredAssignments = selectedRep === 'all' 
+    ? assignments 
+    : assignments.filter(a => a.rep_id === selectedRep)
+
+  const totalAssignments = filteredAssignments.length
+  const completedAssignments = filteredAssignments.filter(a => a.status === 'Completed').length
+  const overdueAssignments = filteredAssignments.filter(a => a.status === 'Overdue').length
   const completionPct = totalAssignments > 0 ? Math.round((completedAssignments / totalAssignments) * 100) : 0
 
   return (

@@ -16,8 +16,11 @@ export default function TrainingPage() {
   const [selectedScenarioId, setSelectedScenarioId] = useState('')
   const [deadline, setDeadline] = useState('')
   const [priority, setPriority] = useState('Medium')
+  const [avatarType, setAvatarType] = useState('female')
   const [assigning, setAssigning] = useState(false)
   const [success, setSuccess] = useState('')
+  const [selectedPersonaFilter, setSelectedPersonaFilter] = useState('all')
+  const [showRepDropdown, setShowRepDropdown] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -56,7 +59,7 @@ export default function TrainingPage() {
       const res = await fetch(`${API}/api/users/assign-training`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repIds: selectedRepIds, scenarioId: selectedScenarioId, deadline, priority })
+        body: JSON.stringify({ repIds: selectedRepIds, scenarioId: selectedScenarioId, deadline, priority, avatarType })
       })
       if (res.ok) {
         setSuccess('Training assigned successfully.')
@@ -142,8 +145,18 @@ export default function TrainingPage() {
 
       {/* Assignment Table */}
       <div className="bg-white border border-gray-900/10 rounded-[12px] overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-        <div className="px-[24px] py-[16px] border-b border-gray-900/10 bg-gray-50/50">
+        <div className="px-[24px] py-[16px] border-b border-gray-900/10 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 className="text-xl font-semibold text-gray-900">Assignment Tracking</h2>
+          <select 
+            value={selectedPersonaFilter}
+            onChange={(e) => setSelectedPersonaFilter(e.target.value)}
+            className="w-full sm:w-[250px] h-[36px] bg-white border border-[#E2E8F0] rounded-[8px] px-[12px] text-sm font-medium text-[#1A2A3A] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors"
+          >
+            <option value="all">All Scenarios</option>
+            {scenarios.map(s => (
+              <option key={s.id} value={s.id}>{s.persona_name}</option>
+            ))}
+          </select>
         </div>
         
         {assignments.length === 0 ? (
@@ -163,7 +176,9 @@ export default function TrainingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-900/5">
-                {assignments.map((assign) => (
+                {assignments
+                  .filter(a => selectedPersonaFilter === 'all' || a.scenario_id === selectedPersonaFilter)
+                  .map((assign) => (
                   <tr key={assign.id} className="hover:bg-gray-50/50 transition-colors duration-150">
                     <td className="px-[24px] py-[16px]">
                       <p className="font-[500] text-gray-900 text-[14px] md:text-[15px]">{assign.rep_name}</p>
@@ -231,26 +246,54 @@ export default function TrainingPage() {
             </div>
 
             <div className="p-[24px] space-y-[20px]">
-              <div>
+              <div className="relative">
                 <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block mb-[8px]">Select Representatives</label>
-                <div className="flex flex-wrap gap-[8px]">
-                  {reps.filter(r => {
-                    // Filter out reps who are already assigned to the selected scenario
-                    if (!selectedScenarioId) return true;
-                    return !assignments.some(a => a.rep_id === r.id && a.scenario_id === selectedScenarioId && a.status !== 'Completed');
-                  }).map(r => (
-                    <button
-                      key={r.id}
-                      onClick={() => {
-                        if (selectedRepIds.includes(r.id)) setSelectedRepIds(selectedRepIds.filter(id => id !== r.id))
-                        else setSelectedRepIds([...selectedRepIds, r.id])
-                      }}
-                      className={`px-[12px] py-[6px] rounded-[8px] text-[13px] font-[600] border transition-all duration-200 ${selectedRepIds.includes(r.id) ? 'bg-[#2C5282] border-[#2C5282] text-white shadow-sm' : 'bg-white border-gray-900/10 text-gray-700 hover:border-gray-900/30'}`}
-                    >
-                      {r.name}
-                    </button>
-                  ))}
+                <div 
+                  className="w-full h-[40px] md:h-[44px] border border-gray-900/10 rounded-[10px] px-[12px] flex items-center justify-between cursor-pointer bg-white"
+                  onClick={() => setShowRepDropdown(!showRepDropdown)}
+                >
+                  <span className="text-[14px] text-gray-700 truncate">
+                    {selectedRepIds.length > 0 
+                      ? `${selectedRepIds.length} rep(s) selected` 
+                      : 'Select representatives...'}
+                  </span>
+                  <svg className={`w-4 h-4 text-gray-500 transition-transform ${showRepDropdown ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
                 </div>
+                
+                {showRepDropdown && (
+                  <div className="absolute top-[100%] left-0 right-0 mt-[4px] bg-white border border-gray-900/10 rounded-[10px] shadow-lg max-h-[200px] overflow-y-auto z-50 p-[8px]">
+                    {reps.filter(r => {
+                      if (!selectedScenarioId) return true;
+                      return !assignments.some(a => a.rep_id === r.id && a.scenario_id === selectedScenarioId && a.status !== 'Completed');
+                    }).length === 0 ? (
+                      <div className="text-[13px] text-gray-500 p-[8px]">No eligible reps available</div>
+                    ) : (
+                      reps.filter(r => {
+                        if (!selectedScenarioId) return true;
+                        return !assignments.some(a => a.rep_id === r.id && a.scenario_id === selectedScenarioId && a.status !== 'Completed');
+                      }).map(r => (
+                        <div
+                          key={r.id}
+                          onClick={() => {
+                            if (selectedRepIds.includes(r.id)) setSelectedRepIds(selectedRepIds.filter(id => id !== r.id))
+                            else setSelectedRepIds([...selectedRepIds, r.id])
+                          }}
+                          className={`flex items-center gap-[10px] px-[12px] py-[8px] rounded-[6px] cursor-pointer hover:bg-gray-50 transition-colors ${selectedRepIds.includes(r.id) ? 'bg-gray-50' : ''}`}
+                        >
+                          <input 
+                            type="checkbox" 
+                            checked={selectedRepIds.includes(r.id)} 
+                            readOnly
+                            className="w-[16px] h-[16px] rounded border-gray-300 text-[#2C5282] focus:ring-[#2C5282]" 
+                          />
+                          <span className="text-[14px] font-[500] text-gray-700">{r.name}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -275,7 +318,7 @@ export default function TrainingPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-[16px]">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-[16px]">
                 <div>
                   <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block mb-[8px]">Deadline</label>
                   <input
@@ -296,6 +339,17 @@ export default function TrainingPage() {
                     <option>Low</option>
                     <option>Medium</option>
                     <option>High</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block mb-[8px]">Avatar</label>
+                  <select
+                    value={avatarType}
+                    onChange={(e) => setAvatarType(e.target.value)}
+                    className="w-full h-[40px] md:h-[44px] bg-white border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors"
+                  >
+                    <option value="female">Female</option>
+                    <option value="male">Male</option>
                   </select>
                 </div>
               </div>

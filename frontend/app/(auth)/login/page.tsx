@@ -61,7 +61,7 @@ export default function LoginPage() {
         
         {/* Left Side: Branding */}
         <div className="md:w-1/2 p-16 flex flex-col justify-center items-center md:items-start border-b md:border-b-0 md:border-r border-[#E2E8F0]/50">
-          <h1 className="text-5xl font-extrabold text-[#1A2A3A] tracking-tighter leading-none mb-4">SalesCoach</h1>
+          <h1 className="text-5xl font-extrabold text-[#1A2A3A] tracking-tighter leading-none mb-4">r-salesCoach</h1>
           <div className="w-12 h-1 bg-[#2C5282] rounded-full"></div>
         </div>
 

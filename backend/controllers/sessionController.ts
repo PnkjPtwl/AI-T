@@ -94,12 +94,13 @@ export const startPractice = async (req: any, res: any) => {
 
   // 1. Link to assignment (either provided or found automatically)
   let targetAssignmentId = assignmentId;
+  let assignmentAvatarType = 'female';
   
   if (!targetAssignmentId) {
     console.log(`[AssignmentLifecycle] No assignmentId provided. searching for pending assignment for rep ${repId} and scenario ${scenarioId}`);
     const { data: autoAssign } = await supabase
       .from('training_assignments')
-      .select('id')
+      .select('id, avatar_type')
       .eq('rep_id', repId)
       .eq('scenario_id', scenarioId)
       .in('status', ['Pending', 'Overdue'])
@@ -110,6 +111,17 @@ export const startPractice = async (req: any, res: any) => {
     if (autoAssign) {
       console.log(`[AssignmentLifecycle] Auto-linked session ${data.id} to assignment ${autoAssign.id}`);
       targetAssignmentId = autoAssign.id;
+      assignmentAvatarType = autoAssign.avatar_type || 'female';
+    }
+  } else {
+    // Fetch avatar_type for the provided assignmentId
+    const { data: assignData } = await supabase
+      .from('training_assignments')
+      .select('avatar_type')
+      .eq('id', targetAssignmentId)
+      .single()
+    if (assignData) {
+      assignmentAvatarType = assignData.avatar_type || 'female';
     }
   }
 
@@ -119,11 +131,9 @@ export const startPractice = async (req: any, res: any) => {
       session_id: data.id,
       status: 'In Progress'
     })
-    
-
   }
 
-  res.json({ sessionId: data.id })
+  res.json({ sessionId: data.id, avatarType: assignmentAvatarType })
 }
 
 export const sendMessage = async (req: any, res: any) => {
@@ -298,14 +308,17 @@ export const endSession = async (req: any, res: any) => {
 
     // 3. AI EVALUATION
     let evaluationFocus = ''
+    let metricWeights: Record<string, number> | undefined = undefined
     const metaMatch = scenario?.context_text?.match(/\[SCENARIO_METADATA:\s*(\{.*?\})\]/)
     if (metaMatch && metaMatch[1]) {
       try {
         const meta = JSON.parse(metaMatch[1])
         evaluationFocus = meta.evaluation_focus || ''
+        metricWeights = meta.metric_weights
       } catch (e) {}
     }
-    const prompt = generateEvaluationPrompt(scenarioName, transcript, evaluationFocus, voiceAggregate)
+    const prompt = generateEvaluationPrompt(scenarioName, transcript, evaluationFocus, voiceAggregate, metricWeights)
+
     
     let feedback;
     

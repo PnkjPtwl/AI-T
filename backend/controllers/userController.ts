@@ -891,11 +891,11 @@ export const getTeamAnalytics = async (req: any, res: any) => {
 }
 
 export const assignTraining = async (req: any, res: any) => {
-  const { repIds, scenarioId, deadline, priority } = req.body
+  const { repIds, scenarioId, deadline, priority, avatarType } = req.body
   const managerId = req.user.id
 
   console.log("--- ASSIGN TRAINING DEBUG START ---");
-  console.log("Payload:", { repIds, scenarioId, deadline, priority });
+  console.log("Payload:", { repIds, scenarioId, deadline, priority, avatarType });
   console.log("Manager Context:", { managerId, org_id: req.user.org_id });
 
   try {
@@ -918,21 +918,36 @@ export const assignTraining = async (req: any, res: any) => {
       status: 'Pending',
       priority: priority || 'Medium',
       deadline: deadline,
+      avatar_type: avatarType || 'female',
       assigned_at: new Date().toISOString()
     }))
 
     console.log(`Attempting to insert ${assignments.length} assignments...`);
 
-    const { data: insertedData, error } = await supabase
+    let insertedData;
+    let result = await supabase
       .from('training_assignments')
       .insert(assignments)
       .select();
 
-    if (error) {
-      console.error("Supabase Insertion Error:", error);
-      throw error;
+    if (result.error && result.error.message.includes('avatar_type')) {
+      console.warn("avatar_type column missing, retrying insert without avatar_type");
+      const fallbackAssignments = assignments.map(a => {
+        const { avatar_type, ...rest } = a;
+        return rest;
+      });
+      result = await supabase
+        .from('training_assignments')
+        .insert(fallbackAssignments)
+        .select();
     }
 
+    if (result.error) {
+      console.error("Supabase Insertion Error:", result.error);
+      throw result.error;
+    }
+
+    insertedData = result.data;
     console.log("Successfully inserted assignments:", insertedData);
     console.log("--- ASSIGN TRAINING DEBUG END ---");
 
@@ -1062,64 +1077,63 @@ export const getTeamAssignments = async (req: any, res: any) => {
 
   try {
     let assignmentsData: any[] = [];
-    let assignmentsError: any = null;
 
-    // Try with session_id first
-    const firstTry = await supabase
+    let selectFields = [
+      'id', 
+      'rep_id',
+      'scenario_id', 
+      'status', 
+      'priority',
+      'deadline',
+      'assigned_at',
+      'completed_at',
+      'session_id',
+      'avatar_type',
+      'rep:users!rep_id (name)',
+      'scenario:training_scenarios (id, persona_name, difficulty)'
+    ];
+
+    let result = await supabase
       .from('training_assignments')
-      .select(`
-        id, 
-        rep_id,
-        scenario_id, 
-        status, 
-        priority,
-        deadline,
-        assigned_at,
-        completed_at,
-        session_id,
-        rep:users!rep_id (name),
-        scenario:training_scenarios (
-          id,
-          persona_name,
-          difficulty
-        )
-      `)
+      .select(selectFields.join(', '))
       .eq('manager_id', managerId)
-      .order('assigned_at', { ascending: false })
+      .order('assigned_at', { ascending: false });
 
-    if (firstTry.error && firstTry.error.message.includes('column "session_id" does not exist')) {
-      console.warn(`[getTeamAssignments] session_id column missing, falling back to basic fetch`);
-      const secondTry = await supabase
+    if (result.error) {
+      if (result.error.message.includes('session_id')) {
+        selectFields = selectFields.filter(f => f !== 'session_id');
+      }
+      if (result.error.message.includes('avatar_type')) {
+        selectFields = selectFields.filter(f => f !== 'avatar_type');
+      }
+      
+      result = await supabase
         .from('training_assignments')
-        .select(`
-          id, 
-          rep_id,
-          scenario_id, 
-          status, 
-          priority,
-          deadline,
-          assigned_at,
-          completed_at,
-          rep:users!rep_id (name),
-          scenario:training_scenarios (
-            id,
-            persona_name,
-            difficulty
-          )
-        `)
+        .select(selectFields.join(', '))
         .eq('manager_id', managerId)
-        .order('assigned_at', { ascending: false })
-      assignmentsData = secondTry.data || [];
-      assignmentsError = secondTry.error;
-    } else {
-      assignmentsData = firstTry.data || [];
-      assignmentsError = firstTry.error;
+        .order('assigned_at', { ascending: false });
+
+      if (result.error) {
+        if (result.error.message.includes('session_id')) {
+          selectFields = selectFields.filter(f => f !== 'session_id');
+        }
+        if (result.error.message.includes('avatar_type')) {
+          selectFields = selectFields.filter(f => f !== 'avatar_type');
+        }
+        result = await supabase
+          .from('training_assignments')
+          .select(selectFields.join(', '))
+          .eq('manager_id', managerId)
+          .order('assigned_at', { ascending: false });
+      }
     }
 
-    if (assignmentsError) {
-      console.error("Supabase Query Error (getTeamAssignments):", assignmentsError);
-      throw assignmentsError;
+    if (result.error) {
+      console.error("Supabase Query Error (getTeamAssignments):", result.error);
+      throw result.error;
     }
+    
+    assignmentsData = result.data || [];
 
     // Fetch related sessions for scores manually
     const sessionIds = (assignmentsData || []).filter(a => a.session_id).map(a => a.session_id)

@@ -15,6 +15,7 @@ export default function RepDashboard() {
    const [recentSessions, setRecentSessions] = useState<any[]>([])
    const [assignments, setAssignments] = useState<any[]>([])
    const [notes, setNotes] = useState<any[]>([])
+   const [timeframe, setTimeframe] = useState<'all' | '30d' | '7d'>('all')
 
    useEffect(() => {
       const fetchData = async () => {
@@ -63,8 +64,20 @@ export default function RepDashboard() {
 
    const now = new Date().getTime();
 
+   const filterByTimeframe = (dateString: string) => {
+      if (timeframe === 'all') return true;
+      if (!dateString) return true; // If no date, include it
+      const date = new Date(dateString).getTime();
+      const diffDays = (now - date) / (1000 * 60 * 60 * 24);
+      if (timeframe === '30d') return diffDays <= 30;
+      if (timeframe === '7d') return diffDays <= 7;
+      return true;
+   };
+
    const activeAssignments = assignments.filter(a => {
       if (a.status === 'Completed') return false;
+      if (!filterByTimeframe(a.created_at || a.assigned_at)) return false;
+
       
       // Auto-destruct (remove from dashboard) if deadline has passed
       if (a.deadline) {
@@ -83,6 +96,7 @@ export default function RepDashboard() {
 
    const missedAssignments = assignments.filter(a => {
       if (a.status === 'Completed') return false;
+      if (!filterByTimeframe(a.deadline)) return false;
       if (a.deadline) {
          const dl = new Date(a.deadline);
          dl.setHours(23, 59, 59, 999);
@@ -93,8 +107,10 @@ export default function RepDashboard() {
       return false;
    });
 
-   const completedAssignments = assignments.filter(a => a.status === 'Completed')
+   const completedAssignments = assignments.filter(a => a.status === 'Completed' && filterByTimeframe(a.completed_at))
    const historyAssignments = [...completedAssignments, ...missedAssignments]
+   
+   const filteredRecentSessions = recentSessions.filter(s => filterByTimeframe(s.completed_at))
 
    const getDeadlineWarning = (deadlineStr: string) => {
       if (!deadlineStr) return { text: 'No deadline', color: 'text-gray-500' };
@@ -115,9 +131,22 @@ export default function RepDashboard() {
    return (
       <div className="max-w-[1200px] mx-auto space-y-[32px] pb-[48px]">
          {/* Header */}
-         <div>
-            <h1 className="text-4xl md:text-5xl font-[800] text-gray-900 tracking-tight">Welcome back, {repName.split(' ')[0]} 👋</h1>
-            <p className="text-lg md:text-xl text-gray-600 mt-2 font-[400] leading-relaxed">Here is your daily performance briefing and training metrics.</p>
+         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+               <h1 className="text-4xl md:text-5xl font-[800] text-gray-900 tracking-tight">Welcome back, {repName.split(' ')[0]} 👋</h1>
+               <p className="text-lg md:text-xl text-gray-600 mt-2 font-[400] leading-relaxed">Here is your daily performance briefing and training metrics.</p>
+            </div>
+            <div>
+               <select
+                  value={timeframe}
+                  onChange={(e) => setTimeframe(e.target.value as any)}
+                  className="w-full md:w-[200px] h-[40px] bg-white border border-[#E2E8F0] rounded-[10px] px-[12px] text-sm font-semibold text-[#1A2A3A] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors"
+               >
+                  <option value="all">All Time</option>
+                  <option value="30d">Last 30 Days</option>
+                  <option value="7d">Last 7 Days</option>
+               </select>
+            </div>
          </div>
 
          {/* 1. Missions Section */}
@@ -254,7 +283,7 @@ export default function RepDashboard() {
                            </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-900/5 bg-white">
-                           {recentSessions.map((session) => (
+                           {filteredRecentSessions.map((session) => (
                               <tr key={session.id} onClick={() => router.push(`/rep/train/${session.scenario_id}/review?sessionId=${session.id}`)} className="cursor-pointer hover:bg-gray-50 transition-colors">
                                  <td className="px-8 py-5">
                                     <p className="font-[600] text-[#2C5282]">{session.scenario_name}</p>
@@ -267,7 +296,7 @@ export default function RepDashboard() {
                                  </td>
                               </tr>
                            ))}
-                           {recentSessions.length === 0 && (
+                           {filteredRecentSessions.length === 0 && (
                               <tr>
                                  <td colSpan={3} className="px-[24px] py-[48px] text-center text-gray-500 text-[14px]">
                                     No recent sessions.

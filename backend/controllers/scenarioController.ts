@@ -119,7 +119,10 @@ export const createScenario = async (req: any, res: any) => {
     evaluation_focus,
     objection_style,
     conversation_expectations,
-    target_skills
+    target_skills,
+    contact_title: req.body.contact_title,
+    contact_company: req.body.contact_company,
+    metric_weights: req.body.metric_weights
   }
   
 
@@ -282,7 +285,10 @@ export const updateScenario = async (req: any, res: any) => {
       evaluation_focus: updates.evaluation_focus,
       objection_style: updates.objection_style,
       conversation_expectations: updates.conversation_expectations,
-      target_skills: updates.target_skills
+      target_skills: updates.target_skills,
+      contact_title: updates.contact_title,
+      contact_company: updates.contact_company,
+      metric_weights: updates.metric_weights
     }
     
     // Ensure we don't append multiple metadata tags if updating

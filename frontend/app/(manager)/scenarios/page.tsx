@@ -36,6 +36,7 @@ export default function ManagerScenariosPage() {
     rep_objective: '',
     background_for_trainee: '',
     selected_metrics: [] as string[],
+    metric_weights: {} as Record<string, number>,
   })
 
   const fetchScenarios = async () => {
@@ -106,13 +107,14 @@ export default function ManagerScenariosPage() {
           objection_style: d.objection_style || '',
           conversation_expectations: d.conversation_expectations || '',
           target_skills: d.target_skills || '',
-          contact_company: '',
-          contact_title: '',
+          contact_company: d.contact_company || '',
+          contact_title: d.contact_title || '',
           motivations: d.personality_traits || '',
           communication_style: d.objection_style || '',
           rep_objective: d.conversation_expectations || '',
           background_for_trainee: '',
           selected_metrics: savedMetrics.length > 0 ? savedMetrics : SCORECARD_METRICS.slice(0, 3),
+          metric_weights: d.metric_weights || {},
         })
       }
     } catch (err) {
@@ -134,6 +136,18 @@ export default function ManagerScenariosPage() {
         conversation_expectations: editForm.rep_objective || editForm.conversation_expectations,
         evaluation_focus: editForm.selected_metrics.join(', '),
       }
+      
+      const weightsSum = Object.entries(editForm.metric_weights)
+        .filter(([k]) => editForm.selected_metrics.includes(k))
+        .reduce((sum, [_, v]) => sum + (v || 0), 0)
+        
+      if (weightsSum !== 100 && editForm.selected_metrics.length > 0 && Object.keys(editForm.metric_weights).length > 0) {
+         if (!window.confirm(`Your metric weights sum to ${weightsSum}% (should be 100%). Do you want to save anyway?`)) {
+           setSaving(false)
+           return
+         }
+      }
+
       const res = await fetch(`${API}/api/scenarios/${selectedScenario.id}`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -330,11 +344,11 @@ export default function ManagerScenariosPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 mb-[6px]">Title</label>
+                    <label className="block text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 mb-[6px]">Designation (Title)</label>
                     <input
                       readOnly={!isEditing}
                       value={isEditing ? editForm.contact_title : (selectedScenario.contact_title || selectedScenario.persona_type)}
-                      onChange={(e) => setEditForm({...editForm, contact_title: e.target.value})}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, contact_title: e.target.value }))}
                       className="w-full h-[40px] md:h-[44px] border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] read-only:bg-gray-50/50"
                     />
                   </div>
@@ -344,7 +358,7 @@ export default function ManagerScenariosPage() {
                   <input
                     readOnly={!isEditing}
                     value={isEditing ? editForm.contact_company : (selectedScenario.contact_company || '')}
-                    onChange={(e) => setEditForm({...editForm, contact_company: e.target.value})}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, contact_company: e.target.value }))}
                     placeholder={!isEditing ? 'Not specified' : 'e.g. TechFlow Inc'}
                     className="w-full h-[40px] md:h-[44px] border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] read-only:bg-gray-50/50"
                   />
@@ -431,27 +445,54 @@ export default function ManagerScenariosPage() {
                 {isEditing ? (
                   <div className="space-y-[8px]">
                     {SCORECARD_METRICS.map((metric) => (
-                      <label key={metric} className={`flex items-center gap-[12px] px-[16px] py-[12px] border rounded-[10px] cursor-pointer transition-all duration-200 ${editForm.selected_metrics.includes(metric) ? 'border-[#2C5282] bg-[#2C5282]/5' : 'border-gray-900/10 hover:border-gray-900/30'}`}>
-                        <input
-                          type="checkbox"
-                          checked={editForm.selected_metrics.includes(metric)}
-                          onChange={() => toggleMetric(metric)}
-                          className="w-[16px] h-[16px] rounded accent-[#2C5282]"
-                        />
-                        <span className={`text-[14px] font-[600] ${editForm.selected_metrics.includes(metric) ? 'text-[#2C5282]' : 'text-gray-700'}`}>{metric}</span>
-                      </label>
+                      <div key={metric} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-[12px] px-[16px] py-[12px] border rounded-[10px] transition-all duration-200 ${editForm.selected_metrics.includes(metric) ? 'border-[#2C5282] bg-[#2C5282]/5' : 'border-gray-900/10 hover:border-gray-900/30'}`}>
+                        <label className="flex items-center gap-[12px] cursor-pointer flex-1">
+                          <input
+                            type="checkbox"
+                            checked={editForm.selected_metrics.includes(metric)}
+                            onChange={() => toggleMetric(metric)}
+                            className="w-[16px] h-[16px] rounded accent-[#2C5282]"
+                          />
+                          <span className={`text-[14px] font-[600] ${editForm.selected_metrics.includes(metric) ? 'text-[#2C5282]' : 'text-gray-700'}`}>{metric}</span>
+                        </label>
+                        {editForm.selected_metrics.includes(metric) && (
+                          <div className="flex items-center gap-[8px] pl-[28px] sm:pl-0">
+                            <span className="text-[12px] text-gray-500 font-[500]">Weight:</span>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={editForm.metric_weights[metric] || ''}
+                                onChange={(e) => setEditForm(f => ({
+                                  ...f,
+                                  metric_weights: { ...f.metric_weights, [metric]: parseInt(e.target.value) || 0 }
+                                }))}
+                                className="w-[70px] h-[32px] border border-[#2C5282]/30 rounded-[6px] px-[8px] text-[14px] font-[600] text-[#2C5282] focus:outline-none focus:border-[#2C5282] bg-white text-right pr-[24px]"
+                              />
+                              <span className="absolute right-[8px] top-1/2 -translate-y-1/2 text-[12px] text-[#2C5282] font-[600] pointer-events-none">%</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 ) : (
                   <div className="space-y-[8px]">
                     {SCORECARD_METRICS.map((metric) => {
                       const isSelected = selectedScenario.evaluation_focus?.includes(metric) || false
+                      const weight = selectedScenario.metric_weights?.[metric]
                       return (
-                        <div key={metric} className="flex items-center gap-[12px] px-[16px] py-[12px] border border-gray-900/10 rounded-[10px]">
-                          <div className={`w-[16px] h-[16px] rounded border-[2px] flex items-center justify-center ${isSelected ? 'border-[#2C5282] bg-[#2C5282]' : 'border-gray-300'}`}>
-                            {isSelected && <svg className="w-[10px] h-[10px] text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
+                        <div key={metric} className="flex items-center justify-between gap-[12px] px-[16px] py-[12px] border border-gray-900/10 rounded-[10px]">
+                          <div className="flex items-center gap-[12px]">
+                            <div className={`w-[16px] h-[16px] rounded border-[2px] flex items-center justify-center ${isSelected ? 'border-[#2C5282] bg-[#2C5282]' : 'border-gray-300'}`}>
+                              {isSelected && <svg className="w-[10px] h-[10px] text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
+                            </div>
+                            <span className="text-[14px] text-gray-900 font-[600]">{metric}</span>
                           </div>
-                          <span className="text-[14px] text-gray-900 font-[600]">{metric}</span>
+                          {isSelected && weight !== undefined && (
+                            <span className="text-[13px] font-[700] text-[#2C5282] bg-[#2C5282]/10 px-[10px] py-[4px] rounded-[6px]">{weight}%</span>
+                          )}
                         </div>
                       )
                     })}

@@ -9,7 +9,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'SalesCoach Intelligence',
+  title: 'r-salesCoach Intelligence',
   description: 'Enterprise AI Sales Training & Coaching',
 }
 

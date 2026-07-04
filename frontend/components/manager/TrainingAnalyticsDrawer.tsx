@@ -168,11 +168,9 @@ export default function TrainingAnalyticsDrawer({ assignments }: { assignments: 
                     <div 
                       key={i} 
                       onClick={() => {
-                        if (isCompleted && a.session_id) {
-                          router.push(`/training/review/${a.session_id}`)
-                        }
+                        router.push(`/reps/${a.rep_id}?scenario=${a.scenario_id}`)
                       }}
-                      className={`flex items-center justify-between border-b border-[#E2E8F0] p-4 last:border-0 ${isCompleted ? 'cursor-pointer hover:bg-[#F8FAFC] transition-colors' : ''}`}
+                      className={`flex items-center justify-between border-b border-[#E2E8F0] p-4 last:border-0 cursor-pointer hover:bg-[#F8FAFC] transition-colors`}
                     >
                       {/* Rep Info */}
                       <div className="flex items-center gap-4 w-1/3">

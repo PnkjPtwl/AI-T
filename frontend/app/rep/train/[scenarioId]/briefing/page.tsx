@@ -15,7 +15,6 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
   const [scenario, setScenario] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
-  const [avatarType, setAvatarType] = useState<'female'|'male'>('female')
 
   useEffect(() => {
     const fetchBriefing = async () => {
@@ -53,7 +52,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
 
       if (res.ok) {
         const data = await res.json()
-        const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}&avatar=${avatarType}`
+        const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}&avatar=${data.avatarType || 'female'}`
         router.push(targetUrl)
       } else {
         alert('Failed to start session. Please try again.')
@@ -86,6 +85,29 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
     difficulty,
     persona_type
   } = scenario
+
+  const renderBullets = (text: string) => {
+    if (!text) return null;
+    if (text.includes('•') || text.includes('- ')) {
+      return (
+        <ul className="list-disc pl-4 space-y-1.5 marker:text-[#2C5282]">
+          {text.split('\n').map((line, i) => {
+            const clean = line.replace(/^[-•]\s*/, '').trim()
+            return clean ? <li key={i} className="text-sm text-[#1A2A3A]">{clean}</li> : null
+          })}
+        </ul>
+      )
+    }
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
+    return (
+      <ul className="list-disc pl-4 space-y-1.5 marker:text-[#2C5282]">
+        {sentences.map((s, i) => {
+          const clean = s.trim()
+          return clean ? <li key={i} className="text-sm text-[#1A2A3A]">{clean}</li> : null
+        })}
+      </ul>
+    )
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12 text-left">
@@ -136,7 +158,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
                 </div>
                 <div className="col-span-2 pt-4 border-t border-[#E2E8F0]">
                   <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-2">Motivations & Priorities</p>
-                  <p className="text-sm text-[#1A2A3A] leading-relaxed">{personality_traits}</p>
+                  {renderBullets(personality_traits)}
                 </div>
               </div>
             </div>
@@ -150,7 +172,9 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
             <div className="p-6 space-y-6">
               <div>
                 <h4 className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-2">Background for Trainee</h4>
-                <p className="text-sm text-[#1A2A3A] leading-relaxed italic">"{scenario.background_for_trainee || scenario.context_text.replace(/\[SCENARIO:.*?\]\s*/g, '').replace(/\[SCENARIO_METADATA:\s*({[\s\S]*?})\]/, '').trim()}"</p>
+                <div className="italic">
+                  {renderBullets(scenario.background_for_trainee || scenario.context_text.replace(/\[SCENARIO:.*?\]\s*/g, '').replace(/\[SCENARIO_METADATA:\s*({[\s\S]*?})\]/, '').trim())}
+                </div>
               </div>
               <div className="bg-[#F8FAFC] rounded-lg p-5 border border-[#E2E8F0]">
                 <h4 className="text-xs font-semibold text-[#2C5282] uppercase tracking-wider mb-2">Rep Objective</h4>
@@ -190,33 +214,10 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
                 <h3 className="text-sm font-semibold text-[#1A2A3A]">Communication Style</h3>
               </div>
               <div className="p-6">
-                <p className="text-sm text-[#1A2A3A] leading-relaxed">{scenario.objection_style}</p>
+                {renderBullets(scenario.objection_style)}
               </div>
             </div>
           )}
-
-          {/* Avatar Selection */}
-          <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden shadow-sm mb-4">
-            <div className="bg-[#F8FAFC] px-6 py-4 border-b border-[#E2E8F0]">
-              <h3 className="text-sm font-semibold text-[#1A2A3A]">Avatar Preference</h3>
-            </div>
-            <div className="p-6">
-              <div className="flex bg-gray-100 p-1 rounded-lg w-full">
-                <button
-                  onClick={() => setAvatarType('female')}
-                  className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${avatarType === 'female' ? 'bg-white text-[#2C5282] shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                >
-                  Female (Default)
-                </button>
-                <button
-                  onClick={() => setAvatarType('male')}
-                  className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${avatarType === 'male' ? 'bg-white text-[#2C5282] shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                >
-                  Male
-                </button>
-              </div>
-            </div>
-          </div>
 
           {/* CTA */}
           <div className="pt-2">

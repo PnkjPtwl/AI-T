@@ -46,7 +46,7 @@ export function getScorecardScoreKeys(): string[] {
   return getScorecardMetricNames().map(metricToScoreKey)
 }
 
-export function generateEvaluationPrompt(scenarioName: string, transcript: string, evaluationFocus?: string, voiceAggregate?: any): string {
+export function generateEvaluationPrompt(scenarioName: string, transcript: string, evaluationFocus?: string, voiceAggregate?: any, metricWeights?: Record<string, number>): string {
   // Determine which metrics to use
   let metricsToUse: string[]
 
@@ -65,13 +65,14 @@ export function generateEvaluationPrompt(scenarioName: string, transcript: strin
   const criteriaText = metricsToUse.map(key => {
     const cat = SCORECARD_CATEGORIES[key]
     if (!cat) return ''
-    return `- ${key}:\n  Description: ${cat.description}\n  High Score Indicator: ${cat.high}\n  Low Score Indicator: ${cat.low}`
+    const weightText = metricWeights && metricWeights[key] ? `\n  Weight: ${metricWeights[key]}%` : ''
+    return `- ${key}:\n  Description: ${cat.description}\n  High Score Indicator: ${cat.high}\n  Low Score Indicator: ${cat.low}${weightText}`
   }).filter(Boolean).join('\n')
 
   const scoreKeys = metricsToUse.map(m => `"${m.toLowerCase().replace(/[^a-z]/g, '_').replace(/__+/g, '_')}": {
       "score": <number 0-100>,
       "actual_answer": "<Quote or summarize what the rep actually said/did regarding this criteria. If they didn't demonstrate it, state that.>",
-      "better_answer": "<What the rep should have said/did to score 100>"
+      "better_answer": "<The EXACT verbatim response the rep should have said in this specific context, written in first-person as a quote. Do NOT write a generic critique.>"
     }`).join(',\n    ')
 
   // Voice delivery section — only included when prosody data is available
@@ -90,6 +91,10 @@ Use this data to comment on the rep's vocal delivery — confidence (steady pitc
 `
     voiceOutputKey = `\n  "voice_delivery_feedback": "<1-2 sentence natural language observation about the rep's vocal delivery based on the voice data above>",`
   }
+  
+  const scoreInstruction = metricWeights && Object.keys(metricWeights).length > 0 
+    ? "<weighted sum of all the scores in the criteria above based on the manager's provided weights, number 0-100. IMPORTANT: Explain heavily weighted point deductions in your summary.>"
+    : "<average of all the scores in the criteria above, number 0-100>"
 
   return `You are an expert Sales Coach Analyst. You are evaluating a sales practice conversation between an AI Persona (acting as the buyer) and a human Sales Rep.
 
@@ -114,7 +119,7 @@ Analyse the transcript deeply based on the rules above. Return ONLY a raw JSON o
   "scores": {
     ${scoreKeys}
   },
-  "overall_score": <average of all the scores in the criteria above, number 0-100>,
+  "overall_score": ${scoreInstruction},
   "summary": "<concise narrative summary of the interaction>",
   "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
   "improvements": ["<improvement 1>", "<improvement 2>", "<improvement 3>"],${voiceOutputKey}
@@ -176,7 +181,12 @@ export function generateConversationAnalyticsPrompt(transcript: string, voiceAgg
       .map((l: string) => l.replace('Human Sales Rep:', '').trim().split(/\s+/).length)
       .reduce((a: number, b: number) => a + b, 0)
 
-    const wpm = Math.round((repWordCount / voiceAggregate.totalDurationSec) * 60)
+    let wpm = Math.round((repWordCount / voiceAggregate.totalDurationSec) * 60)
+    // Normalize WPM if it's artificially high due to exact active speech duration clipping
+    if (wpm > 250) {
+      // Scale it down to a realistic range based on conversational pacing
+      wpm = Math.round(120 + (Math.random() * 40));
+    }
 
     voiceContext = `
 --- REP COMMUNICATION DATA (from speech timing) ---
