@@ -81,7 +81,7 @@ const personas = [
       `- [Discovery] Are your engineers currently managing cost optimization manually, or do you have automated policies in place?\n` +
       `- [Pitch & Presentation] (Persona Challenge) Our engineers are smart enough to write our own scripts for AWS cost savings. Why pay for your platform?\n` +
       `\n\n[SCENARIO_METADATA: ${JSON.stringify({
-        personality_traits: '- The prospect is fast-paced and analytical.\n- Slightly arrogant about his team\\'s capabilities.\n- Driven by metrics and cost reduction.',
+        personality_traits: "- The prospect is fast-paced and analytical.\\n- Slightly arrogant about his team's capabilities.\\n- Driven by metrics and cost reduction.",
         evaluation_focus: CANONICAL_METRICS,
         objection_style: '- Challenges the necessity of the tool.\n- Claims his engineering team can build it in-house.\n- Heavily relies on "Build vs Buy" objections.',
         target_skills: 'Challenger Sale, Value Selling, Objection Handling'
