@@ -1,15 +1,15 @@
 import express from 'express'
 import { authenticate } from '../middleware/auth'
 import { managerOnly } from '../middleware/roleGuard'
-import { getScenarios, createScenario, getScenario, updateScenario, deleteScenario, assignRepsToScenario, getScenarioAssignments, getScorecardMetrics } from '../controllers/scenarioController'
+import { getScenarios, createScenario, getScenario, updateScenario, deleteScenario, assignRepsToScenario, getScenarioAssignments, generateScorecardMetrics } from '../controllers/scenarioController'
 
 const router = express.Router()
 
 // GET /api/scenarios (manager and rep can view org scenarios)
 router.get('/', authenticate, getScenarios)
 
-// GET /api/scenarios/scorecard-metrics (canonical metrics list)
-router.get('/scorecard-metrics', authenticate, getScorecardMetrics)
+// POST /api/scenarios/generate-scorecard — AI generates dynamic scorecard metrics from persona context
+router.post('/generate-scorecard', authenticate, managerOnly, generateScorecardMetrics)
 
 // GET /api/scenarios/:scenarioId (fetch single scenario)
 router.get('/:scenarioId', authenticate, getScenario)

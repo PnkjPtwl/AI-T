@@ -32,18 +32,23 @@ export const managerSignup = async (req, res) => {
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: true
+      email_confirm: true,
+      user_metadata: {
+        name,
+        role: 'manager',
+        org_id: org.id
+      }
     })
     if (authError) return res.status(400).json({ error: authError.message })
     if (!authData.user) return res.status(400).json({ error: 'User creation failed' })
 
-    const { error: userError } = await supabase.from('users').insert({
+    const { error: userError } = await supabase.from('users').upsert({
       id:     authData.user.id,
       name,
       email,
       role:   'manager',
       org_id: org.id
-    })
+    }, { onConflict: 'id' })
 
     if (userError) throw userError
 
@@ -89,18 +94,23 @@ export const repSignup = async (req, res) => {
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: true
+      email_confirm: true,
+      user_metadata: {
+        name,
+        role: 'rep',
+        org_id: org.id
+      }
     })
     if (authError) return res.status(400).json({ error: authError.message })
     if (!authData.user) return res.status(400).json({ error: 'User creation failed' })
 
-    const { error: userError } = await supabase.from('users').insert({
+    const { error: userError } = await supabase.from('users').upsert({
       id:     authData.user.id,
       name,
       email,
       role:   'rep',
       org_id: org.id
-    })
+    }, { onConflict: 'id' })
 
     if (userError) throw userError
 

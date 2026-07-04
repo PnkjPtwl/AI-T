@@ -138,7 +138,6 @@ export default function TrainingCenter() {
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Scenario</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Deadline</th>
                 <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Score</th>
@@ -156,12 +155,11 @@ export default function TrainingCenter() {
                 return (
                   <tr key={a.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
-                      <p className="font-medium text-gray-900">{scenario.persona_name || '—'}</p>
+                      <p className="font-medium text-gray-900">{scenario.contact_title ? `${scenario.contact_title} - ${scenario.contact_company}` : scenario.persona_name || '—'}</p>
                       {isUrgent && (
                         <span className="text-xs text-red-500 font-semibold animate-pulse">Due in {Math.round(diffHours!)} hrs 🔥</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-gray-500 text-sm">{scenario.persona_type || '—'}</td>
                     <td className="px-6 py-4">{statusBadge(a)}</td>
                     <td className="px-6 py-4 text-gray-500 text-sm">
                       {dl ? dl.toLocaleDateString() : '—'}

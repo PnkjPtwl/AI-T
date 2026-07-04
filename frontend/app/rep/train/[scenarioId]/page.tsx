@@ -423,6 +423,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   // ─── Browser Native STT ────────────────────────────────────────────────────────────
   const recognitionRef = useRef<any>(null)
   const recordingStartTimeRef = useRef<number>(0)
+  const typingStartTimeRef = useRef<number | null>(null)
 
   const handleMicClick = async () => {
     if (isRecording) {
@@ -499,9 +500,18 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
     try {
       const token = localStorage.getItem('token')
       const payload: any = { sessionId, message: textToSend }
-      if (durationSec !== undefined) {
-        payload.durationSec = durationSec
+      
+      let finalDuration = durationSec
+      if (finalDuration === undefined && !directText && typingStartTimeRef.current) {
+        finalDuration = (Date.now() - typingStartTimeRef.current) / 1000
       }
+      
+      if (finalDuration !== undefined && finalDuration > 0) {
+        payload.durationSec = finalDuration
+      }
+      
+      // Reset typing timer for the next message
+      typingStartTimeRef.current = null
       
       const res = await fetch(`${API}/api/sessions/message`, {
         method: 'POST',
@@ -608,8 +618,8 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
     )
   }
 
-  const personaName = scenario.customer_info?.name || scenario.persona_name || 'Target Persona'
-  const personaType = scenario.persona_type || 'Target Account'
+  const personaName = scenario.contact_title ? `${scenario.contact_title} - ${scenario.contact_company}` : (scenario.customer_info?.name || scenario.persona_name || 'Target Persona')
+  const personaType = ''
 
   return (
     // fixed inset-0: breaks out of the growing min-h-screen layout so the session is truly full-screen
@@ -650,7 +660,6 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       )}
 
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
-
         {/* LEFT PANEL: Persona Brief (Drawer) */}
         <div className={`absolute top-0 bottom-0 left-0 z-20 w-[350px] bg-white border-r border-[#E2E8F0] shadow-2xl flex flex-col transform transition-transform duration-300 ${isBriefOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="p-6 border-b border-[#E2E8F0] shrink-0 flex justify-between items-start">
@@ -685,83 +694,87 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
 
               let text = scenario.context_text
               let metadata: any = null
-              let scenarioTitle = scenario.scenario_name || null
 
               const metadataMatch = text.match(/\[SCENARIO_METADATA:\s*({[\s\S]*?})\]/)
               if (metadataMatch) {
                 try {
                   metadata = JSON.parse(metadataMatch[1])
                   text = text.replace(metadataMatch[0], '')
-                } catch (e) {
-                  console.error('Failed to parse metadata', e)
-                }
+                } catch (e) {}
               }
 
               const scenarioMatch = text.match(/\[SCENARIO:\s*(.*?)\]/)
-              if (scenarioMatch) {
-                scenarioTitle = scenarioMatch[1]
-                text = text.replace(scenarioMatch[0], '')
-              }
+              if (scenarioMatch) text = text.replace(scenarioMatch[0], '')
 
+              // Extract rubric lines
+              const rubricMatch = text.match(/\[MANDATORY EVALUATION RUBRIC[\s\S]*?\]/)
+              const rubricLines = rubricMatch
+                ? rubricMatch[0].split('\n').filter((l: string) => l.trim().startsWith('-')).map((l: string) => l.replace(/^-\s*/, '').trim())
+                : []
+              if (rubricMatch) text = text.replace(rubricMatch[0], '')
               text = text.trim()
 
-              const renderList = (content: string) => {
+              const renderList = (content: string, colorClass = 'text-[#64748B]') => {
                 if (!content) return null
                 const items = content.split('\n').filter(i => i.trim())
-                if (items.length <= 1 && !content.includes('-') && !content.includes('•')) {
-                  return <p className="text-sm text-[#64748B] leading-relaxed">{content}</p>
-                }
                 return (
-                  <ul className="list-disc pl-4 text-sm text-[#64748B] space-y-1.5 marker:text-[#64748B]">
+                  <ul className="space-y-1.5">
                     {items.map((item, i) => {
                       const cleaned = item.replace(/^[-*•]\s*/, '').trim()
-                      return cleaned ? <li key={i} className="leading-relaxed pl-1">{cleaned}</li> : null
+                      return cleaned ? <li key={i} className={`text-sm ${colorClass} leading-relaxed flex items-start gap-2`}><span className="mt-1 shrink-0">›</span>{cleaned}</li> : null
                     })}
                   </ul>
                 )
               }
 
               return (
-                <div className="space-y-8">
-                  {scenarioTitle && (
-                    <div>
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#64748B] mb-2">Scenario</h4>
-                      <p className="text-sm font-bold text-[#1A2A3A] leading-relaxed">{scenarioTitle}</p>
-                    </div>
-                  )}
+                <div className="space-y-6">
+                  {/* Current Situation */}
                   {text && (
                     <div>
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#64748B] mb-2">Goal & Context</h4>
-                      <p className="text-sm text-[#64748B] leading-relaxed whitespace-pre-wrap">{text}</p>
+                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#64748B] mb-2 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block"></span>
+                        Current Situation
+                      </h4>
+                      {renderList(text)}
                     </div>
                   )}
-                  {metadata && (
-                    <>
-                      {metadata.personality_traits && (
-                        <div>
-                          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#64748B] mb-2">Personality</h4>
-                          <p className="text-sm text-[#64748B] leading-relaxed">{metadata.personality_traits}</p>
-                        </div>
-                      )}
-                      {metadata.objection_style && (
-                        <div>
-                          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#64748B] mb-2">Objection Style</h4>
-                          {renderList(metadata.objection_style)}
-                        </div>
-                      )}
-                      {metadata.evaluation_focus && (
-                        <div>
-                          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#64748B] mb-2">Evaluation Focus</h4>
-                          {renderList(metadata.evaluation_focus)}
-                        </div>
-                      )}
-                      {metadata.conversation_expectations && (
-                        <div>
-                          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#64748B] mb-2">Expectations</h4>
-                          <p className="text-sm text-[#64748B] leading-relaxed">{metadata.conversation_expectations}</p>
-                        </div>
-                      )}
-                    </>
+
+                  {/* Expect These Challenges */}
+                  {(metadata?.objection_style || scenario.objection_style) && (
+                    <div>
+                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#64748B] mb-2 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block"></span>
+                        Expect These Challenges
+                      </h4>
+                      {renderList(metadata?.objection_style || scenario.objection_style)}
+                    </div>
+                  )}
+
+                  {/* Must-ask questions */}
+                  {rubricLines.length > 0 && (
+                    <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-green-700 mb-2">
+                        ✓ Must-Ask Questions
+                      </h4>
+                      <ul className="space-y-1.5">
+                        {rubricLines.map((q: string, i: number) => (
+                          <li key={i} className="text-sm text-green-800 flex items-start gap-2">
+                            <span className="mt-0.5 text-green-500 shrink-0">›</span>{q}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Your objective */}
+                  {(scenario.conversation_expectations || metadata?.target_skills) && (
+                    <div className="bg-[#EFF6FF] rounded-lg p-3 border border-blue-200">
+                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700 mb-1">
+                        Your Objective
+                      </h4>
+                      <p className="text-sm text-blue-900 font-medium">{scenario.conversation_expectations || `Focus on: ${metadata?.target_skills}`}</p>
+                    </div>
                   )}
                 </div>
               )
@@ -905,7 +918,15 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
                 <input
                   type="text"
                   value={inputText}
-                  onChange={e => setInputText(e.target.value)}
+                  onChange={e => {
+                    setInputText(e.target.value)
+                    if (!typingStartTimeRef.current) {
+                      typingStartTimeRef.current = Date.now()
+                    }
+                    if (e.target.value === '') {
+                      typingStartTimeRef.current = null
+                    }
+                  }}
                   disabled={isTyping || ending || isRecording || isProcessing || isPaused}
                   placeholder={isPaused ? 'Session paused — press ▶ to resume' : isRecording ? 'Listening to your voice...' : 'Type a response...'}
                   className="w-full bg-[#18181B] border border-[#27272A] hover:border-[#3F3F46] rounded-[24px] pl-6 pr-12 py-4 text-white placeholder-[#71717A] focus:outline-none focus:border-[#3B82F6] focus:bg-[#18181B] focus:ring-2 focus:ring-[#3B82F6]/20 transition-all font-medium disabled:opacity-50 text-[15px]"

@@ -39,11 +39,13 @@ export const getMySessions = async (req: any, res: any) => {
       feedback_json, 
       training_scenarios (
         persona_name,
-        persona_type
+        persona_type,
+        contact_title,
+        contact_company
       )
     `)
     .eq('rep_id', repId)
-    .not('completed_at', 'is', null) // Only fetch completed sessions
+    .not('completed_at', 'is', null)
     .order('completed_at', { ascending: false })
 
   if (error) {
@@ -57,9 +59,13 @@ export const getMySessions = async (req: any, res: any) => {
 
   const formatted = standardSessions.map((session: any) => {
     const scenario = session.training_scenarios
-    const scenarioName = scenario 
-      ? `${scenario.persona_name} (${scenario.persona_type})` 
-      : 'Practice Session'
+    // Use contact_title + contact_company as display, fallback to persona_name
+    let scenarioName = 'Practice Session'
+    if (scenario) {
+      const title = scenario.contact_title || ''
+      const company = scenario.contact_company || ''
+      scenarioName = (title && company) ? `${title} - ${company}` : title || company || scenario.persona_name || 'Practice Session'
+    }
 
     return {
       id: session.id,
@@ -104,7 +110,7 @@ export const startPractice = async (req: any, res: any) => {
       .eq('rep_id', repId)
       .eq('scenario_id', scenarioId)
       .in('status', ['Pending', 'Overdue'])
-      .order('assigned_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
     
@@ -243,8 +249,12 @@ export const endSession = async (req: any, res: any) => {
     }).join('\n')
     
     const scenario = session.training_scenarios
-    const match = scenario?.context_text?.match(/\[SCENARIO:\s*(.*?)\]/)
-    const scenarioName = match ? match[1] : (scenario?.persona_type || 'Unknown')
+    // Use contact_title + contact_company as display label, fallback to persona_name
+    const contactTitle = scenario?.contact_title || ''
+    const contactCompany = scenario?.contact_company || ''
+    const scenarioName = (contactTitle && contactCompany)
+      ? `${contactTitle} - ${contactCompany}`
+      : contactTitle || contactCompany || scenario?.persona_name || 'Unknown'
 
     // 2. MARK ASSIGNMENT AS COMPLETED (IMMEDIATELY)
     // We do this first to ensure the status updates even if AI evaluation fails
@@ -268,7 +278,7 @@ export const endSession = async (req: any, res: any) => {
         .eq('rep_id', session.rep_id)
         .eq('scenario_id', session.scenario_id)
         .in('status', ['Pending', 'In Progress', 'Overdue'])
-        .order('assigned_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       
@@ -307,17 +317,24 @@ export const endSession = async (req: any, res: any) => {
     }
 
     // 3. AI EVALUATION
+    // Prefer dynamic per-persona scorecard_metrics from the DB column
+    const dynamicMetrics = scenario?.scorecard_metrics || null
     let evaluationFocus = ''
     let metricWeights: Record<string, number> | undefined = undefined
-    const metaMatch = scenario?.context_text?.match(/\[SCENARIO_METADATA:\s*(\{.*?\})\]/)
-    if (metaMatch && metaMatch[1]) {
-      try {
-        const meta = JSON.parse(metaMatch[1])
-        evaluationFocus = meta.evaluation_focus || ''
-        metricWeights = meta.metric_weights
-      } catch (e) {}
+
+    if (!dynamicMetrics) {
+      // Legacy fallback: read from embedded metadata in context_text
+      const metaMatch = scenario?.context_text?.match(/\[SCENARIO_METADATA:\s*(\{.*?\})\]/)
+      if (metaMatch && metaMatch[1]) {
+        try {
+          const meta = JSON.parse(metaMatch[1])
+          evaluationFocus = meta.evaluation_focus || ''
+          metricWeights = meta.metric_weights
+        } catch (e) {}
+      }
     }
-    const prompt = generateEvaluationPrompt(scenarioName, transcript, evaluationFocus, voiceAggregate, metricWeights)
+
+    const prompt = generateEvaluationPrompt(scenarioName, transcript, evaluationFocus, voiceAggregate, metricWeights, dynamicMetrics || undefined)
 
     
     let feedback;

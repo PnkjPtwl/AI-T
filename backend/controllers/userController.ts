@@ -145,7 +145,9 @@ export const getRepSessions = async (req: any, res: any) => {
         persona_name,
         persona_type,
         difficulty,
-        context_text
+        context_text,
+        contact_title,
+        contact_company
       )
     `)
     .eq('rep_id', repId)
@@ -163,8 +165,9 @@ export const getRepSessions = async (req: any, res: any) => {
 
   const formatted = practiceSessions.map((session: any) => {
     const scenario = session.training_scenarios
-    const match = scenario?.context_text?.match(/\[SCENARIO:\s*(.*?)\]/)
-    const scenarioName = match ? match[1] : (scenario?.persona_type || 'Unknown')
+    const scenarioName = (scenario?.contact_title && scenario?.contact_company)
+      ? `${scenario.contact_title} - ${scenario.contact_company}`
+      : scenario?.contact_title || scenario?.contact_company || scenario?.persona_name || 'Unknown Scenario'
 
     return {
       id: session.id,
@@ -205,7 +208,9 @@ export const getRepSessions = async (req: any, res: any) => {
   const personaMap: any = {}
   practiceSessions.forEach((s: any) => {
     const type = s.training_scenarios?.persona_type || 'Unknown'
-    const name = s.training_scenarios?.persona_name || 'Prospect'
+    const name = (s.training_scenarios?.contact_title && s.training_scenarios?.contact_company)
+      ? `${s.training_scenarios.contact_title} - ${s.training_scenarios.contact_company}`
+      : s.training_scenarios?.contact_title || s.training_scenarios?.contact_company || s.training_scenarios?.persona_name || 'Prospect'
     const scores = s.feedback_json?.scores || {}
 
     if (!personaMap[type]) {
@@ -280,7 +285,9 @@ export const getMyAnalytics = async (req: any, res: any) => {
         feedback_json,
         training_scenarios (
           persona_name,
-          persona_type
+          persona_type,
+          contact_title,
+          contact_company
         )
       `)
       .eq('rep_id', repId)
@@ -319,7 +326,9 @@ export const getMyAnalytics = async (req: any, res: any) => {
     const personaMap: any = {}
     practiceSessions.forEach((s: any) => {
       const type = (s.training_scenarios as any)?.persona_type || 'Unknown'
-      const name = (s.training_scenarios as any)?.persona_name || 'Prospect'
+      const name = ((s.training_scenarios as any)?.contact_title && (s.training_scenarios as any)?.contact_company)
+        ? `${(s.training_scenarios as any).contact_title} - ${(s.training_scenarios as any).contact_company}`
+        : (s.training_scenarios as any)?.contact_title || (s.training_scenarios as any)?.contact_company || (s.training_scenarios as any)?.persona_name || 'Prospect'
       const scores = s.feedback_json?.scores || {}
 
       if (!personaMap[type]) {
@@ -919,7 +928,7 @@ export const assignTraining = async (req: any, res: any) => {
       priority: priority || 'Medium',
       deadline: deadline,
       avatar_type: avatarType || 'female',
-      assigned_at: new Date().toISOString()
+      
     }))
 
     console.log(`Attempting to insert ${assignments.length} assignments...`);
@@ -979,18 +988,20 @@ export const getMyAssignments = async (req: any, res: any) => {
         status, 
         priority, 
         deadline, 
-        assigned_at, 
+        created_at, 
         completed_at, 
         session_id,
         scenario:training_scenarios (
           id,
           persona_name,
           persona_type,
-          difficulty
+          difficulty,
+          contact_title,
+          contact_company
         )
       `)
       .eq('rep_id', repId)
-      .order('assigned_at', { ascending: false })
+      .order('created_at', { ascending: false })
 
     if (firstTry.error && firstTry.error.message.includes('column "session_id" does not exist')) {
       console.warn(`[getMyAssignments] session_id column missing, falling back to basic fetch`);
@@ -1002,17 +1013,19 @@ export const getMyAssignments = async (req: any, res: any) => {
           status, 
           priority, 
           deadline, 
-          assigned_at, 
+          created_at, 
           completed_at,
           scenario:training_scenarios (
             id,
             persona_name,
             persona_type,
-            difficulty
+            difficulty,
+            contact_title,
+            contact_company
           )
         `)
         .eq('rep_id', repId)
-        .order('assigned_at', { ascending: false })
+        .order('created_at', { ascending: false })
       assignmentsData = secondTry.data || [];
       assignmentsError = secondTry.error;
     } else {
@@ -1085,19 +1098,19 @@ export const getTeamAssignments = async (req: any, res: any) => {
       'status', 
       'priority',
       'deadline',
-      'assigned_at',
+      'created_at',
       'completed_at',
       'session_id',
       'avatar_type',
       'rep:users!rep_id (name)',
-      'scenario:training_scenarios (id, persona_name, difficulty)'
+      'scenario:training_scenarios (id, persona_name, difficulty, contact_title, contact_company)'
     ];
 
     let result = await supabase
       .from('training_assignments')
       .select(selectFields.join(', '))
       .eq('manager_id', managerId)
-      .order('assigned_at', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (result.error) {
       if (result.error.message.includes('session_id')) {
@@ -1111,7 +1124,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
         .from('training_assignments')
         .select(selectFields.join(', '))
         .eq('manager_id', managerId)
-        .order('assigned_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (result.error) {
         if (result.error.message.includes('session_id')) {
@@ -1124,7 +1137,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
           .from('training_assignments')
           .select(selectFields.join(', '))
           .eq('manager_id', managerId)
-          .order('assigned_at', { ascending: false });
+          .order('created_at', { ascending: false });
       }
     }
 
@@ -1170,7 +1183,12 @@ export const getTeamAssignments = async (req: any, res: any) => {
         score,
         feedback,
         rep_name: a.rep?.name || 'Unknown Rep',
-        scenario_name: a.scenario?.persona_name || 'Unknown Scenario',
+        // Display label: designation - company, fallback to persona_name
+        scenario_name: (
+          (a.scenario?.contact_title && a.scenario?.contact_company)
+            ? `${a.scenario.contact_title} - ${a.scenario.contact_company}`
+            : a.scenario?.contact_title || a.scenario?.contact_company || a.scenario?.persona_name || 'Unknown Scenario'
+        ),
         difficulty: a.scenario?.difficulty || 'N/A'
       };
     });

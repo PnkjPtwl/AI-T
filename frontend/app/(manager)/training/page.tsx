@@ -154,7 +154,7 @@ export default function TrainingPage() {
           >
             <option value="all">All Scenarios</option>
             {scenarios.map(s => (
-              <option key={s.id} value={s.id}>{s.persona_name}</option>
+              <option key={s.id} value={s.id}>{s.display_label || s.persona_name}</option>
             ))}
           </select>
         </div>
@@ -314,7 +314,7 @@ export default function TrainingPage() {
                   className="w-full h-[40px] md:h-[44px] bg-white border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors"
                 >
                   <option value="">Select scenario...</option>
-                  {scenarios.map(s => <option key={s.id} value={s.id}>{s.persona_name} ({s.difficulty})</option>)}
+                  {scenarios.map(s => <option key={s.id} value={s.id}>{(s.display_label || s.persona_name)} ({s.difficulty})</option>)}
                 </select>
               </div>
 

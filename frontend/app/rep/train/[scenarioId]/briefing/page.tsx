@@ -140,21 +140,11 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
             </div>
             <div className="p-6">
               <div className="grid grid-cols-2 gap-y-6 gap-x-8">
-                <div>
-                  <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-1">Name</p>
-                  <p className="text-base font-bold text-[#1A2A3A]">{customer_info?.name || scenario.persona_name}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-1">Title</p>
-                  <p className="text-base font-bold text-[#1A2A3A]">{scenario.contact_title || customer_info?.role || 'Executive'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-1">Company</p>
-                  <p className="text-sm font-semibold text-[#1A2A3A]">{scenario.contact_company || customer_info?.company || 'Prospect Co.'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-1">Type</p>
-                  <p className="text-sm font-semibold text-[#1A2A3A]">{persona_type}</p>
+                <div className="col-span-2">
+                  <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-1">Role & Company</p>
+                  <p className="text-base font-bold text-[#1A2A3A]">
+                    {scenario.contact_title || customer_info?.role || 'Executive'} - {scenario.contact_company || customer_info?.company || 'Prospect Co.'}
+                  </p>
                 </div>
                 <div className="col-span-2 pt-4 border-t border-[#E2E8F0]">
                   <p className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-2">Motivations & Priorities</p>
@@ -164,21 +154,72 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
             </div>
           </div>
 
-          {/* Context */}
           <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden shadow-sm">
             <div className="bg-[#F8FAFC] px-6 py-4 border-b border-[#E2E8F0]">
               <h3 className="text-sm font-semibold text-[#1A2A3A]">Meeting Context</h3>
             </div>
             <div className="p-6 space-y-6">
-              <div>
-                <h4 className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-2">Background for Trainee</h4>
-                <div className="italic">
-                  {renderBullets(scenario.background_for_trainee || scenario.context_text.replace(/\[SCENARIO:.*?\]\s*/g, '').replace(/\[SCENARIO_METADATA:\s*({[\s\S]*?})\]/, '').trim())}
+              {/* Current Situation */}
+              {(() => {
+                const rawContext = scenario.context_text || ''
+                const cleanContext = rawContext
+                  .replace(/\[SCENARIO:.*?\]\s*/g, '')
+                  .replace(/\[SCENARIO_METADATA:[\s\S]*?\]/, '')
+                  .replace(/\[MANDATORY EVALUATION RUBRIC[\s\S]*$/, '')
+                  .trim()
+                if (!cleanContext) return null
+                return (
+                  <div>
+                    <h4 className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                      Current Situation
+                    </h4>
+                    {renderBullets(cleanContext)}
+                  </div>
+                )
+              })()}
+
+              {/* What the Prospect Expects */}
+              {scenario.objection_style && (
+                <div>
+                  <h4 className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-orange-400 inline-block"></span>
+                    Expect These Challenges
+                  </h4>
+                  {renderBullets(scenario.objection_style)}
                 </div>
-              </div>
+              )}
+
+              {/* Your Dos */}
+              {(() => {
+                const rawContext = scenario.context_text || ''
+                const rubricMatch = rawContext.match(/\[MANDATORY EVALUATION RUBRIC[\s\S]*?\]/)
+                if (!rubricMatch) return null
+                const rubric = rubricMatch[0]
+                  .replace(/\[MANDATORY EVALUATION RUBRIC[\s\S]*?\]\s*/, '')
+                  .replace(/\[SCENARIO_METADATA[\s\S]*/, '')
+                  .trim()
+                const questions = rubric.split('\n').filter((l: string) => l.trim().startsWith('-'))
+                if (!questions.length) return null
+                return (
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                    <h4 className="text-xs font-semibold text-green-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+                      <span>✓</span> Your Must-Ask Questions
+                    </h4>
+                    <ul className="list-none space-y-1.5">
+                      {questions.map((q: string, i: number) => {
+                        const clean = q.replace(/^-\s*/, '').trim()
+                        return clean ? <li key={i} className="text-sm text-green-800 flex items-start gap-2"><span className="mt-0.5 text-green-500">›</span>{clean}</li> : null
+                      })}
+                    </ul>
+                  </div>
+                )
+              })()}
+
+              {/* Rep Objective */}
               <div className="bg-[#F8FAFC] rounded-lg p-5 border border-[#E2E8F0]">
-                <h4 className="text-xs font-semibold text-[#2C5282] uppercase tracking-wider mb-2">Rep Objective</h4>
-                <p className="text-sm font-bold text-[#1A2A3A]">{scenario.conversation_expectations || sales_rep_goal}</p>
+                <h4 className="text-xs font-semibold text-[#2C5282] uppercase tracking-wider mb-2">Your Objective</h4>
+                <p className="text-sm font-bold text-[#1A2A3A]">{scenario.conversation_expectations || sales_rep_goal || 'Build rapport, understand the prospect\'s challenges, and identify a clear next step.'}</p>
               </div>
             </div>
           </div>

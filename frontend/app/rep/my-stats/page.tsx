@@ -19,8 +19,16 @@ export default function PerformancePage() {
   const [loading, setLoading] = useState(true)
   const [analytics, setAnalytics] = useState<any>(null)
   const [recentSessions, setRecentSessions] = useState<any[]>([])
+  const [selectedPersona, setSelectedPersona] = useState<string>('All')
 
   useEffect(() => {
+    // Read from URL on mount
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const persona = params.get('persona')
+      if (persona) setSelectedPersona(persona)
+    }
+
     const fetchData = async () => {
       try {
         const token = localStorage.getItem('token')
@@ -52,8 +60,11 @@ export default function PerformancePage() {
     )
   }
 
-  // Build chart data from recent sessions sorted by date
+  const uniquePersonas = Array.from(new Set(recentSessions.map(s => s.scenario_name).filter(Boolean)))
+
+  // Build chart data from recent sessions sorted by date and filtered by persona
   const chartData = [...recentSessions]
+    .filter(s => selectedPersona === 'All' || s.scenario_name === selectedPersona)
     .sort((a, b) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime())
     .map((s, i) => ({
       idx: i + 1,
@@ -110,7 +121,21 @@ export default function PerformancePage() {
 
       {/* Chart — full width */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <h2 className="text-base font-semibold text-gray-900 mb-6">Score Over Time</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-base font-semibold text-gray-900">Score Over Time</h2>
+          {uniquePersonas.length > 0 && (
+            <select
+              value={selectedPersona}
+              onChange={(e) => setSelectedPersona(e.target.value)}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-gray-700 outline-none focus:ring-2 focus:ring-[#2C5282]"
+            >
+              <option value="All">All Personas</option>
+              {uniquePersonas.map((p: any) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          )}
+        </div>
         {chartData.length === 0 ? (
           <div className="h-[300px] flex items-center justify-center text-gray-400 text-sm">No session data yet.</div>
         ) : (

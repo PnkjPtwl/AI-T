@@ -31,13 +31,25 @@ export function generateSystemInstruction(scenario: any): string {
     }
 
     // 3. Check if we have rich AI-extracted metadata
-    if (metadata.personality_traits && metadata.communication_style) {
-      basePrompt = `You are a ${scenario.persona_type} named ${scenario.persona_name}.
-You are highly ${metadata.personality_traits}.
-Your communication style is: ${metadata.communication_style}.
-You frequently raise objections such as: ${metadata.objection_style || 'General hesitation based on value'}.
-You make decisions based on: ${metadata.decision_drivers || 'ROI and cost-effectiveness'}.
-Maintain this behavior consistently and challenge vague responses.`;
+    if (metadata.personality_traits && metadata.objection_style) {
+      basePrompt = `You are acting as the buyer persona in a sales simulation.
+Name: ${scenario.persona_name}
+Role: ${scenario.persona_type}
+
+--- BEHAVIORAL PROFILE ---
+Personality Traits:
+${metadata.personality_traits}
+
+Communication Style:
+${metadata.communication_style || 'Standard professional.'}
+
+Objections & Hesitations:
+${metadata.objection_style || 'General hesitation based on value.'}
+
+Decision Drivers:
+${metadata.decision_drivers || 'ROI and cost-effectiveness.'}
+
+INSTRUCTIONS: Maintain this behavior consistently, challenge vague responses, and stay in character.`;
     } else if (scenario.persona_name && scenario.context_text) {
       // 4. Use DB fields directly for custom/dynamic personas
       basePrompt = `You are acting as a specific buyer persona in a sales coaching simulation.

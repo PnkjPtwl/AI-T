@@ -46,34 +46,67 @@ export function getScorecardScoreKeys(): string[] {
   return getScorecardMetricNames().map(metricToScoreKey)
 }
 
-export function generateEvaluationPrompt(scenarioName: string, transcript: string, evaluationFocus?: string, voiceAggregate?: any, metricWeights?: Record<string, number>): string {
-  // Determine which metrics to use
-  let metricsToUse: string[]
+export interface DynamicMetric {
+  name: string
+  description: string
+  weight: number
+}
 
-  if (evaluationFocus && evaluationFocus.trim().length > 0) {
-    // Use manager-specified metrics
-    const specified = evaluationFocus.split(',').map(s => s.trim()).filter(Boolean)
-    // Map them to our known scorecard keys
-    metricsToUse = specified.filter(m => SCORECARD_CATEGORIES[m])
-    // Fallback to all if none match
-    if (metricsToUse.length === 0) metricsToUse = Object.keys(SCORECARD_CATEGORIES)
-  } else {
-    // Default: all metrics
-    metricsToUse = Object.keys(SCORECARD_CATEGORIES)
-  }
+/**
+ * Generates the evaluation prompt.
+ * Prefers dynamic per-persona metrics (scorecard_metrics from DB) over the static SCORECARD_CATEGORIES.
+ * Falls back to static categories if no dynamic metrics provided.
+ */
+export function generateEvaluationPrompt(
+  scenarioName: string,
+  transcript: string,
+  evaluationFocus?: string,
+  voiceAggregate?: any,
+  metricWeights?: Record<string, number>,
+  dynamicMetrics?: DynamicMetric[]
+): string {
+  let criteriaText = ''
+  let scoreKeys = ''
 
-  const criteriaText = metricsToUse.map(key => {
-    const cat = SCORECARD_CATEGORIES[key]
-    if (!cat) return ''
-    const weightText = metricWeights && metricWeights[key] ? `\n  Weight: ${metricWeights[key]}%` : ''
-    return `- ${key}:\n  Description: ${cat.description}\n  High Score Indicator: ${cat.high}\n  Low Score Indicator: ${cat.low}${weightText}`
-  }).filter(Boolean).join('\n')
+  if (dynamicMetrics && dynamicMetrics.length > 0) {
+    // --- Dynamic path: use per-persona criteria ---
+    criteriaText = dynamicMetrics.map(m => {
+      const weightText = m.weight ? `\n  Weight: ${m.weight}%` : ''
+      return `- ${m.name}:\n  Description: ${m.description}${weightText}`
+    }).join('\n')
 
-  const scoreKeys = metricsToUse.map(m => `"${m.toLowerCase().replace(/[^a-z]/g, '_').replace(/__+/g, '_')}": {
+    scoreKeys = dynamicMetrics.map(m => {
+      const key = metricToScoreKey(m.name)
+      return `"${key}": {
       "score": <number 0-100>,
-      "actual_answer": "<Quote or summarize what the rep actually said/did regarding this criteria. If they didn't demonstrate it, state that.>",
-      "better_answer": "<The EXACT verbatim response the rep should have said in this specific context, written in first-person as a quote. Do NOT write a generic critique.>"
+      "actual_answer": "<The EXACT quote from the transcript of what the rep actually said regarding this criteria. Do NOT summarize in the third person (e.g., do NOT say 'The rep did...'). Use their exact words in quotes. If they didn't demonstrate it, state 'Not demonstrated.'>",
+      "better_answer": "<The EXACT verbatim response the rep should have said in this specific context, written as a direct first-person quote (e.g. 'I suggest we...'). Do NOT write a description or generic critique.>"
+    }`
+    }).join(',\n    ')
+  } else {
+    // --- Static fallback path ---
+    let metricsToUse: string[]
+    if (evaluationFocus && evaluationFocus.trim().length > 0) {
+      const specified = evaluationFocus.split(',').map(s => s.trim()).filter(Boolean)
+      metricsToUse = specified.filter(m => SCORECARD_CATEGORIES[m])
+      if (metricsToUse.length === 0) metricsToUse = Object.keys(SCORECARD_CATEGORIES)
+    } else {
+      metricsToUse = Object.keys(SCORECARD_CATEGORIES)
+    }
+
+    criteriaText = metricsToUse.map(key => {
+      const cat = SCORECARD_CATEGORIES[key]
+      if (!cat) return ''
+      const weightText = metricWeights && metricWeights[key] ? `\n  Weight: ${metricWeights[key]}%` : ''
+      return `- ${key}:\n  Description: ${cat.description}\n  High Score Indicator: ${cat.high}\n  Low Score Indicator: ${cat.low}${weightText}`
+    }).filter(Boolean).join('\n')
+
+    scoreKeys = metricsToUse.map(m => `"${m.toLowerCase().replace(/[^a-z]/g, '_').replace(/__+/g, '_')}": {
+      "score": <number 0-100>,
+      "actual_answer": "<The EXACT quote from the transcript of what the rep actually said regarding this criteria. Do NOT summarize in the third person (e.g., do NOT say 'The rep did...'). Use their exact words in quotes. If they didn't demonstrate it, state 'Not demonstrated.'>",
+      "better_answer": "<The EXACT verbatim response the rep should have said in this specific context, written as a direct first-person quote (e.g. 'I suggest we...'). Do NOT write a description or generic critique.>"
     }`).join(',\n    ')
+  }
 
   // Voice delivery section — only included when prosody data is available
   let voiceSection = ''
@@ -91,9 +124,12 @@ Use this data to comment on the rep's vocal delivery — confidence (steady pitc
 `
     voiceOutputKey = `\n  "voice_delivery_feedback": "<1-2 sentence natural language observation about the rep's vocal delivery based on the voice data above>",`
   }
-  
-  const scoreInstruction = metricWeights && Object.keys(metricWeights).length > 0 
-    ? "<weighted sum of all the scores in the criteria above based on the manager's provided weights, number 0-100. IMPORTANT: Explain heavily weighted point deductions in your summary.>"
+
+  // Determine overall score instruction
+  const hasWeights = (dynamicMetrics && dynamicMetrics.some(m => m.weight > 0)) || 
+                     (metricWeights && Object.keys(metricWeights).length > 0)
+  const scoreInstruction = hasWeights
+    ? "<weighted sum of all the scores in the criteria above based on the provided weights, number 0-100. IMPORTANT: Explain heavily weighted point deductions in your summary.>"
     : "<average of all the scores in the criteria above, number 0-100>"
 
   return `You are an expert Sales Coach Analyst. You are evaluating a sales practice conversation between an AI Persona (acting as the buyer) and a human Sales Rep.
@@ -203,6 +239,7 @@ IMPORTANT: Do NOT score the rep on sales skills — that is handled by a separat
 Focus ONLY on:
 1. Rep's TONE and COMMUNICATION STYLE throughout the conversation
 2. Customer's SENTIMENT at each conversation step
+3. Rep's SENTIMENT (confidence/positivity) at each conversation step
 ${voiceContext}
 --- CONVERSATION STEPS ---
 ${stepsJson}
@@ -234,11 +271,20 @@ Return ONLY a raw JSON object (no markdown, no backticks):
       "reason": "<1 short sentence explaining why>"
     }
   ],
+  "rep_sentiment_arc": [
+    {
+      "step": <step number>,
+      "sentiment_score": <0-100 where 0=very negative/insecure, 50=neutral, 100=very positive/confident>,
+      "label": "Very Positive" | "Positive" | "Neutral" | "Negative" | "Very Negative",
+      "reason": "<1 short sentence explaining why>"
+    }
+  ],
   "ai_conversation_summary": "<2-3 sentences of narrative insight about the overall conversational dynamic>"
 }
 
 RULES:
 - customer_sentiment_arc MUST have exactly one entry per step (${steps.length} steps total).
+- rep_sentiment_arc MUST have exactly one entry per step (${steps.length} steps total).
 - Sentiment MUST change naturally across steps — avoid identical scores.
 - INFER energy_label and warmth_score carefully from semantic enthusiasm, conversational momentum, word choice, and empathy shown in the text.
 - Be specific in the reason field — reference what was actually said.

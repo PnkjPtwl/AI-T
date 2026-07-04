@@ -1,14 +1,78 @@
 import { supabase } from '../db/supabase'
 import fs from 'fs'
 import path from 'path'
-import { getScorecardMetricNames, SCORECARD_CATEGORIES } from '../utils/evaluationGenerator'
+import { DynamicMetric } from '../utils/evaluationGenerator'
+import Groq from 'groq-sdk'
+import { getSecret } from '../lib/secrets'
 
-export const getScorecardMetrics = async (_req: any, res: any) => {
-  const metrics = getScorecardMetricNames().map(name => ({
-    name,
-    description: SCORECARD_CATEGORIES[name].description,
-  }))
-  res.json(metrics)
+/** Helper: derive a human-readable display label from scenario data */
+export function getScenarioDisplayLabel(scenario: any): string {
+  const title = scenario.contact_title || ''
+  const company = scenario.contact_company || ''
+  if (title && company) return `${title} - ${company}`
+  if (title) return title
+  if (company) return company
+  return scenario.persona_name || 'Unnamed Persona'
+}
+
+export const generateScorecardMetrics = async (req: any, res: any) => {
+  const { context_text, personality_traits, objection_style, target_skills, contact_title, contact_company } = req.body
+
+  if (!context_text && !personality_traits && !target_skills) {
+    return res.status(400).json({ error: 'Persona context is required to generate scorecard metrics.' })
+  }
+
+  try {
+    const groqKey = await getSecret('GROQ_API_KEY')
+    const groq = new Groq({ apiKey: groqKey })
+
+    const prompt = `You are an expert sales training architect. Based on the following persona details, generate 5-7 SPECIFIC and RELEVANT scoring criteria for evaluating a sales rep's performance during a roleplay with this persona.
+
+PERSONA DETAILS:
+- Contact: ${contact_title || 'N/A'} at ${contact_company || 'N/A'}
+- Scenario Context: ${context_text || ''}
+- Personality & Traits: ${personality_traits || ''}
+- Objection Style: ${objection_style || ''}
+- Target Skills to Develop: ${target_skills || ''}
+
+INSTRUCTIONS:
+- Generate criteria that are SPECIFIC to this persona's context, industry, and behavior — not generic sales skills
+- Each criterion should be directly testable from a conversation transcript
+- Do NOT include weights (the manager will set those)
+- Return ONLY a raw JSON array, no markdown, no explanation:
+
+[
+  {
+    "name": "<Short criterion name, 2-5 words>",
+    "description": "<1-2 sentence description of what to evaluate and what good/bad looks like for THIS specific persona>"
+  }
+]
+
+Generate between 5 and 7 criteria. Make them precise and persona-specific.`
+
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 1200
+    })
+
+    let raw = completion.choices[0]?.message?.content || '[]'
+    raw = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+
+    // Extract the JSON array
+    const match = raw.match(/\[[\s\S]*\]/)
+    if (!match) return res.status(500).json({ error: 'AI did not return valid JSON array' })
+
+    const metrics: Array<{ name: string; description: string }> = JSON.parse(match[0])
+
+    // Add default weight of 0 (manager sets)
+    const withWeights: DynamicMetric[] = metrics.map(m => ({ ...m, weight: 0 }))
+    res.json(withWeights)
+  } catch (err: any) {
+    console.error('Error generating scorecard metrics:', err)
+    res.status(500).json({ error: err.message || 'Failed to generate scorecard metrics' })
+  }
 }
 
 export const getScenarios = async (req: any, res: any) => {
@@ -22,14 +86,10 @@ export const getScenarios = async (req: any, res: any) => {
       console.warn("WARNING: No orgId found for user. Fetching global scenarios.");
     }
 
-    // Step 1: Simplified query for debugging
-    console.log(`Executing Supabase query for org_id: ${orgId}`);
-    
     let query = supabase
       .from('training_scenarios')
       .select('*');
 
-    // Only filter if orgId exists, otherwise fetch all for debug
     if (orgId) {
       query = query.eq('org_id', orgId);
     }
@@ -50,31 +110,47 @@ export const getScenarios = async (req: any, res: any) => {
 
     let finalData = data || [];
 
-    // Step 3: Enhance data
     const enhanced = finalData.map(s => {
-      const match = s.context_text?.match(/\[SCENARIO:\s*(.*?)\]/);
-      const scenario_name = (match && match[1]) ? match[1] : s.persona_type || 'General Training';
-      
-      let target_skills = '';
-      let personality_traits = s.personality_traits || '';
-      let objection_style = s.objection_style || '';
-      let evaluation_focus = '';
-      const metaMatch = s.context_text?.match(/\[SCENARIO_METADATA:\s*(\{.*?\})\]/);
+      // Parse metadata from context_text for legacy scenarios that used the embedded approach
+      let target_skills = s.target_skills || ''
+      let personality_traits = s.personality_traits || ''
+      let objection_style = s.objection_style || ''
+      let contact_title = s.contact_title || ''
+      let contact_company = s.contact_company || ''
+      let scorecard_metrics = s.scorecard_metrics || null
+
+      const metaMatch = s.context_text?.match(/\[SCENARIO_METADATA:\s*(\{.*?\})\]/)
       if (metaMatch && metaMatch[1]) {
         try {
-          const meta = JSON.parse(metaMatch[1]);
-          target_skills = meta.target_skills || '';
-          if (!personality_traits) personality_traits = meta.personality_traits || '';
-          if (!objection_style) objection_style = meta.objection_style || '';
-          evaluation_focus = meta.evaluation_focus || '';
+          const meta = JSON.parse(metaMatch[1])
+          if (!target_skills) target_skills = meta.target_skills || ''
+          if (!personality_traits) personality_traits = meta.personality_traits || ''
+          if (!objection_style) objection_style = meta.objection_style || ''
+          if (!contact_title) contact_title = meta.contact_title || ''
+          if (!contact_company) contact_company = meta.contact_company || ''
+          if (!scorecard_metrics && meta.metric_weights) {
+            // Legacy: convert old metric_weights to partial dynamic format
+            scorecard_metrics = Object.entries(meta.metric_weights).map(([name, weight]) => ({
+              name, weight, description: ''
+            }))
+          }
         } catch (e) {}
       }
 
-      // We still fall back to legacy extraction if not in metadata for older formats
-      if (!evaluation_focus && s.evaluation_focus) evaluation_focus = s.evaluation_focus;
-      if (!evaluation_focus && s.context_text?.includes('roi_justification')) evaluation_focus = 'roi_justification, pricing_defense, logic'
+      const display_label = (contact_title && contact_company)
+        ? `${contact_title} - ${contact_company}`
+        : contact_title || contact_company || s.persona_name || 'Unnamed Persona'
 
-      return { ...s, scenario_name, target_skills, personality_traits, objection_style, evaluation_focus };
+      return {
+        ...s,
+        contact_title,
+        contact_company,
+        display_label,
+        target_skills,
+        personality_traits,
+        objection_style,
+        scorecard_metrics
+      };
     });
 
     console.log("Returning enhanced scenarios to frontend.");
@@ -96,47 +172,40 @@ export const createScenario = async (req: any, res: any) => {
   const orgId = req.user.org_id
   const { 
     persona_name, 
-    persona_type, 
     context_text, 
     difficulty,
     personality_traits,
-    evaluation_focus,
     objection_style,
     conversation_expectations,
     target_skills,
     custom_prompt,
     assigned_reps,
-    evaluation_questions
+    evaluation_questions,
+    contact_title,
+    contact_company,
+    scorecard_metrics
   } = req.body
 
-  if (!persona_name || !persona_type || !context_text || !difficulty) {
-    return res.status(400).json({ error: 'All fields are required' })
+  if (!persona_name || !context_text || !difficulty) {
+    return res.status(400).json({ error: 'Persona name, context, and difficulty are required' })
   }
-
-  // Pack extra fields into a soft-schema JSON inside context_text
-  const metadata = {
-    personality_traits,
-    evaluation_focus,
-    objection_style,
-    conversation_expectations,
-    target_skills,
-    contact_title: req.body.contact_title,
-    contact_company: req.body.contact_company,
-    metric_weights: req.body.metric_weights
-  }
-  
-
-  const finalContextText = `${context_text}\n\n[SCENARIO_METADATA: ${JSON.stringify(metadata)}]`
 
   const { data, error } = await supabase
     .from('training_scenarios')
     .insert({
       org_id: orgId,
       persona_name,
-      persona_type,
-      context_text: finalContextText,
+      persona_type: contact_title || persona_name, // kept for legacy compatibility
+      context_text,
       difficulty,
-      custom_prompt
+      personality_traits,
+      objection_style,
+      conversation_expectations,
+      target_skills,
+      custom_prompt,
+      contact_title,
+      contact_company,
+      scorecard_metrics: scorecard_metrics || null
     })
     .select()
     .single()
@@ -171,7 +240,7 @@ export const createScenario = async (req: any, res: any) => {
       manager_id: req.user.id,
       scenario_id: newScenarioId,
       status: 'Pending',
-      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // Default 7 days
+      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
     }));
     
     const { error: assignError } = await supabase
@@ -197,64 +266,76 @@ export const getScenario = async (req: any, res: any) => {
     return res.status(500).json({ error: error?.message || 'Scenario not found' })
   }
 
-  // Hydrate with rich JSON data
-  const personasPath = path.join(__dirname, '../data/personas.json')
-  const scenariosPath = path.join(__dirname, '../data/scenarios.json')
-  
-  let personas = []
-  let scenarios = []
-  
-  try {
-    personas = JSON.parse(fs.readFileSync(personasPath, 'utf8'))
-    scenarios = JSON.parse(fs.readFileSync(scenariosPath, 'utf8'))
-  } catch (err) {
-    console.error("Failed to read JSON config files", err)
-  }
+  // Parse metadata from legacy context_text if present
+  let contact_title = data.contact_title || ''
+  let contact_company = data.contact_company || ''
+  let scorecard_metrics = data.scorecard_metrics || null
+  let personality_traits = data.personality_traits || ''
+  let objection_style = data.objection_style || ''
+  let target_skills = data.target_skills || ''
+  let conversation_expectations = data.conversation_expectations || ''
 
-  const match = data.context_text?.match(/\[SCENARIO:\s*(.*?)\]/)
-  const extractedScenarioName = (match && match[1]) ? match[1] : data.persona_type
-
-  const personaConfig = personas.find((p: any) => p.persona_name === data.persona_name) || {}
-  const scenarioConfig = scenarios.find((s: any) => s.scenario_name === extractedScenarioName) || {}
-
-  const hydratedData = {
-    ...data,
-    scenario_name: extractedScenarioName || 'Sales Strategy Session',
-    customer_info: personaConfig.customer_info || {
-      name: data.persona_name,
-      role: 'Decision Maker',
-      company: 'Prospect Corp',
-      industry: 'Enterprise'
-    },
-    personality_traits: data.personality_traits || personaConfig.personality_description || 'A professional looking to solve business challenges.',
-    customer_goal: scenarioConfig.customer_goal || 'Understand the value proposition and potential ROI.',
-    sales_rep_goal: scenarioConfig.sales_rep_goal || 'Establish trust and move the prospect to the next stage.',
-    likely_objections: scenarioConfig.likely_objections || ['Pricing', 'Timing', 'Competitor Features'],
-    coaching_focus_areas: scenarioConfig.coaching_focus_areas || ['discovery', 'objection_handling', 'closing'],
-    preparation_tips: scenarioConfig.preparation_tips || [
-      "Focus on identifying pain points early.",
-      "Be prepared to defend value over price.",
-      "Maintain a professional and consultative tone."
-    ],
-    suggested_discovery_questions: scenarioConfig.suggested_discovery_questions || [
-      "What is your primary goal for this quarter?",
-      "How are you currently handling these challenges?",
-      "Who else would be involved in this decision?"
-    ],
-    persona_type: personaConfig.persona_type || data.persona_type || 'Professional Buyer',
-    evaluation_focus: data.evaluation_focus || (scenarioConfig.coaching_focus_areas ? scenarioConfig.coaching_focus_areas.join(', ') : 'discovery, rapport, closing'),
-    objection_style: data.objection_style || (scenarioConfig.likely_objections ? scenarioConfig.likely_objections.join(', ') : 'Standard transactional pushback.')
-  }
-
-  // Parse soft-schema from context_text if it exists (allows overrides)
   const jsonMatch = data.context_text?.match(/\[SCENARIO_METADATA:\s*({.*?})\]/s)
   if (jsonMatch) {
     try {
       const metadata = JSON.parse(jsonMatch[1])
-      Object.assign(hydratedData, metadata)
+      if (!contact_title) contact_title = metadata.contact_title || ''
+      if (!contact_company) contact_company = metadata.contact_company || ''
+      if (!scorecard_metrics && metadata.metric_weights) {
+        scorecard_metrics = Object.entries(metadata.metric_weights).map(([name, weight]) => ({
+          name, weight, description: ''
+        }))
+      }
+      if (!personality_traits) personality_traits = metadata.personality_traits || ''
+      if (!objection_style) objection_style = metadata.objection_style || ''
+      if (!target_skills) target_skills = metadata.target_skills || ''
+      if (!conversation_expectations) conversation_expectations = metadata.conversation_expectations || ''
     } catch (e) {
       console.error("Failed to parse scenario metadata JSON", e)
     }
+  }
+
+  const display_label = (contact_title && contact_company)
+    ? `${contact_title} - ${contact_company}`
+    : contact_title || contact_company || data.persona_name || 'Unnamed Persona'
+
+  // Clean context_text from metadata tags for display
+  const clean_context = (data.context_text || '')
+    .replace(/\n*\[SCENARIO_METADATA:\s*{[\s\S]*?}\]/g, '')
+    .replace(/\n*\[MANDATORY EVALUATION RUBRIC[\s\S]*?(?=\n\[|$)/g, '')
+    .trim()
+
+  const hydratedData = {
+    ...data,
+    contact_title,
+    contact_company,
+    display_label,
+    scorecard_metrics,
+    personality_traits,
+    objection_style,
+    target_skills,
+    conversation_expectations,
+    context_text: clean_context,
+    customer_info: {
+      name: data.persona_name,
+      role: contact_title || 'Decision Maker',
+      company: contact_company || 'Prospect Corp',
+      industry: 'Enterprise'
+    },
+    customer_goal: 'Understand the value proposition and potential ROI.',
+    sales_rep_goal: 'Establish trust and move the prospect to the next stage.',
+    likely_objections: ['Pricing', 'Timing', 'Competitor Features'],
+    coaching_focus_areas: ['discovery', 'objection_handling', 'closing'],
+    preparation_tips: [
+      "Focus on identifying pain points early.",
+      "Be prepared to defend value over price.",
+      "Maintain a professional and consultative tone."
+    ],
+    suggested_discovery_questions: [
+      "What is your primary goal for this quarter?",
+      "How are you currently handling these challenges?",
+      "Who else would be involved in this decision?"
+    ]
   }
 
   res.json(hydratedData)
@@ -267,7 +348,6 @@ export const updateScenario = async (req: any, res: any) => {
   const updates = req.body
 
   try {
-    // 1. Fetch current scenario to preserve org_id and context
     const { data: existing, error: fetchError } = await supabase
       .from('training_scenarios')
       .select('*')
@@ -279,32 +359,26 @@ export const updateScenario = async (req: any, res: any) => {
       return res.status(404).json({ error: 'Scenario not found or access denied' })
     }
 
-    // Pack extra fields into a soft-schema JSON inside context_text
-    const metadata = {
-      personality_traits: updates.personality_traits,
-      evaluation_focus: updates.evaluation_focus,
-      objection_style: updates.objection_style,
-      conversation_expectations: updates.conversation_expectations,
-      target_skills: updates.target_skills,
-      contact_title: updates.contact_title,
-      contact_company: updates.contact_company,
-      metric_weights: updates.metric_weights
-    }
-    
-    // Ensure we don't append multiple metadata tags if updating
-    let baseContext = updates.context_text || ''
-    baseContext = baseContext.replace(/\\n*\\[SCENARIO_METADATA:.*?\\]/s, '')
-    const finalContextText = `${baseContext}\n\n[SCENARIO_METADATA: ${JSON.stringify(metadata)}]`
+    // Clean context_text from old embedded metadata
+    let baseContext = updates.context_text || existing.context_text || ''
+    baseContext = baseContext.replace(/\n*\[SCENARIO_METADATA:\s*{[\s\S]*?}\]/g, '').trim()
 
-    // 2. Update the DB with all columns
     const { data, error } = await supabase
       .from('training_scenarios')
       .update({
-        persona_name: updates.persona_name,
-        persona_type: updates.persona_type,
-        difficulty: updates.difficulty,
-        context_text: finalContextText,
-        custom_prompt: updates.custom_prompt
+        persona_name: updates.persona_name || existing.persona_name,
+        persona_type: updates.contact_title || existing.contact_title || existing.persona_type,
+        difficulty: updates.difficulty || existing.difficulty,
+        context_text: baseContext,
+        custom_prompt: updates.custom_prompt !== undefined ? updates.custom_prompt : existing.custom_prompt,
+        personality_traits: updates.personality_traits !== undefined ? updates.personality_traits : existing.personality_traits,
+        objection_style: updates.objection_style !== undefined ? updates.objection_style : existing.objection_style,
+        conversation_expectations: updates.conversation_expectations !== undefined ? updates.conversation_expectations : existing.conversation_expectations,
+        target_skills: updates.target_skills !== undefined ? updates.target_skills : existing.target_skills,
+        contact_title: updates.contact_title !== undefined ? updates.contact_title : existing.contact_title,
+        contact_company: updates.contact_company !== undefined ? updates.contact_company : existing.contact_company,
+        // scorecard_metrics: manager can only update weights/delete/add custom — AI regen is NOT allowed in edit
+        scorecard_metrics: updates.scorecard_metrics !== undefined ? updates.scorecard_metrics : existing.scorecard_metrics
       })
       .eq('id', scenarioId)
       .eq('org_id', orgId)
@@ -313,7 +387,6 @@ export const updateScenario = async (req: any, res: any) => {
 
     if (error) throw error
 
-    // 5. Return updated data
     res.json(data)
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -358,7 +431,7 @@ export const deleteScenario = async (req: any, res: any) => {
 
 export const assignRepsToScenario = async (req: any, res: any) => {
   const { scenarioId } = req.params;
-  const { repIds } = req.body; // array of UUIDs
+  const { repIds } = req.body;
   const managerId = req.user.id;
 
   if (!repIds || !Array.isArray(repIds)) {
@@ -402,7 +475,6 @@ export const getScenarioAssignments = async (req: any, res: any) => {
   const orgId = req.user.org_id;
 
   try {
-    // get all reps in org
     const { data: reps, error: repsError } = await supabase
       .from('users')
       .select('id, name, email, role')
@@ -411,7 +483,6 @@ export const getScenarioAssignments = async (req: any, res: any) => {
 
     if (repsError) throw repsError;
 
-    // get assignments for this scenario
     const { data: assignments, error: assignError } = await supabase
       .from('training_assignments')
       .select('rep_id, status')

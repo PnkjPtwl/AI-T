@@ -87,10 +87,10 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
               <span className="text-[#64748B] text-xs font-medium">{new Date(session.completed_at).toLocaleDateString()}</span>
             </div>
             <h1 className="text-3xl font-bold text-[#1A2A3A]">
-              {scenario.persona_name || 'Training Interaction'}
+              {scenario.contact_title ? `${scenario.contact_title} - ${scenario.contact_company}` : (scenario.persona_name || 'Training Interaction')}
             </h1>
             <p className="text-[#64748B] text-sm leading-relaxed">
-              Review of the rep's interaction with <span className="font-semibold">{scenario.persona_name}</span>. 
+              Review of the rep's interaction with <span className="font-semibold">{scenario.contact_title ? `${scenario.contact_title} - ${scenario.contact_company}` : scenario.persona_name}</span>. 
               {(feedback.summary || feedback.evaluation_summary || '')?.split('.')[0]}.
             </p>
           </div>
@@ -354,6 +354,7 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
         {activeTab === 'conversation_analytics' && (() => {
           const ca = feedback.conversation_analytics || {}
           const arc = ca.customer_sentiment_arc || []
+          const repArc = ca.rep_sentiment_arc || []
           const toneProfile = ca.rep_tone_profile || {}
           const voiceStats = ca.rep_voice_stats || {}
 
@@ -378,6 +379,16 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
 
           const areaD = arc.length >= 2
             ? `${pathD} L ${xOf(arc.length - 1).toFixed(1)} ${(padT + innerH).toFixed(1)} L ${padL} ${(padT + innerH).toFixed(1)} Z`
+            : ''
+
+          const repPathD = repArc.length >= 2
+            ? repArc.map((p: any, i: number) =>
+                `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(p.sentiment_score).toFixed(1)}`
+              ).join(' ')
+            : ''
+
+          const repAreaD = repArc.length >= 2
+            ? `${repPathD} L ${xOf(repArc.length - 1).toFixed(1)} ${(padT + innerH).toFixed(1)} L ${padL} ${(padT + innerH).toFixed(1)} Z`
             : ''
 
           const sentimentColor = (score: number) =>
@@ -451,8 +462,11 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
               {/* Customer Sentiment Arc Chart */}
               <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-sm font-bold text-[#1A2A3A] uppercase tracking-wider">Customer Sentiment Arc</h3>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-[#94A3B8]">Per conversation step</span>
+                  <h3 className="text-sm font-bold text-[#1A2A3A] uppercase tracking-wider">Sentiment Arcs</h3>
+                  <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-[#94A3B8]">
+                    <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#22C55E]"></div> Customer</span>
+                    <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#8B5CF6]"></div> Rep</span>
+                  </div>
                 </div>
                 {arc.length === 0 ? (
                   <p className="text-sm text-[#64748B] text-center py-8">No sentiment data available.</p>
@@ -469,26 +483,44 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
                           </g>
                         )
                       })}
-                      {/* Area fill */}
+                      {/* Area fill - Customer */}
                       {areaD && <path d={areaD} fill="url(#sentGrad)" opacity="0.3" />}
-                      {/* Gradient */}
+                      {/* Area fill - Rep */}
+                      {repAreaD && <path d={repAreaD} fill="url(#repGrad)" opacity="0.2" />}
+                      {/* Gradient Customer */}
                       <defs>
                         <linearGradient id="sentGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#22C55E" stopOpacity="0.6" />
                           <stop offset="100%" stopColor="#22C55E" stopOpacity="0" />
                         </linearGradient>
+                        <linearGradient id="repGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.6" />
+                          <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0" />
+                        </linearGradient>
                       </defs>
-                      {/* Line */}
-                      {pathD && <path d={pathD} fill="none" stroke="#2C5282" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
-                      {/* Dots + X labels */}
+                      {/* Line Customer */}
+                      {pathD && <path d={pathD} fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
+                      {/* Line Rep */}
+                      {repPathD && <path d={repPathD} fill="none" stroke="#8B5CF6" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
+                      {/* Dots + X labels Customer */}
                       {arc.map((pt: any, i: number) => {
                         const x = xOf(i)
                         const y = yOf(pt.sentiment_score)
                         const color = sentimentColor(pt.sentiment_score)
                         return (
-                          <g key={i}>
-                            <circle cx={x} cy={y} r="5" fill={color} stroke="white" strokeWidth="2" />
+                          <g key={`cust-${i}`}>
+                            <circle cx={x} cy={y} r="4" fill={color} stroke="white" strokeWidth="1.5" />
                             <text x={x} y={padT + innerH + 16} fontSize="9" fill="#94A3B8" textAnchor="middle">Step {pt.step}</text>
+                          </g>
+                        )
+                      })}
+                      {/* Dots Rep */}
+                      {repArc.map((pt: any, i: number) => {
+                        const x = xOf(i)
+                        const y = yOf(pt.sentiment_score)
+                        return (
+                          <g key={`rep-${i}`}>
+                            <circle cx={x} cy={y} r="4" fill="#8B5CF6" stroke="white" strokeWidth="1.5" />
                           </g>
                         )
                       })}
@@ -497,29 +529,35 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
                 )}
                 {/* Sentiment Table */}
                 {arc.length > 0 && (
-                  <div className="mt-6 border-t border-[#E2E8F0] pt-4 overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="text-[#94A3B8] uppercase tracking-wider">
-                          <th className="text-left py-2 pr-4 font-semibold">Step</th>
-                          <th className="text-left py-2 pr-4 font-semibold">Sentiment</th>
-                          <th className="text-left py-2 font-semibold">Reason</th>
+                  <div className="mt-6 border border-[#E2E8F0] rounded-lg overflow-hidden">
+                    <table className="w-full text-left">
+                      <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                        <tr>
+                          <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#64748B] w-16">Step</th>
+                          <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#64748B] w-32">Customer</th>
+                          <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#64748B] w-32">Rep</th>
+                          <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#64748B]">Analysis</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#F1F5F9]">
-                        {arc.map((pt: any, i: number) => (
-                          <tr key={i}>
-                            <td className="py-2 pr-4 font-bold text-[#1A2A3A]">#{pt.step}</td>
-                            <td className="py-2 pr-4">
-                              <span className={`font-semibold ${
-                                pt.label === 'Very Positive' || pt.label === 'Positive' ? 'text-green-600'
-                                : pt.label === 'Neutral' ? 'text-amber-600'
-                                : 'text-red-500'
-                              }`}>{pt.label}</span>
-                            </td>
-                            <td className="py-2 text-[#64748B]">{pt.reason}</td>
-                          </tr>
-                        ))}
+                      <tbody className="divide-y divide-[#E2E8F0]">
+                        {arc.map((pt: any, i: number) => {
+                          const repPt = repArc[i]
+                          return (
+                            <tr key={i} className="hover:bg-[#F8FAFC]/50 transition-colors">
+                              <td className="px-4 py-3 text-xs font-bold text-[#1A2A3A]">{pt.step}</td>
+                              <td className="px-4 py-3 text-xs font-semibold" style={{ color: sentimentColor(pt.sentiment_score) }}>
+                                {pt.label}
+                              </td>
+                              <td className="px-4 py-3 text-xs font-semibold text-[#8B5CF6]">
+                                {repPt ? repPt.label : '-'}
+                              </td>
+                              <td className="px-4 py-3 text-xs text-[#64748B] leading-relaxed">
+                                <span className="font-medium text-[#1A2A3A] block mb-1">Customer: {pt.reason}</span>
+                                {repPt && <span className="text-[#8B5CF6] block">Rep: {repPt.reason}</span>}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
