@@ -991,6 +991,7 @@ export const getMyAssignments = async (req: any, res: any) => {
         created_at, 
         completed_at, 
         session_id,
+        avatar_type,
         scenario:training_scenarios (
           id,
           persona_name,
