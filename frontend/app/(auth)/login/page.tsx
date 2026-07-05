@@ -64,7 +64,7 @@ export default function LoginPage() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-50 translate-x-1/2 -translate-y-1/2" />
           <div className="flex items-center gap-3 mb-4">
             <div className="w-14 h-14 bg-[#2C5282] rounded-2xl flex items-center justify-center text-white text-[28px] font-black">R</div>
-            <h1 className="text-5xl font-extrabold text-[#1A2A3A] tracking-tighter leading-none">-salesCoach</h1>
+            <h1 className="text-5xl font-extrabold text-[#1A2A3A] tracking-tighter leading-none">salesCoach</h1>
           </div>
           <div className="w-12 h-1 bg-[#2C5282] rounded-full mb-8" />
         </div>
