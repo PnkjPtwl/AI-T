@@ -62,7 +62,10 @@ export default function LoginPage() {
         {/* Left Side: Branding */}
         <div className="flex-1 bg-white p-12 flex flex-col justify-center relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-50 translate-x-1/2 -translate-y-1/2" />
-          <h1 className="text-5xl font-extrabold text-[#1A2A3A] tracking-tighter leading-none mb-4">R-salesCoach</h1>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-14 h-14 bg-[#2C5282] rounded-2xl flex items-center justify-center text-white text-[28px] font-black">R</div>
+            <h1 className="text-5xl font-extrabold text-[#1A2A3A] tracking-tighter leading-none">-salesCoach</h1>
+          </div>
           <div className="w-12 h-1 bg-[#2C5282] rounded-full mb-8" />
         </div>
 

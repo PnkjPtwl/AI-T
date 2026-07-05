@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
@@ -20,6 +20,7 @@ export default function TrainingPage() {
   const [assigning, setAssigning] = useState(false)
   const [success, setSuccess] = useState('')
   const [showRepDropdown, setShowRepDropdown] = useState(false)
+  const [assignmentToDelete, setAssignmentToDelete] = useState<string | null>(null)
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>({ key: 'status', direction: 'asc' })
 
   // Filter States
@@ -30,6 +31,21 @@ export default function TrainingPage() {
   const [repSearchText, setRepSearchText] = useState('')
   const [personaSearchText, setPersonaSearchText] = useState('')
   const [activeFilterTab, setActiveFilterTab] = useState<'reps' | 'personas' | 'status'>('reps')
+  const filterRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
+        setIsFilterMenuOpen(false)
+      }
+    }
+    if (isFilterMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isFilterMenuOpen])
 
   const fetchData = async () => {
     try {
@@ -92,17 +108,23 @@ export default function TrainingPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this training assignment?')) return;
+  const handleDelete = (id: string) => {
+    setAssignmentToDelete(id)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!assignmentToDelete) return;
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`${API}/api/users/assignments/${id}`, {
+      const res = await fetch(`${API}/api/users/assignments/${assignmentToDelete}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (res.ok) fetchData()
     } catch (err) {
       console.error('Delete failed', err)
+    } finally {
+      setAssignmentToDelete(null)
     }
   }
   const statusColor: Record<string, string> = {
@@ -183,7 +205,7 @@ export default function TrainingPage() {
           className="bg-[#2C5282] text-white font-[600] py-[8px] md:py-[10px] px-[16px] md:px-[20px] min-w-[100px] rounded-[10px] transition-all duration-200 hover:bg-[#1A365D] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-[8px]"
         >
           <svg className="w-[16px] h-[16px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
-          Assign Training
+          Assign Persona
         </button>
       </div>
 
@@ -212,12 +234,12 @@ export default function TrainingPage() {
       </div>
 
       {/* Assignment Table */}
-      <div className="bg-white border border-gray-900/10 rounded-[12px] overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+      <div className="bg-white border border-gray-900/10 rounded-[12px] overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] min-h-[450px] flex flex-col">
         <div className="px-[24px] py-[16px] border-b border-gray-900/10 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 className="text-xl font-semibold text-gray-900">Assignment Tracking</h2>
           
           {/* Multi-select Filter */}
-          <div className="relative">
+          <div className="relative" ref={filterRef}>
             <button 
               onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
               className="flex items-center gap-2 h-[36px] bg-white border border-[#E2E8F0] rounded-[8px] px-[16px] text-sm font-medium text-[#1A2A3A] hover:bg-gray-50 transition-colors shadow-sm"
@@ -303,7 +325,7 @@ export default function TrainingPage() {
         </div>
         
         {assignments.length === 0 ? (
-          <div className="p-[64px] text-center text-base text-gray-500">No assignments yet. Click "Assign Training" to get started.</div>
+          <div className="p-[64px] text-center text-base text-gray-500">No assignments yet. Click "Assign Persona" to get started.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-base">
@@ -380,7 +402,7 @@ export default function TrainingPage() {
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAssignModal(false)} />
           <div className="relative w-full max-w-lg bg-white rounded-[12px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] overflow-hidden">
             <div className="flex justify-between items-center px-[24px] py-[20px] border-b border-gray-900/10">
-              <h2 className="text-[18px] md:text-[20px] font-[600] text-gray-900">Assign Training</h2>
+              <h2 className="text-[18px] md:text-[20px] font-[600] text-gray-900">Assign Persona</h2>
               <button onClick={() => setShowAssignModal(false)} className="text-gray-500 hover:text-gray-900 transition-colors">
                 <svg className="w-[20px] h-[20px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
@@ -502,9 +524,35 @@ export default function TrainingPage() {
                   disabled={assigning || selectedRepIds.length === 0 || !selectedScenarioId}
                   className="flex-1 bg-[#2C5282] text-white font-[600] py-[8px] md:py-[10px] px-[16px] md:px-[20px] rounded-[10px] transition-all duration-200 hover:bg-[#1A365D] disabled:opacity-40 disabled:cursor-not-allowed text-[14px]"
                 >
-                  {assigning ? 'Assigning...' : 'Assign Training'}
+                  {assigning ? 'Assigning...' : 'Assign Persona'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {assignmentToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200 text-center">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Assignment?</h3>
+            <p className="text-gray-500 text-sm mb-6">
+              Are you sure you want to permanently delete this assignment?
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setAssignmentToDelete(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-[#2C5282] hover:bg-[#1A365D] text-white font-semibold transition-colors shadow-lg shadow-[#2C5282]/20"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>

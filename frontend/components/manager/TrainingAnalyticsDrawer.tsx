@@ -154,7 +154,7 @@ export default function TrainingAnalyticsDrawer({ assignments }: { assignments: 
                             setStatusFlags([])
                             setExpandedReps(new Set())
                           }}
-                          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors text-sm font-medium"
+                          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#2C5282]/30 text-[#2C5282] hover:bg-[#2C5282]/5 transition-colors text-sm font-medium"
                         >
                           <Eye className="w-4 h-4" /> Review
                         </button>
@@ -305,7 +305,7 @@ export default function TrainingAnalyticsDrawer({ assignments }: { assignments: 
                         >
                           <div className="flex items-center gap-4 w-1/3 min-w-[200px]">
                             {/* Generic Avatar */}
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm bg-gray-800 text-white shadow-sm flex-shrink-0">
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm bg-[#2C5282] text-white shadow-sm flex-shrink-0">
                               {rep.initials}
                             </div>
                             <div className="flex flex-col min-w-0">
@@ -323,13 +323,16 @@ export default function TrainingAnalyticsDrawer({ assignments }: { assignments: 
                               <>
                                 {/* Status Dots */}
                                 <div className="flex items-center gap-1.5">
-                                  {attempts.map((a: any, idx: number) => (
+                                  {attempts.slice(0, 3).map((a: any, idx: number) => (
                                     <div 
                                       key={idx}
                                       className={`w-2 h-2 rounded-full ${getStatusColor(a.status)}`}
                                       title={`${a.status === 'Pending' ? 'Not started' : a.status === 'In Progress' ? 'In progress' : a.status === 'Overdue' ? 'Missed' : a.status}${a.score !== null && a.status === 'Completed' ? ` (${a.score}%)` : ''}`}
                                     />
                                   ))}
+                                  {attempts.length > 3 && (
+                                    <span className="text-[10px] font-bold text-[#64748B] ml-0.5">+{attempts.length - 3}</span>
+                                  )}
                                 </div>
                                 <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                               </>

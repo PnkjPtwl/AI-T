@@ -20,9 +20,9 @@ export default function RepSidebar() {
       {/* Brand */}
       <div className={`flex items-center gap-3 px-4 py-5 border-b border-gray-100 ${collapsed ? 'justify-center' : 'justify-between'}`}>
         {!collapsed && (
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-[#2C5282] rounded-lg flex items-center justify-center text-white text-[10px] font-black">AI</div>
-            <span className="text-sm font-bold text-gray-900 tracking-tight">R-salesCoach</span>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-[#2C5282] rounded-lg flex items-center justify-center text-white text-[14px] font-black">R</div>
+            <span className="text-sm font-bold text-gray-900 tracking-tight">SalesCoach</span>
           </div>
         )}
         <button
@@ -47,11 +47,10 @@ export default function RepSidebar() {
               key={item.href}
               href={item.href}
               title={collapsed ? item.name : undefined}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm font-medium ${
-                isActive
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm font-medium ${isActive
                   ? 'bg-[#EBF8FF] text-[#2C5282]'
                   : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-              }`}
+                }`}
             >
               {collapsed ? (
                 <span className="text-xs font-bold">{item.name.charAt(0)}</span>

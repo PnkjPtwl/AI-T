@@ -92,7 +92,7 @@ export default function TrainingCenter() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Assignments</h1>
-          <p className="text-base text-gray-500 mt-1">Complete your required trainings and practice scenarios.</p>
+          <p className="text-base text-gray-500 mt-1">Complete your required personas and practice scenarios.</p>
         </div>
         {/* Search */}
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2 shadow-sm w-full md:w-64">
@@ -101,7 +101,7 @@ export default function TrainingCenter() {
           </svg>
           <input
             type="text"
-            placeholder="Search scenarios..."
+            placeholder="Search personas..."
             className="text-sm text-gray-700 outline-none bg-transparent w-full placeholder:text-gray-400"
             value={search}
             onChange={e => setSearch(e.target.value)}

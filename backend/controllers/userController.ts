@@ -682,36 +682,36 @@ export const getTeamAnalytics = async (req: any, res: any) => {
     // Build rep assignment stats (works even without feedback_json)
     const repStatsMap: Record<string, any> = {}
 
-    // Initialize with all known reps
-    ;(allReps || []).forEach((rep: any) => {
-      repStatsMap[rep.id] = {
-        name: rep.name,
-        id: rep.id,
-        totalAssignments: 0,
-        completedAssignments: 0,
-        totalScore: 0,
-        scoredSessions: 0,
-        latestFeedback: ''
-      }
-    })
-
-    // Count assignments per rep
-    ;(assignments || []).forEach((a: any) => {
-      const repId = a.rep_id
-      if (!repStatsMap[repId]) {
-        repStatsMap[repId] = {
-          name: (a.rep as any)?.name || 'Unknown',
-          id: repId,
+      // Initialize with all known reps
+      ; (allReps || []).forEach((rep: any) => {
+        repStatsMap[rep.id] = {
+          name: rep.name,
+          id: rep.id,
           totalAssignments: 0,
           completedAssignments: 0,
           totalScore: 0,
           scoredSessions: 0,
           latestFeedback: ''
         }
-      }
-      repStatsMap[repId].totalAssignments++
-      if (a.status === 'Completed') repStatsMap[repId].completedAssignments++
-    })
+      })
+
+      // Count assignments per rep
+      ; (assignments || []).forEach((a: any) => {
+        const repId = a.rep_id
+        if (!repStatsMap[repId]) {
+          repStatsMap[repId] = {
+            name: (a.rep as any)?.name || 'Unknown',
+            id: repId,
+            totalAssignments: 0,
+            completedAssignments: 0,
+            totalScore: 0,
+            scoredSessions: 0,
+            latestFeedback: ''
+          }
+        }
+        repStatsMap[repId].totalAssignments++
+        if (a.status === 'Completed') repStatsMap[repId].completedAssignments++
+      })
 
     // Add session feedback data
     orgSessions.forEach((s: any) => {
@@ -760,7 +760,7 @@ export const getTeamAnalytics = async (req: any, res: any) => {
       })
     } else {
       // Fall back to assignment-based persona data (show completion rate as score)
-      ;(assignments || []).forEach((a: any) => {
+      ; (assignments || []).forEach((a: any) => {
         const scenario = a.scenario as any
         const type = scenario?.persona_type || scenario?.persona_name || 'General Prospect'
         const repName = (a.rep as any)?.name || 'Unknown'
@@ -928,7 +928,7 @@ export const assignTraining = async (req: any, res: any) => {
       priority: priority || 'Medium',
       deadline: deadline,
       avatar_type: avatarType || 'female',
-      
+
     }))
 
     console.log(`Attempting to insert ${assignments.length} assignments...`);
@@ -991,7 +991,6 @@ export const getMyAssignments = async (req: any, res: any) => {
         created_at, 
         completed_at, 
         session_id,
-        avatar_type,
         scenario:training_scenarios (
           id,
           persona_name,
@@ -1039,13 +1038,13 @@ export const getMyAssignments = async (req: any, res: any) => {
     // Fetch related sessions for scores if we have session_ids
     const sessionIds = (assignmentsData || []).filter(a => a.session_id).map(a => a.session_id)
     let sessionMap: Record<string, any> = {}
-    
+
     if (sessionIds.length > 0) {
       const { data: sessionsData } = await supabase
         .from('training_sessions')
         .select('id, feedback_json')
         .in('id', sessionIds)
-      
+
       if (sessionsData) {
         sessionsData.forEach(s => {
           sessionMap[s.id] = s.feedback_json
@@ -1054,13 +1053,13 @@ export const getMyAssignments = async (req: any, res: any) => {
     }
 
     console.log(`[getMyAssignments] Fetched ${assignmentsData?.length || 0} assignments for rep ${repId}`);
-    
+
     // Enrich and check overdue
     const assignments = (assignmentsData || []).map((a: any) => {
       const deadlineDate = new Date(a.deadline);
       const now = new Date();
       let status = a.status || 'Pending';
-      
+
       const feedback = a.session_id ? sessionMap[a.session_id] : null;
       const score = feedback?.overall_score || 0;
 
@@ -1093,10 +1092,10 @@ export const getTeamAssignments = async (req: any, res: any) => {
     let assignmentsData: any[] = [];
 
     let selectFields = [
-      'id', 
+      'id',
       'rep_id',
-      'scenario_id', 
-      'status', 
+      'scenario_id',
+      'status',
       'priority',
       'deadline',
       'created_at',
@@ -1120,7 +1119,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
       if (result.error.message.includes('avatar_type')) {
         selectFields = selectFields.filter(f => f !== 'avatar_type');
       }
-      
+
       result = await supabase
         .from('training_assignments')
         .select(selectFields.join(', '))
@@ -1146,7 +1145,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
       console.error("Supabase Query Error (getTeamAssignments):", result.error);
       throw result.error;
     }
-    
+
     assignmentsData = result.data || [];
 
     // Fetch related sessions for scores manually
@@ -1416,7 +1415,7 @@ export const completeAssignment = async (req: any, res: any) => {
 
   try {
     console.log(`[completeAssignment] Marking assignment ${assignmentId} as Completed for rep ${repId}`);
-    
+
     const { data, error } = await supabase
       .from('training_assignments')
       .update({
@@ -1432,9 +1431,9 @@ export const completeAssignment = async (req: any, res: any) => {
       console.error(`[completeAssignment] DB Error:`, error.message);
       throw error
     }
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Mission marked as completed.',
       assignment: data
     })
