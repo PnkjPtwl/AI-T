@@ -23,7 +23,7 @@ export default function Sidebar() {
         {!collapsed && (
           <div className="flex items-center gap-2">
             <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain border-none outline-none" />
-            <span className="text-sm font-bold text-gray-900 tracking-tight">SalesCoach</span>
+            <span className="text-xl font-semibold text-gray-900 tracking-tight">SalesCoach</span>
           </div>
         )}
         <button
