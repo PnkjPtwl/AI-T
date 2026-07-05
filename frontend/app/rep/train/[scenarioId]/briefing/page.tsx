@@ -88,17 +88,39 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
 
   const renderBullets = (text: string) => {
     if (!text) return null;
-    if (text.includes('•') || text.includes('- ')) {
+    
+    // Normalize abbreviations so they don't break sentence splitting
+    const safeText = text.replace(/Pvt\.\s*Ltd\./gi, 'Pvt Ltd')
+                         .replace(/Pvt\./gi, 'Pvt')
+                         .replace(/Ltd\./gi, 'Ltd')
+                         .replace(/Inc\./gi, 'Inc')
+                         .replace(/Mr\./gi, 'Mr')
+                         .replace(/Ms\./gi, 'Ms')
+                         .replace(/Dr\./gi, 'Dr');
+
+    if (safeText.includes('•') || safeText.includes('- ')) {
       return (
         <ul className="list-disc pl-4 space-y-1.5 marker:text-[#2C5282]">
-          {text.split('\n').map((line, i) => {
+          {safeText.split('\n').map((line, i) => {
             const clean = line.replace(/^[-•]\s*/, '').trim()
             return clean ? <li key={i} className="text-sm text-[#1A2A3A]">{clean}</li> : null
           })}
         </ul>
       )
     }
-    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
+    
+    if (safeText.includes('\n')) {
+      return (
+        <ul className="list-disc pl-4 space-y-1.5 marker:text-[#2C5282]">
+          {safeText.split('\n').map((line, i) => {
+            const clean = line.trim()
+            return clean ? <li key={i} className="text-sm text-[#1A2A3A]">{clean}</li> : null
+          })}
+        </ul>
+      )
+    }
+
+    const sentences = safeText.match(/[^.!?]+[.!?]+/g) || [safeText]
     return (
       <ul className="list-disc pl-4 space-y-1.5 marker:text-[#2C5282]">
         {sentences.map((s, i) => {

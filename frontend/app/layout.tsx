@@ -9,8 +9,8 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'r-salesCoach Intelligence',
-  description: 'Enterprise AI Sales Training & Coaching',
+  title: 'R-salesCoach Intelligence',
+  description: 'AI-powered Sales Coaching Platform',
 }
 
 export default function RootLayout({

@@ -304,11 +304,11 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
                   {actual && better && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
                       <div className="bg-[#F8FAFC] p-4 rounded-lg border border-[#E2E8F0]">
-                        <p className="text-xs text-[#64748B] font-semibold mb-2 uppercase tracking-wider">What you did</p>
+                        <p className="text-xs text-[#64748B] font-semibold mb-2 uppercase tracking-wider">Your Response</p>
                         <p className="text-[#1A2A3A] italic">"{actual}"</p>
                       </div>
                       <div className="bg-[#F0FDF4] p-4 rounded-lg border border-[#BBF7D0]">
-                        <p className="text-xs text-green-700 font-semibold mb-2 uppercase tracking-wider">Better Approach</p>
+                        <p className="text-xs text-green-700 font-semibold mb-2 uppercase tracking-wider">Suggested Response</p>
                         <p className="text-green-900">"{better}"</p>
                       </div>
                     </div>

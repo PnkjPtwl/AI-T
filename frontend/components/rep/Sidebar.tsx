@@ -22,7 +22,7 @@ export default function RepSidebar() {
         {!collapsed && (
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 bg-[#2C5282] rounded-lg flex items-center justify-center text-white text-[10px] font-black">AI</div>
-            <span className="text-sm font-bold text-gray-900 tracking-tight">AI Trainer</span>
+            <span className="text-sm font-bold text-gray-900 tracking-tight">R-salesCoach</span>
           </div>
         )}
         <button

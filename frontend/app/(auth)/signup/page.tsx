@@ -81,7 +81,7 @@ export default function ManagerSignupPage() {
         
         {/* Branding Header */}
         <div className="p-12 pb-6 text-center border-b border-[#E2E8F0]/30">
-          <h2 className="text-[12px] font-black uppercase tracking-[0.4em] text-[#2C5282] mb-6">r-salesCoach</h2>
+          <h2 className="text-[12px] font-black uppercase tracking-[0.4em] text-[#2C5282] mb-6">R-salesCoach</h2>
           <h1 className="text-4xl font-extrabold text-[#1A2A3A] tracking-tight mb-3">Create your organization</h1>
           <p className="text-[#64748B] text-base font-medium max-w-lg mx-auto">
             Set up your workspace and start managing your sales coaching operations.

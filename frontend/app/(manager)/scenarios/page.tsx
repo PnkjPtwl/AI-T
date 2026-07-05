@@ -197,7 +197,7 @@ export default function ManagerScenariosPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-[16px]">
         <div>
-          <h1 className="text-[24px] md:text-[28px] font-[700] tracking-[-0.3px] text-gray-900">Scenario Library</h1>
+          <h1 className="text-[24px] md:text-[28px] font-[700] tracking-[-0.3px] text-gray-900">Persona Library</h1>
           <p className="text-[14px] md:text-[15px] text-gray-500 font-[400] mt-1 leading-[1.6]">AI Persona Catalog & Behavioral Architecture</p>
         </div>
         <div className="flex flex-wrap gap-[12px] items-center">
@@ -213,7 +213,7 @@ export default function ManagerScenariosPage() {
           </select>
           <Link href="/scenarios/new" className="flex items-center justify-center gap-[8px] bg-[#2C5282] hover:bg-[#1A365D] text-white py-[8px] md:py-[10px] px-[16px] md:px-[20px] min-w-[100px] rounded-[10px] font-[600] text-[14px] transition-all duration-200 shadow-sm">
             <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
-            New Scenario
+            New Persona
           </Link>
         </div>
       </div>
@@ -221,7 +221,7 @@ export default function ManagerScenariosPage() {
       {/* Table */}
       <div className="bg-white border border-gray-900/10 rounded-[12px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
         {filteredScenarios.length === 0 ? (
-          <div className="p-16 text-center text-sm text-[#64748B]">No scenarios found.</div>
+          <div className="p-16 text-center text-sm text-[#64748B]">No personas found.</div>
         ) : (
           <table className="w-full text-sm">
             <thead>

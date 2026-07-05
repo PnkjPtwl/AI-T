@@ -1,18 +1,38 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, X, ArrowLeft } from 'lucide-react'
+import { Eye, X, ArrowLeft, Search, ChevronDown, ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 
 function getScenarioDisplayLabel(scenario: { name?: string; contact_title?: string; contact_company?: string }): string {
-  // The name field from getTeamAssignments is already computed as "title - company"
-  // but keep this as a fallback utility
   return scenario.name || 'Unknown Training'
 }
 
 export default function TrainingAnalyticsDrawer({ assignments }: { assignments: any[] }) {
   const router = useRouter()
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null)
+  
+  // New State for Slider Redesign
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFlags, setStatusFlags] = useState<string[]>([])
+  const [expandedReps, setExpandedReps] = useState<Set<string>>(new Set())
 
-  // Group assignments by Scenario
+  const toggleExpand = (repId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setExpandedReps(prev => {
+      const next = new Set(prev)
+      if (next.has(repId)) next.delete(repId)
+      else next.add(repId)
+      return next
+    })
+  }
+
+  const toggleFlag = (flag: string) => {
+    setStatusFlags(prev => {
+      if (prev.includes(flag)) return prev.filter(f => f !== flag)
+      return [...prev, flag]
+    })
+  }
+
+  // Group assignments by Scenario for the main table
   const scenariosMap: Record<string, { id: string, name: string, assignments: any[], activeCount: number }> = {}
   
   assignments.forEach((a: any) => {
@@ -22,13 +42,11 @@ export default function TrainingAnalyticsDrawer({ assignments }: { assignments: 
     if (!scenariosMap[scenarioId]) {
       scenariosMap[scenarioId] = {
         id: scenarioId,
-        // scenario_name is already computed as "designation - company" in getTeamAssignments
         name: a.scenario_name || 'Unknown Training',
         assignments: [],
         activeCount: 0
       }
     }
-
     scenariosMap[scenarioId].assignments.push(a)
     if (a.status !== 'Completed') {
       scenariosMap[scenarioId].activeCount++
@@ -37,6 +55,61 @@ export default function TrainingAnalyticsDrawer({ assignments }: { assignments: 
 
   const scenariosArray = Object.values(scenariosMap)
   const selectedScenario = selectedScenarioId ? scenariosMap[selectedScenarioId] : null;
+
+  // Process data for the Drawer
+  const groupedReps = useMemo(() => {
+    if (!selectedScenario) return []
+
+    // 1. Filter by Status Flags (at attempt level)
+    let filteredAttempts = selectedScenario.assignments
+    if (statusFlags.length > 0) {
+      filteredAttempts = filteredAttempts.filter(a => statusFlags.includes(a.status))
+    }
+
+    // 2. Group by Rep
+    const repMap: Record<string, any> = {}
+    filteredAttempts.forEach(a => {
+      if (!repMap[a.rep_id]) {
+        repMap[a.rep_id] = {
+          id: a.rep_id,
+          name: a.rep_name || 'Unknown',
+          initials: (a.rep_name || 'U').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
+          attempts: []
+        }
+      }
+      repMap[a.rep_id].attempts.push(a)
+    })
+
+    // 3. Filter by Search (at rep level)
+    let repList = Object.values(repMap)
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      repList = repList.filter(r => r.name.toLowerCase().includes(q))
+    }
+
+    // 4. Sort Attempts Chronologically
+    repList.forEach(r => {
+      r.attempts.sort((a: any, b: any) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+    })
+
+    return repList
+  }, [selectedScenario, statusFlags, searchQuery])
+
+
+  // Helpers for Status Colors
+  const getStatusColor = (status: string) => {
+    if (status === 'Completed') return 'bg-green-500'
+    if (status === 'Overdue') return 'bg-red-500'
+    if (status === 'Pending') return 'bg-gray-300'
+    return 'bg-yellow-500'
+  }
+  
+  const getStatusBgText = (status: string) => {
+    if (status === 'Completed') return 'bg-green-100 text-green-700'
+    if (status === 'Overdue') return 'bg-red-100 text-red-700'
+    if (status === 'Pending') return 'bg-gray-100 text-gray-600'
+    return 'bg-yellow-100 text-yellow-700'
+  }
 
   return (
     <>
@@ -70,12 +143,17 @@ export default function TrainingAnalyticsDrawer({ assignments }: { assignments: 
                       <td className="px-6 py-5 text-center font-medium text-[#1A2A3A]">{scenario.assignments.length}</td>
                       <td className="px-6 py-5 text-center">
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${isActive ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-[#64748B]'}`}>
-                          {isActive ? `Active · ${completedCount} done` : `All done`}
+                          {isActive ? `${scenario.activeCount} Active · ${completedCount} Completed` : `All done`}
                         </span>
                       </td>
                       <td className="px-6 py-5 text-center">
                         <button 
-                          onClick={() => setSelectedScenarioId(scenario.id)}
+                          onClick={() => {
+                            setSelectedScenarioId(scenario.id)
+                            setSearchQuery('')
+                            setStatusFlags([])
+                            setExpandedReps(new Set())
+                          }}
                           className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors text-sm font-medium"
                         >
                           <Eye className="w-4 h-4" /> Review
@@ -102,89 +180,219 @@ export default function TrainingAnalyticsDrawer({ assignments }: { assignments: 
           {/* Drawer Panel */}
           <div className="relative w-full max-w-[600px] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
             {/* Drawer Header */}
-            <div className="px-6 py-5 border-b border-[#E2E8F0] flex items-center justify-between">
-              <div className="flex items-center gap-4">
+            <div className="px-6 py-5 border-b border-[#E2E8F0] flex flex-col gap-4 bg-white z-10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => setSelectedScenarioId(null)}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors text-[#64748B]"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <div>
+                    <h2 className="text-lg font-semibold text-[#1A2A3A]">
+                      {selectedScenario?.name} — {selectedScenario?.assignments.length} rep{selectedScenario?.assignments.length !== 1 ? 's' : ''}
+                    </h2>
+                  </div>
+                </div>
                 <button 
                   onClick={() => setSelectedScenarioId(null)}
                   className="p-2 hover:bg-gray-100 rounded-full transition-colors text-[#64748B]"
                 >
-                  <ArrowLeft className="w-5 h-5" />
+                  <X className="w-5 h-5" />
                 </button>
-                <div>
-                  <h2 className="text-lg font-semibold text-[#1A2A3A]">
-                    {selectedScenario?.name} — {selectedScenario?.assignments.length} rep{selectedScenario?.assignments.length !== 1 ? 's' : ''}
-                  </h2>
-                  <p className="text-sm text-[#64748B]">Due {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+              </div>
+              
+              {/* Search & Filters */}
+              <div className="flex flex-col gap-3 mt-2">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Search reps..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full h-[36px] bg-gray-50 border border-gray-200 rounded-[8px] pl-9 pr-3 text-sm focus:outline-none focus:border-[#2C5282] focus:bg-white transition-colors"
+                  />
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[
+                    { label: 'Not started', status: 'Pending', color: 'bg-gray-400' },
+                    { label: 'In progress', status: 'In Progress', color: 'bg-yellow-500' },
+                    { label: 'Completed', status: 'Completed', color: 'bg-green-500' },
+                    { label: 'Overdue', status: 'Overdue', color: 'bg-red-500' }
+                  ].map(f => {
+                    const isActive = statusFlags.includes(f.status)
+                    return (
+                      <button 
+                        key={f.status}
+                        onClick={() => toggleFlag(f.status)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium transition-all border ${
+                          isActive ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${f.color}`} />
+                        {f.label}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
-              <button 
-                onClick={() => setSelectedScenarioId(null)}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors text-[#64748B]"
-              >
-                <X className="w-5 h-5" />
-              </button>
             </div>
 
-            {/* Drawer Body — only reps progress, no skill gaps */}
+            {/* Drawer Body */}
             <div className="flex-1 overflow-y-auto p-6 bg-[#F8FAFC]">
-              <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-2">
-                {selectedScenario?.assignments.map((a, i) => {
-                  const isCompleted = a.status === 'Completed'
-                  const isOverdue = a.status === 'Overdue'
-                  const isPending = a.status === 'Pending'
-                  
-                  return (
-                    <div 
-                      key={i} 
-                      onClick={() => {
-                        router.push(`/reps/${a.rep_id}?persona=${encodeURIComponent(selectedScenario?.name || '')}`)
-                      }}
-                      className={`flex items-center justify-between border-b border-[#E2E8F0] p-4 last:border-0 cursor-pointer hover:bg-[#F8FAFC] transition-colors`}
-                    >
-                      {/* Rep Info */}
-                      <div className="flex items-center gap-4 w-1/3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
-                          isCompleted ? 'bg-[#EBF8FF] text-[#2C5282]' :
-                          isOverdue ? 'bg-[#FFF5F5] text-red-600' :
-                          isPending ? 'bg-[#F1F5F9] text-[#64748B]' :
-                          'bg-[#FEF3C7] text-yellow-700'
-                        }`}>
-                          {(a.rep_name || 'U').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
-                        </div>
-                        <span className="font-semibold text-[#1A2A3A] truncate">{a.rep_name}</span>
-                      </div>
-                      
-                      {/* Progress Bar */}
-                      <div className="flex-1 px-6">
-                        <div className="h-1.5 w-full bg-[#E2E8F0] rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full ${isCompleted ? 'bg-green-500 w-full' : isOverdue ? 'bg-red-500 w-[20%]' : isPending ? 'bg-gray-300 w-0' : 'bg-blue-500 w-[50%]'}`}
-                          ></div>
-                        </div>
-                      </div>
+              {groupedReps.length === 0 ? (
+                <div className="p-12 text-center text-[#64748B] flex flex-col items-center gap-2">
+                  <Search className="w-8 h-8 text-gray-300" />
+                  <p>No reps match {searchQuery ? `"${searchQuery}"` : 'the active filters'}.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {groupedReps.map((rep) => {
+                    const attempts = rep.attempts
+                    const isMultiple = attempts.length > 1
+                    const isExpanded = expandedReps.has(rep.id)
 
-                      {/* Status + Score */}
-                      <div className="flex items-center gap-4 w-1/3 justify-end">
-                        {isCompleted && (
-                          <span className="text-sm font-medium text-[#64748B]">Score: {a.score || 0}%</span>
+                    // Compute Summary for Multiple
+                    let summaryText = ''
+                    let TrendIcon = null
+                    let trendColor = ''
+
+                    if (isMultiple) {
+                      const allCompleted = attempts.every((a: any) => a.status === 'Completed')
+                      if (allCompleted) {
+                        const maxScore = Math.max(...attempts.map((a:any) => a.score || 0))
+                        summaryText = `${attempts.length} done · best ${maxScore}%`
+                        
+                        const firstScore = attempts[0].score || 0
+                        const lastScore = attempts[attempts.length - 1].score || 0
+                        
+                        if (lastScore > firstScore) {
+                          TrendIcon = TrendingUp
+                          trendColor = 'text-green-600'
+                        } else if (lastScore < firstScore) {
+                          TrendIcon = TrendingDown
+                          trendColor = 'text-red-500'
+                        } else {
+                          TrendIcon = Minus
+                          trendColor = 'text-gray-400'
+                        }
+                      } else {
+                        const done = attempts.filter((a:any) => a.status === 'Completed').length
+                        const prog = attempts.filter((a:any) => a.status === 'In Progress').length
+                        const pend = attempts.filter((a:any) => a.status === 'Pending').length
+                        const over = attempts.filter((a:any) => a.status === 'Overdue').length
+                        
+                        const parts = []
+                        if (done) parts.push(`${done} done`)
+                        if (prog) parts.push(`${prog} in progress`)
+                        if (pend) parts.push(`${pend} pending`)
+                        if (over) parts.push(`${over} overdue`)
+                        summaryText = parts.join(' · ')
+                      }
+                    } else {
+                      // Single attempt row logic
+                      summaryText = `Due: ${new Date(attempts[0].deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                    }
+
+                    return (
+                      <div key={rep.id} className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden transition-all">
+                        {/* Main Row */}
+                        <div 
+                          className={`flex items-center justify-between p-4 ${isMultiple ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                          onClick={(e) => isMultiple ? toggleExpand(rep.id, e) : undefined}
+                        >
+                          <div className="flex items-center gap-4 w-1/3 min-w-[200px]">
+                            {/* Generic Avatar */}
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm bg-gray-800 text-white shadow-sm flex-shrink-0">
+                              {rep.initials}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-semibold text-[#1A2A3A] truncate">{rep.name}</span>
+                              <div className="flex items-center gap-1.5 text-xs text-[#64748B] mt-0.5">
+                                {summaryText}
+                                {TrendIcon && <TrendIcon className={`w-3.5 h-3.5 ${trendColor}`} />}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right Side - Dots & Status or Single Status */}
+                          <div className="flex items-center gap-4">
+                            {isMultiple ? (
+                              <>
+                                {/* Status Dots */}
+                                <div className="flex items-center gap-1.5">
+                                  {attempts.map((a: any, idx: number) => (
+                                    <div 
+                                      key={idx}
+                                      className={`w-2 h-2 rounded-full ${getStatusColor(a.status)}`}
+                                      title={`${a.status === 'Pending' ? 'Not started' : a.status === 'In Progress' ? 'In progress' : a.status === 'Overdue' ? 'Missed' : a.status}${a.score !== null && a.status === 'Completed' ? ` (${a.score}%)` : ''}`}
+                                    />
+                                  ))}
+                                </div>
+                                <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                              </>
+                            ) : (
+                              // Single Attempt Action/Status
+                              <>
+                                {attempts[0].status === 'Completed' && (
+                                  <span className="text-sm font-medium text-[#64748B]">Score: {attempts[0].score || 0}%</span>
+                                )}
+                                <span className={`px-2.5 py-1 rounded-md text-[11px] font-semibold ${getStatusBgText(attempts[0].status)}`}>
+                                  {attempts[0].status === 'Pending' ? 'Not started' : attempts[0].status === 'In Progress' ? 'In progress' : attempts[0].status === 'Overdue' ? 'Missed' : attempts[0].status}
+                                </span>
+                              </>
+                            )}
+
+                            {/* Stats Link Chevron */}
+                            {attempts.some((a: any) => a.status === 'Completed') && (
+                              <div 
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  router.push(`/reps/${rep.id}?persona=${encodeURIComponent(selectedScenario?.name || '')}`)
+                                }}
+                                className="p-1.5 rounded-full bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer ml-2 text-blue-600 hover:text-blue-700"
+                                title="View Rep Stats"
+                              >
+                                <ArrowRight className="w-4 h-4 stroke-[2.5px]" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Expanded Sub-rows */}
+                        {isMultiple && isExpanded && (
+                          <div className="bg-gray-50/50 border-t border-gray-100 p-2 space-y-1">
+                            {attempts.map((a: any, idx: number) => (
+                              <div 
+                                key={idx} 
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  router.push(`/reps/${a.rep_id}?persona=${encodeURIComponent(selectedScenario?.name || '')}`)
+                                }}
+                                className="flex items-center justify-between py-2 px-4 ml-[40px] rounded-lg hover:bg-white hover:shadow-sm transition-all cursor-pointer border border-transparent hover:border-gray-200"
+                              >
+                                <div className="text-sm text-gray-600">
+                                  Due: {new Date(a.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </div>
+                                <div className="flex items-center gap-4">
+                                  {a.status === 'Completed' && (
+                                    <span className="text-sm font-medium text-[#64748B]">Score: {a.score || 0}%</span>
+                                  )}
+                                  <span className={`px-2.5 py-1 rounded-md text-[11px] font-semibold ${getStatusBgText(a.status)}`}>
+                                    {a.status === 'Pending' ? 'Not started' : a.status === 'In Progress' ? 'In progress' : a.status === 'Overdue' ? 'Missed' : a.status}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         )}
-                        <span className={`px-3 py-1 rounded-md text-xs font-semibold ${
-                          isCompleted ? 'bg-green-100 text-green-700' : 
-                          isOverdue ? 'bg-red-100 text-red-700' : 
-                          isPending ? 'bg-gray-100 text-gray-600' :
-                          'bg-yellow-100 text-yellow-700'
-                        }`}>
-                          {a.status === 'Pending' ? 'Not started' : a.status === 'In Progress' ? 'In progress' : isOverdue ? 'Missed' : a.status}
-                        </span>
                       </div>
-                    </div>
-                  )
-                })}
-
-                {(!selectedScenario?.assignments || selectedScenario.assignments.length === 0) && (
-                  <div className="p-8 text-center text-sm text-[#64748B]">No reps assigned yet.</div>
-                )}
-              </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
