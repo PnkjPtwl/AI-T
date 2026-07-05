@@ -10,7 +10,6 @@ export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<'manager' | 'rep'>('manager')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -26,7 +25,7 @@ export default function LoginPage() {
       const res = await fetch(`${API}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, role })
+        body: JSON.stringify({ email, password })
       })
 
       const data = await res.json()
@@ -62,11 +61,10 @@ export default function LoginPage() {
         {/* Left Side: Branding */}
         <div className="flex-1 bg-white p-12 flex flex-col justify-center relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-50 translate-x-1/2 -translate-y-1/2" />
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-14 h-14 bg-[#2C5282] rounded-2xl flex items-center justify-center text-white text-[28px] font-black">R</div>
-            <h1 className="text-5xl font-extrabold text-[#1A2A3A] tracking-tighter leading-none">salesCoach</h1>
+          <div className="flex items-center gap-3 mb-10">
+            <img src="/logo.png" alt="Logo" className="w-14 h-14 object-contain border-none outline-none" />
+            <h1 className="text-5xl font-extrabold text-[#1A2A3A] tracking-tighter leading-none">SalesCoach</h1>
           </div>
-          <div className="w-12 h-1 bg-[#2C5282] rounded-full mb-8" />
         </div>
 
         {/* Right Side: Authentication */}
@@ -77,24 +75,11 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div className="role-tabs flex gap-2 mb-10 bg-white p-1.5 rounded-2xl border border-[#E2E8F0]">
-             <button 
-               onClick={() => setRole('manager')}
-               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${role === 'manager' ? 'bg-[#2C5282] text-white shadow-md' : 'text-[#64748B] hover:text-[#1A2A3A]'}`}
-             >
-               Manager
-             </button>
-             <button 
-               onClick={() => setRole('rep')}
-               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${role === 'rep' ? 'bg-[#2C5282] text-white shadow-md' : 'text-[#64748B] hover:text-[#1A2A3A]'}`}
-             >
-               Representative
-             </button>
-          </div>
+
 
           <form onSubmit={handleLogin} className="space-y-8">
             <div className="space-y-3">
-              <label className="text-[11px] font-black uppercase text-[#64748B] tracking-[0.3em] ml-1">Email Identity</label>
+              <label className="text-[11px] font-black uppercase text-[#64748B] tracking-[0.3em] ml-1">Email</label>
               <input 
                 type="email" 
                 placeholder="name@organization.com" 
@@ -105,7 +90,7 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-3">
-              <label className="text-[11px] font-black uppercase text-[#64748B] tracking-[0.3em] ml-1">Secret Access</label>
+              <label className="text-[11px] font-black uppercase text-[#64748B] tracking-[0.3em] ml-1">Password</label>
               <input 
                 type="password" 
                 placeholder="••••••••" 
@@ -117,12 +102,12 @@ export default function LoginPage() {
             </div>
 
             <button type="submit" disabled={loading} className="w-full py-5 bg-[#2C5282] hover:bg-[#1A365D] text-white font-black text-[12px] uppercase tracking-[0.25em] rounded-2xl shadow-xl shadow-[#2C5282]/20 transition-all active:scale-[0.98] mt-4">
-              {loading ? 'Verifying...' : 'Authorize Access'}
+              {loading ? 'Logging in...' : 'Login'}
             </button>
           </form>
 
           <div className="mt-12 text-center text-[12px] font-black uppercase tracking-widest text-[#64748B]">
-            New Client? <Link href="/signup" className="text-[#2C5282] hover:underline ml-2">Initialize Account</Link>
+            Don't have an account? <Link href="/signup" className="text-[#2C5282] hover:underline ml-2">Sign Up</Link>
           </div>
         </div>
       </div>

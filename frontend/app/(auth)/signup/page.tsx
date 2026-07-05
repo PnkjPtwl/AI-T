@@ -81,7 +81,10 @@ export default function ManagerSignupPage() {
         
         {/* Branding Header */}
         <div className="p-12 pb-6 text-center border-b border-[#E2E8F0]/30">
-          <h2 className="text-[12px] font-black uppercase tracking-[0.4em] text-[#2C5282] mb-6">R-salesCoach</h2>
+          <div className="flex justify-center items-center gap-2 mb-6">
+            <img src="/logo.png" alt="Logo" className="w-5 h-5 object-contain border-none outline-none" />
+            <h2 className="text-[12px] font-black uppercase tracking-[0.4em] text-[#2C5282]">SalesCoach</h2>
+          </div>
           <h1 className="text-4xl font-extrabold text-[#1A2A3A] tracking-tight mb-3">Create your organization</h1>
           <p className="text-[#64748B] text-base font-medium max-w-lg mx-auto">
             Set up your workspace and start managing your sales coaching operations.
@@ -157,11 +160,11 @@ export default function ManagerSignupPage() {
                 disabled={loading} 
                 className="px-16 py-5 bg-[#2C5282] hover:bg-[#1A365D] text-white font-black text-[12px] uppercase tracking-[0.25em] rounded-2xl shadow-xl shadow-[#2C5282]/20 transition-all active:scale-[0.98]"
               >
-                {loading ? 'Initializing Workspace...' : 'Create Organization'}
+                {loading ? 'Creating Account...' : 'Sign Up'}
               </button>
 
               <div className="flex flex-col md:flex-row items-center gap-4 text-[12px] font-black uppercase tracking-widest text-[#64748B]">
-                <span>Already have an account? <Link href="/login" className="text-[#2C5282] hover:underline ml-1">Sign In</Link></span>
+                <span>Already have an account? <Link href="/login" className="text-[#2C5282] hover:underline ml-1">Login</Link></span>
                 <span className="hidden md:inline opacity-30">•</span>
                 <span>Joining as a representative? <Link href="/signup/rep" className="text-[#2C5282] hover:underline ml-1">Rep Signup</Link></span>
               </div>

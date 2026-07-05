@@ -21,7 +21,7 @@ export default function RepSidebar() {
       <div className={`flex items-center gap-3 px-4 py-5 border-b border-gray-100 ${collapsed ? 'justify-center' : 'justify-between'}`}>
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-[#2C5282] rounded-lg flex items-center justify-center text-white text-[14px] font-black">R</div>
+            <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain border-none outline-none" />
             <span className="text-sm font-bold text-gray-900 tracking-tight">SalesCoach</span>
           </div>
         )}
