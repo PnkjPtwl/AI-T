@@ -26,6 +26,7 @@ RUN addgroup -g 1001 -S nodejs && adduser -S appuser -u 1001
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 
 
 ENV NODE_ENV=production
