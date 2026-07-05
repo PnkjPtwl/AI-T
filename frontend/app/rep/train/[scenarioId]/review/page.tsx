@@ -68,7 +68,7 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
     <div className="space-y-8 pb-12 text-left">
       {/* Navigation */}
       <div className="flex items-center justify-between">
-        <button onClick={() => router.back()} className="text-[#64748B] hover:text-[#1A2A3A] text-sm font-medium flex items-center gap-2">
+        <button onClick={() => router.push('/rep/train')} className="text-[#64748B] hover:text-[#1A2A3A] text-sm font-medium flex items-center gap-2">
           &larr; Back
         </button>
         <div className="text-[#64748B] text-xs font-medium">

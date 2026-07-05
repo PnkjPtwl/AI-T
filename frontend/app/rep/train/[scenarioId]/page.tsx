@@ -825,7 +825,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
               <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
             </div>
             
-            <h2 className="mt-8 text-3xl font-extrabold text-white tracking-tight">
+            <h2 title={personaName} className="mt-8 text-xl max-w-xs md:max-w-md font-extrabold text-white tracking-tight text-center truncate px-4">
               {personaName}
             </h2>
             <p className="text-sm font-medium text-gray-400 uppercase tracking-[0.2em] mt-2">
@@ -873,25 +873,27 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
 
           {/* Unified Input Bar */}
           <div className="p-5 bg-[#0A0A0A] shrink-0 border-t border-white/10">
-            {/* End Call confirm toast */}
+            {/* End Call confirm modal */}
             {showEndConfirm && (
-              <div className="mb-4 mx-auto max-w-lg bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 flex items-center gap-4 animate-in slide-in-from-bottom-4 duration-200">
-                <div className="flex-1">
-                  <p className="text-white text-sm font-semibold">End this session?</p>
-                  <p className="text-gray-400 text-xs mt-0.5">Your performance will be analysed and a report will be generated.</p>
+              <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-[#1C1C1E] border border-white/10 rounded-3xl p-6 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 mx-4">
+                  <h3 className="text-white text-xl font-bold mb-2">End this session?</h3>
+                  <p className="text-gray-400 text-sm mb-6">Your performance will be analysed and a report will be generated.</p>
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      onClick={() => setShowEndConfirm(false)}
+                      className="px-5 py-2.5 rounded-xl text-gray-300 font-medium hover:bg-white/10 hover:text-white transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => { setShowEndConfirm(false); handleEndSession() }}
+                      className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition-all"
+                    >
+                      End Call
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => { setShowEndConfirm(false); handleEndSession() }}
-                  className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all"
-                >
-                  End Call
-                </button>
-                <button
-                  onClick={() => setShowEndConfirm(false)}
-                  className="text-gray-400 hover:text-white text-xs font-medium transition-colors"
-                >
-                  Cancel
-                </button>
               </div>
             )}
 
