@@ -45,9 +45,17 @@ export default function RepTopbar() {
       <div className="flex items-center gap-4">
         <div className="relative group">
           <button className="flex items-center gap-3 px-3 py-2 hover:bg-[#F8FAFC] rounded-xl transition-all">
-            <div className="w-8 h-8 bg-[#2C5282] rounded-full flex items-center justify-center text-xs font-bold text-white">
-              {userName ? userName.charAt(0).toUpperCase() : 'R'}
-            </div>
+            {userName && ['barani', 'lokesh', 'pankaj', 'reddy', 'sujeevan'].includes(userName.toLowerCase()) ? (
+              <img 
+                src={`/avatars/${userName.toLowerCase()}${userName.toLowerCase() === 'pankaj' ? '.jpeg' : '.jpg'}`} 
+                alt={userName} 
+                className="w-8 h-8 rounded-full object-cover" 
+              />
+            ) : (
+              <div className="w-8 h-8 bg-[#2C5282] rounded-full flex items-center justify-center text-xs font-bold text-white">
+                {userName ? userName.charAt(0).toUpperCase() : 'R'}
+              </div>
+            )}
             <span className="text-sm font-medium text-[#1A2A3A] hidden md:block">{userName || 'Sales Rep'}</span>
             <svg className="w-4 h-4 text-[#64748B]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
           </button>
