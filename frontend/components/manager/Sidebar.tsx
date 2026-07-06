@@ -21,8 +21,9 @@ export default function Sidebar() {
       {/* Brand */}
       <div className={`flex items-center gap-3 px-4 py-5 border-b border-gray-100 ${collapsed ? 'justify-center' : 'justify-between'}`}>
         {!collapsed && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0">
             <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain border-none outline-none" />
+            <img src="/dash.png" alt="-" className="w-3 h-3 object-contain border-none outline-none -ml-0.5 mr-0.5" />
             <span className="text-xl font-semibold text-gray-900 tracking-tight">SalesCoach</span>
           </div>
         )}

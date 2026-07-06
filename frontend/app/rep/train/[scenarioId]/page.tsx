@@ -136,6 +136,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   const [isPaused, setIsPaused] = useState(false)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
   const [anamFailed, setAnamFailed] = useState(false)
+  const showStaticFallback = anamFailed || timeLeft <= 420
 
   // Live AI Coaching state (LLM-powered per-turn sentiment)
   const [liveSentiment, setLiveSentiment] = useState<{
@@ -282,6 +283,14 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   useEffect(() => {
     if (ending || timeLeft <= 0 || isPaused) return
     const interval = setInterval(() => setTimeLeft(prev => prev - 1), 1000)
+    
+    // Disconnect Anam streaming exactly at the 3-minute mark to save bandwidth
+    if (timeLeft === 420 && anamClientRef.current) {
+      console.log("[ANAM] 3 minutes reached. Switching to static fallback image.")
+      anamReadyRef.current = false // ensure future TTS uses raw audio fallback
+      try { anamClientRef.current.stop() } catch (_) {}
+    }
+
     return () => clearInterval(interval)
   }, [ending, timeLeft, isPaused])
 
@@ -803,10 +812,12 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
                 ? 'ring-2 ring-[#4B5563] ring-opacity-50'
                 : 'ring-1 ring-white/10'
             }`}>
-              {anamFailed ? (
-                <div className="w-full h-full flex flex-col items-center justify-center bg-[#111]">
-                  <div className="text-8xl animate-pulse">🤖</div>
-                </div>
+              {showStaticFallback ? (
+                <img 
+                  src={avatarPref === 'male' ? '/male.jpeg' : '/female.jpeg'} 
+                  alt="Avatar Fallback" 
+                  className="w-full h-full object-cover bg-[#111]" 
+                />
               ) : (
                 <video
                   id="avatar-video"

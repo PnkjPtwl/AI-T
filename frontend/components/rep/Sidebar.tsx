@@ -20,8 +20,9 @@ export default function RepSidebar() {
       {/* Brand */}
       <div className={`flex items-center gap-3 px-4 py-5 border-b border-gray-100 ${collapsed ? 'justify-center' : 'justify-between'}`}>
         {!collapsed && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0">
             <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain border-none outline-none" />
+            <img src="/dash.png" alt="-" className="w-3 h-3 object-contain border-none outline-none -ml-0.5 mr-0.5" />
             <span className="text-xl font-semibold text-gray-900 tracking-tight">SalesCoach</span>
           </div>
         )}
@@ -48,8 +49,8 @@ export default function RepSidebar() {
               href={item.href}
               title={collapsed ? item.name : undefined}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm font-medium ${isActive
-                  ? 'bg-[#EBF8FF] text-[#2C5282]'
-                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                ? 'bg-[#EBF8FF] text-[#2C5282]'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                 }`}
             >
               {collapsed ? (

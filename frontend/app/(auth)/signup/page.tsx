@@ -81,8 +81,9 @@ export default function ManagerSignupPage() {
         
         {/* Branding Header */}
         <div className="p-12 pb-6 text-center border-b border-[#E2E8F0]/30">
-          <div className="flex justify-center items-center gap-2 mb-6">
+          <div className="flex justify-center items-center gap-0 mb-6">
             <img src="/logo.png" alt="Logo" className="w-5 h-5 object-contain border-none outline-none" />
+            <img src="/dash.png" alt="-" className="w-2.5 h-2.5 object-contain border-none outline-none -ml-0.5 mr-0.5" />
             <h2 className="text-[12px] font-black uppercase tracking-[0.4em] text-[#2C5282]">SalesCoach</h2>
           </div>
           <h1 className="text-4xl font-extrabold text-[#1A2A3A] tracking-tight mb-3">Create your organization</h1>
