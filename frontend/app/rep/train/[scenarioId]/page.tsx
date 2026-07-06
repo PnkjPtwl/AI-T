@@ -207,8 +207,8 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
     // Cleanup old client if exists (for refresh)
     if (anamClientRef.current) {
       try { anamClientRef.current.stopStreaming?.() } catch (_) {}
-      try { anamClientRef.current.stop?.() } catch (_) {}
-      try { anamClientRef.current.leave?.() } catch (_) {}
+      try { (anamClientRef.current as any).stop?.() } catch (_) {}
+      try { (anamClientRef.current as any).leave?.() } catch (_) {}
       anamClientRef.current = null
       audioStreamRef.current = null
       anamReadyRef.current = false
@@ -257,8 +257,8 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       if (anamInitIdRef.current !== currentInitId) {
         // Late abort
         client.stopStreaming?.()
-        client.stop?.()
-        client.leave?.()
+        ;(client as any).stop?.()
+        ;(client as any).leave?.()
         return;
       }
 
@@ -290,8 +290,8 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       anamReadyRef.current = false
       if (anamClientRef.current) {
         try { anamClientRef.current.stopStreaming?.() } catch (_) {}
-        try { anamClientRef.current.stop?.() } catch (_) {}
-        try { anamClientRef.current.leave?.() } catch (_) {}
+        try { (anamClientRef.current as any).stop?.() } catch (_) {}
+        try { (anamClientRef.current as any).leave?.() } catch (_) {}
         anamClientRef.current = null
       }
       audioStreamRef.current = null
