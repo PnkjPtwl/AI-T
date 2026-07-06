@@ -122,6 +122,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
 
   const MAX_TURNS = 20
   const [timeLeft, setTimeLeft] = useState(600)
+  const [anamSessionAge, setAnamSessionAge] = useState(0)
 
   // Voice States
   const [isRecording, setIsRecording] = useState(false)
@@ -158,6 +159,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   const anamClientRef  = useRef<any>(null)
   const audioStreamRef = useRef<any>(null)
   const anamReadyRef   = useRef<boolean>(false)
+  const anamInitIdRef  = useRef<number>(0)
   const currentSpeechRef = useRef<{text: string, voiceId: string, timeoutId: any} | null>(null)
 
   // Auto-scroll to bottom when messages update
@@ -194,77 +196,97 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   }, [params.scenarioId, sessionId, router])
 
   // ─── Anam AI initialisation ──────────────────────────────────────────────────
-  // Runs once after the session is confirmed. Fetches a session token from our
-  // backend proxy, then wires the SDK to stream into the <video id="avatar-video">.
-  useEffect(() => {
+  const initAnam = useCallback(async () => {
     if (!sessionId) return
+    
+    const currentInitId = ++anamInitIdRef.current
 
-    let cancelled = false
+    // Reset failure state to ensure <video id="avatar-video"> is rendered
+    setAnamFailed(false)
 
-    const initAnam = async () => {
-      try {
-        const token = localStorage.getItem('token')
+    // Cleanup old client if exists (for refresh)
+    if (anamClientRef.current) {
+      try { anamClientRef.current.stopStreaming?.() } catch (_) {}
+      try { anamClientRef.current.stop?.() } catch (_) {}
+      try { anamClientRef.current.leave?.() } catch (_) {}
+      anamClientRef.current = null
+      audioStreamRef.current = null
+      anamReadyRef.current = false
+    }
 
-        // 1. Get a short-lived Anam session token from our backend
-        //    Only send avatarId — Anam renders the FACE only.
-        //    voiceId is NOT sent because enableAudioPassthrough=true means
-        //    ElevenLabs generates audio separately.
-        const tokenRes = await fetch(`${API}/api/anam/session-token`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            avatarId: avatarPref === 'male' ? 'ccf00c0e-7302-455b-ace2-057e0cf58127' : undefined
-          })
+    try {
+      const token = localStorage.getItem('token')
+
+      // 1. Get a short-lived Anam session token from our backend
+      const tokenRes = await fetch(`${API}/api/anam/session-token`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          avatarId: avatarPref === 'male' ? 'ccf00c0e-7302-455b-ace2-057e0cf58127' : undefined
         })
-        if (!tokenRes.ok) throw new Error('Failed to get Anam session token')
-        const { sessionToken } = await tokenRes.json()
-        if (cancelled) return
+      })
+      if (!tokenRes.ok) throw new Error('Failed to get Anam session token')
+      const { sessionToken } = await tokenRes.json()
+      
+      // Abort if a newer init was called while fetching
+      if (anamInitIdRef.current !== currentInitId) return;
 
-        // 2. Dynamically import the Anam SDK (avoids SSR issues in Next.js)
-        const { createClient, AnamEvent } = await import('@anam-ai/js-sdk')
-        if (cancelled) return
+      // 2. Dynamically import the Anam SDK
+      const { createClient, AnamEvent } = await import('@anam-ai/js-sdk')
+      
+      if (anamInitIdRef.current !== currentInitId) return;
 
-        // 3. Create the Anam client with the session token
-        //    disableInputAudio: we handle our own mic pipeline via Groq Whisper
-        const client = createClient(sessionToken, { disableInputAudio: true })
-        anamClientRef.current = client
+      // 3. Create the Anam client with the session token
+      const client = createClient(sessionToken, { disableInputAudio: true })
+      anamClientRef.current = client
 
-        client.addListener(AnamEvent.CONNECTION_CLOSED, (reason: any, details: any) => {
+      client.addListener(AnamEvent.CONNECTION_CLOSED, (reason: any, details: any) => {
+        if (anamInitIdRef.current === currentInitId) {
           console.warn('[ANAM] Connection Closed:', reason, details)
           setAnamFailed(true)
           anamReadyRef.current = false
-        })
-        client.addListener(AnamEvent.SERVER_WARNING, (message: any) => {
-          console.warn('[ANAM] Server Warning:', message)
-        })
+        }
+      })
+      client.addListener(AnamEvent.SERVER_WARNING, (message: any) => {
+        console.warn('[ANAM] Server Warning:', message)
+      })
 
-        // 4. Bind the avatar video stream to our <video> element
-        await client.streamToVideoElement('avatar-video')
-        if (cancelled) return
+      // 4. Bind the avatar video stream to our <video> element
+      await client.streamToVideoElement('avatar-video')
+      
+      if (anamInitIdRef.current !== currentInitId) {
+        // Late abort
+        client.stopStreaming?.()
+        client.stop?.()
+        client.leave?.()
+        return;
+      }
 
-        // 5. Open an agent audio input stream — PCM s16le, 16 kHz, mono
-        const stream = client.createAgentAudioInputStream({
-          encoding:   'pcm_s16le',
-          sampleRate: 16000,
-          channels:   1,
-        })
-        audioStreamRef.current = stream
-        anamReadyRef.current   = true
+      // 5. Open an agent audio input stream
+      const stream = client.createAgentAudioInputStream({
+        encoding:   'pcm_s16le',
+        sampleRate: 16000,
+        channels:   1,
+      })
+      audioStreamRef.current = stream
+      anamReadyRef.current   = true
 
-        console.log('[ANAM] Avatar ready — audio passthrough stream open')
-      } catch (err) {
+      console.log('[ANAM] Avatar ready — audio passthrough stream open')
+    } catch (err) {
+      if (anamInitIdRef.current === currentInitId) {
         console.error('[ANAM] Initialisation failed:', err)
         setAnamFailed(true)
         anamReadyRef.current = false
-        // Non-fatal: the session continues with the emoji fallback hidden behind the video
       }
     }
+  }, [sessionId, avatarPref])
 
+  // Mount/Unmount
+  useEffect(() => {
     initAnam()
 
-    // Cleanup: dispose the Anam client when the component unmounts (session ends)
     return () => {
-      cancelled = true
+      anamInitIdRef.current++ // cancel any in-flight init
       anamReadyRef.current = false
       if (anamClientRef.current) {
         try { anamClientRef.current.stopStreaming?.() } catch (_) {}
@@ -274,14 +296,27 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       }
       audioStreamRef.current = null
     }
-  }, [sessionId, avatarPref])
+  }, [initAnam])
+
+  // Auto-refresh Anam session at 2m45s (165s) to bypass 3 min limit
+  useEffect(() => {
+    // Wait until the AI is completely idle before refreshing
+    if (anamSessionAge >= 165 && !isSpeaking && !isProcessing && !isRecording && !ending) {
+      console.log(`[ANAM] Session reached 165s limit, auto-refreshing WebRTC...`)
+      setAnamSessionAge(0) // reset immediately to prevent loops
+      initAnam()
+    }
+  }, [anamSessionAge, isSpeaking, isProcessing, isRecording, ending, initAnam])
 
 
 
   // ─── Timer countdown (respects pause) ───────────────────────────────────────
   useEffect(() => {
     if (ending || timeLeft <= 0 || isPaused) return
-    const interval = setInterval(() => setTimeLeft(prev => prev - 1), 1000)
+    const interval = setInterval(() => {
+      setTimeLeft(prev => prev - 1)
+      setAnamSessionAge(prev => prev + 1)
+    }, 1000)
     return () => clearInterval(interval)
   }, [ending, timeLeft, isPaused])
 
