@@ -17,6 +17,7 @@ export default function TrainingPage() {
   const [deadline, setDeadline] = useState('')
   const [priority, setPriority] = useState('Medium')
   const [avatarType, setAvatarType] = useState('female')
+  const [trainingMode, setTrainingMode] = useState('learning')
   const [assigning, setAssigning] = useState(false)
   const [success, setSuccess] = useState('')
   const [showRepDropdown, setShowRepDropdown] = useState(false)
@@ -92,7 +93,7 @@ export default function TrainingPage() {
       const res = await fetch(`${API}/api/users/assign-training`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repIds: selectedRepIds, scenarioId: selectedScenarioId, deadline, priority, avatarType })
+        body: JSON.stringify({ repIds: selectedRepIds, scenarioId: selectedScenarioId, deadline, priority, avatarType, trainingMode })
       })
       if (res.ok) {
         setSuccess('Training assigned successfully.')
@@ -481,7 +482,7 @@ export default function TrainingPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-[16px]">
+              <div className="grid grid-cols-2 gap-[16px]">
                 <div>
                   <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block mb-[8px]">Deadline</label>
                   <input
@@ -515,7 +516,20 @@ export default function TrainingPage() {
                     <option value="male">Male</option>
                   </select>
                 </div>
+                <div>
+                  <label className="text-[12px] font-[600] uppercase tracking-[0.6px] text-gray-900/70 block mb-[8px]">Training Mode</label>
+                  <select
+                    value={trainingMode}
+                    onChange={(e) => setTrainingMode(e.target.value)}
+                    className="w-full h-[40px] md:h-[44px] bg-white border border-gray-900/10 rounded-[10px] px-[12px] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors"
+                  >
+                    <option value="learning">🎓 Learning — Full coaching</option>
+                    <option value="coach">🏅 Coach — Guided hints</option>
+                    <option value="exam">📝 Exam — No coaching</option>
+                  </select>
+                </div>
               </div>
+
 
               <div className="flex gap-[12px] pt-[8px]">
                 <button onClick={() => setShowAssignModal(false)} className="flex-1 border border-gray-900/20 text-gray-700 font-[600] py-[8px] md:py-[10px] px-[16px] md:px-[20px] rounded-[10px] transition-all duration-200 hover:bg-gray-50 text-[14px]">Cancel</button>

@@ -2,7 +2,7 @@ import express from 'express'
 import multer from 'multer'
 import { authenticate } from '../middleware/auth'
 import { repOnly } from '../middleware/roleGuard'
-import { getMySessions, startPractice, sendMessage, endSession, getSession, deleteSession, liveSentiment } from '../controllers/sessionController'
+import { getMySessions, startPractice, sendMessage, endSession, getSession, deleteSession, liveSentiment, hudCoaching } from '../controllers/sessionController'
 
 const router = express.Router()
 
@@ -19,6 +19,9 @@ router.post('/message', authenticate, repOnly, sendMessage)
 
 // POST /api/sessions/live-sentiment
 router.post('/live-sentiment', authenticate, repOnly, liveSentiment)
+
+// POST /api/sessions/hud-coaching
+router.post('/hud-coaching', authenticate, repOnly, hudCoaching)
 
 // POST /api/sessions/end
 router.post('/end', authenticate, repOnly, endSession)

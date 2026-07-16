@@ -101,12 +101,13 @@ export const startPractice = async (req: any, res: any) => {
   // 1. Link to assignment (either provided or found automatically)
   let targetAssignmentId = assignmentId;
   let assignmentAvatarType = 'female';
+  let assignmentTrainingMode = 'learning';
   
   if (!targetAssignmentId) {
     console.log(`[AssignmentLifecycle] No assignmentId provided. searching for pending assignment for rep ${repId} and scenario ${scenarioId}`);
     const { data: autoAssign } = await supabase
       .from('training_assignments')
-      .select('id, avatar_type')
+      .select('id, avatar_type, training_mode')
       .eq('rep_id', repId)
       .eq('scenario_id', scenarioId)
       .in('status', ['Pending', 'Overdue'])
@@ -118,16 +119,18 @@ export const startPractice = async (req: any, res: any) => {
       console.log(`[AssignmentLifecycle] Auto-linked session ${data.id} to assignment ${autoAssign.id}`);
       targetAssignmentId = autoAssign.id;
       assignmentAvatarType = autoAssign.avatar_type || 'female';
+      assignmentTrainingMode = autoAssign.training_mode || 'learning';
     }
   } else {
-    // Fetch avatar_type for the provided assignmentId
+    // Fetch avatar_type and training_mode for the provided assignmentId
     const { data: assignData } = await supabase
       .from('training_assignments')
-      .select('avatar_type')
+      .select('avatar_type, training_mode')
       .eq('id', targetAssignmentId)
       .single()
     if (assignData) {
       assignmentAvatarType = assignData.avatar_type || 'female';
+      assignmentTrainingMode = assignData.training_mode || 'learning';
     }
   }
 
@@ -139,7 +142,7 @@ export const startPractice = async (req: any, res: any) => {
     })
   }
 
-  res.json({ sessionId: data.id, avatarType: assignmentAvatarType })
+  res.json({ sessionId: data.id, avatarType: assignmentAvatarType, trainingMode: assignmentTrainingMode })
 }
 
 export const sendMessage = async (req: any, res: any) => {
@@ -524,6 +527,150 @@ RULES:
       customer_sentiment: 50,
       rep_tone_type: 'good',
       coaching_hint: 'Keep going — stay curious and listen actively.'
+    })
+  }
+}
+
+/**
+ * POST /api/sessions/hud-coaching
+ * Rich real-time HUD payload — replaces the old live-sentiment endpoint.
+ * Returns ALL coaching signals in a single Groq call so the frontend can
+ * render up to 14 different HUD cards without multiple round-trips.
+ */
+export const hudCoaching = async (req: any, res: any) => {
+  const { repMessage, customerReply, sessionId, mode = 'learning', recentHistory = [] } = req.body
+  if (!repMessage && !customerReply) {
+    return res.status(400).json({ error: 'repMessage and customerReply are required' })
+  }
+
+  let scenarioContext = '';
+  try {
+    if (sessionId) {
+      const { data: session } = await supabase
+        .from('training_sessions')
+        .select('*, training_scenarios(*)')
+        .eq('id', sessionId)
+        .single()
+      
+      if (session && session.training_scenarios) {
+        scenarioContext = `\nScenario Context:\n${session.training_scenarios.context_text || ''}\n`;
+      }
+    }
+  } catch (err) {
+    console.warn('[HudCoaching] Failed to fetch session context:', err);
+  }
+
+  // Build a brief conversation snippet for trend analysis (last 6 turns)
+  const historySnippet = (recentHistory as Array<{role: string; content: string}>)
+    .slice(-6)
+    .map(m => `${m.role === 'user' ? 'Rep' : 'Customer'}: ${m.content.substring(0, 150)}`)
+    .join('\n')
+
+  const prompt = `You are a real-time enterprise sales coaching AI with deep knowledge of B2B SaaS products, SAP, Microsoft, Salesforce, and related enterprise software ecosystems.
+${scenarioContext}
+Analyse this sales training exchange and return a SINGLE JSON object (no markdown) covering ALL coaching signals.
+
+Conversation history (last 6 turns for trend context):
+${historySnippet || 'N/A (first turn)'}
+
+Current exchange:
+Rep said: "${(repMessage || '').substring(0, 400)}"
+Customer replied: "${(customerReply || '').substring(0, 400)}"
+
+Return EXACTLY this JSON (all fields required):
+{
+  "customer_sentiment": <0-100>,
+  "rep_tone_type": "good" | "warn",
+  "coaching_hint": "<1 short actionable sentence>",
+  "sentiment_trend": ["<emoji for each of last 4 turns e.g. \"🙂\", \"🙂\", \"😐\", \"☹\"">],
+  "emotion": "excited" | "confused" | "frustrated" | "hesitant" | "skeptical" | "neutral",
+  "emotion_action": "<1 sentence suggested action for the rep>",
+  "objection": {
+    "detected": <boolean>,
+    "type": "<e.g. 'incumbent vendor' | 'budget' | 'timing' | 'authority' | 'none'>",
+    "hint": "<brief 1-line hint>",
+    "full_suggestion": "<2 alternative approaches as numbered list>"
+  },
+  "buying_signal": {
+    "detected": <boolean>,
+    "phrase": "<the phrase that signals buying intent or ''>",
+    "recommendation": "<what the rep should do next>"
+  },
+  "risk_signal": {
+    "detected": <boolean>,
+    "type": "<'budget' | 'timeline' | 'authority' | 'competition' | 'none'>",
+    "follow_up": "<suggested follow-up question>"
+  },
+  "competitor": {
+    "detected": <boolean>,
+    "name": "<competitor name or ''>",
+    "battle_card": {
+      "strengths": ["<our strength 1>", "<our strength 2>", "<our strength 3>"],
+      "differentiators": ["<differentiator 1>", "<differentiator 2>"],
+      "comparison": "<1-sentence honest comparison vs competitor>"
+    }
+  },
+  "product_recommendation": ["<relevant product/feature 1>", "<relevant product/feature 2>"],
+  "meddicc": {
+    "metrics": <boolean — has rep established measurable value/ROI?>,
+    "economic_buyer": <boolean — has the economic buyer been identified?>,
+    "decision_criteria": <boolean — have decision criteria been discussed?>,
+    "champion": <boolean — has a champion/internal advocate been identified?>,
+    "prompt": "<what MEDDICC element to focus on next>"
+  },
+  "compliance_alert": {
+    "detected": <boolean — did rep use guarantee/100%/always/never language?>,
+    "claim": "<the problematic phrase or ''>",
+    "correction": "<suggested safer phrasing>"
+  },
+  "cross_sell": ["<upsell/cross-sell suggestion 1>", "<upsell/cross-sell suggestion 2>"]
+}
+
+RULES:
+- customer_sentiment: 0=very negative, 50=neutral, 100=very positive
+- sentiment_trend: generate 4 emoji based on the conversation arc (use 🙂😐😟☹ range)
+- competitor battle_card: use your knowledge of real enterprise software market (SAP, Microsoft, Salesforce, etc.) to generate accurate strengths/differentiators. CRITICAL: Do NOT flag the rep's own company as a competitor (infer the rep's company from the Scenario Context if provided).
+- product_recommendation: suggest 2-3 products/features relevant to customer's stated needs
+- cross_sell: only suggest if customer mentioned scale (users, departments, volume)
+- compliance_alert: flag absolute guarantees ("100% uptime", "always works", etc.)
+- All fields must be present; use detected=false and empty strings/arrays when not applicable`
+
+  try {
+    const groqApiKey = await getSecret('GROQ_API_KEY')
+    const groq = new Groq({ apiKey: groqApiKey || '' })
+
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        { role: 'system', content: 'Return only raw JSON with no markdown, backticks, or commentary.' },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 800,
+      temperature: 0.3,
+      response_format: { type: 'json_object' }
+    })
+
+    const text = completion.choices[0].message.content || '{}'
+    const parsed = JSON.parse(text)
+    return res.json(parsed)
+  } catch (err: any) {
+    console.error('[HudCoaching] Error:', err)
+    // Graceful fallback
+    return res.json({
+      customer_sentiment: 50,
+      rep_tone_type: 'good',
+      coaching_hint: 'Keep going — stay curious and listen actively.',
+      sentiment_trend: ['🙂', '🙂', '🙂', '🙂'],
+      emotion: 'neutral',
+      emotion_action: 'Continue the conversation naturally.',
+      objection: { detected: false, type: 'none', hint: '', full_suggestion: '' },
+      buying_signal: { detected: false, phrase: '', recommendation: '' },
+      risk_signal: { detected: false, type: 'none', follow_up: '' },
+      competitor: { detected: false, name: '', battle_card: { strengths: [], differentiators: [], comparison: '' } },
+      product_recommendation: [],
+      meddicc: { metrics: false, economic_buyer: false, decision_criteria: false, champion: false, prompt: 'Discover metrics and economic buyer.' },
+      compliance_alert: { detected: false, claim: '', correction: '' },
+      cross_sell: []
     })
   }
 }

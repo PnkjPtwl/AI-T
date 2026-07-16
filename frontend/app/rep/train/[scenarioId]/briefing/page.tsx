@@ -52,7 +52,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
 
       if (res.ok) {
         const data = await res.json()
-        const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}&avatar=${data.avatarType || 'female'}`
+        const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}&avatar=${data.avatarType || 'female'}&mode=${data.trainingMode || 'learning'}`
         router.push(targetUrl)
       } else {
         alert('Failed to start session. Please try again.')

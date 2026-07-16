@@ -2,27 +2,15 @@
 
 // =============================================================================
 // page.tsx — Training Session Page (Anam AI Avatar Edition)
-//
-// WHAT CHANGED vs old version:
-//   1. Replaced the static 🤖 emoji with a real-time Anam AI video avatar.
-//   2. On mount: fetches an Anam session token, initialises the Anam JS SDK,
-//      streams the avatar to a <video> element, and opens an AudioPassthroughStream.
-//   3. Updated speakText() to:
-//       a. Call /api/tts/base64 (returns PCM 16kHz mono as base64) instead of /api/tts.
-//       b. Pipe that base64 chunk straight to Anam via audioStream.sendAudioChunk().
-//       c. Signal audioStream.endOfSpeech() when the turn is complete so lip-sync stops cleanly.
-//   4. Mic / mute interruption calls anamClient.interruptPersona() to clear the video buffer.
-//   5. Anam client is disposed on component unmount.
-//
-// WHAT IS UNCHANGED:
-//   - All Groq / backend API calls (sendMessage, sendVoiceMessage, endSession)
-//   - Session history, persona brief, conversation panel
-//   - Timer, turn counter, assignment lifecycle
-//   - All Supabase / evaluation logic (lives in the backend)
+// HUD COACHING SYSTEM added: all 14 live coaching signals.
 // =============================================================================
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import HudOverlay, { type HudPayload, type TrainingMode } from '@/components/hud/HudOverlay'
+import { useSilenceDetector } from '@/components/hud/useSilenceDetector'
+import { useTalkRatio } from '@/components/hud/useTalkRatio'
+import { useSpeakingPace } from '@/components/hud/useSpeakingPace'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
@@ -33,85 +21,13 @@ interface ChatMessage {
 
 
 
-// --- Draggable Coaching Panel ---
-function DraggableCoachingPanel({ sentiment, onClose }: { sentiment: any, onClose: () => void }) {
-  const [pos, setPos] = useState({ x: typeof window !== 'undefined' ? window.innerWidth / 2 - 170 : 100, y: typeof window !== 'undefined' ? window.innerHeight - 200 : 500 })
-  const [isDragging, setIsDragging] = useState(false)
-  const dragRef = useRef<{ startX: number, startY: number, initialX: number, initialY: number } | null>(null)
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-    dragRef.current = { startX: e.clientX, startY: e.clientY, initialX: pos.x, initialY: pos.y }
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging || !dragRef.current) return
-    const dx = e.clientX - dragRef.current.startX
-    const dy = e.clientY - dragRef.current.startY
-    setPos({ x: dragRef.current.initialX + dx, y: dragRef.current.initialY + dy })
-  }
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    setIsDragging(false)
-    e.currentTarget.releasePointerCapture(e.pointerId)
-  }
-
-  if (!sentiment) return null
-
-  return (
-    <div
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      style={{ left: pos.x, top: pos.y, touchAction: 'none' }}
-      className="fixed z-[100] cursor-grab active:cursor-grabbing bg-white/95 backdrop-blur-md border border-gray-200 rounded-2xl p-5 shadow-2xl w-[340px] select-none text-gray-800"
-    >
-      <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Live AI Coach</span>
-        </div>
-        <button 
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onClose(); }} 
-          className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-        >
-          ✕
-        </button>
-      </div>
-      
-      <div className="flex items-center gap-4 mb-4">
-        <div className="flex-1 bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-          <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1">Cust Sentiment</div>
-          <div className={`text-xl font-black ${sentiment.customer_sentiment >= 70 ? 'text-green-500' : sentiment.customer_sentiment <= 40 ? 'text-red-500' : 'text-amber-500'}`}>
-            {sentiment.customer_sentiment}%
-          </div>
-        </div>
-        <div className="flex-1 bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-          <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1">Rep Tone</div>
-          <div className={`text-xl font-black capitalize ${sentiment.rep_tone_type === 'good' ? 'text-green-500' : 'text-amber-500'}`}>
-            {sentiment.rep_tone_type}
-          </div>
-        </div>
-      </div>
-
-      <div className={`flex items-start gap-3 p-3.5 rounded-xl border ${sentiment.rep_tone_type === 'good' ? 'bg-green-50 border-green-200 text-green-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
-        <div className="mt-0.5 text-lg">{sentiment.rep_tone_type === 'good' ? '✅' : '⚠️'}</div>
-        <p className="text-sm leading-relaxed font-semibold">{sentiment.coaching_hint}</p>
-      </div>
-    </div>
-  )
-}
-
 export default function PracticeChatPage({ params }: { params: { scenarioId: string } }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('sessionId')
   const assignmentId = searchParams.get('assignmentId')
   const avatarPref = searchParams.get('avatar')
+  const trainingMode = (searchParams.get('mode') || 'learning') as TrainingMode
 
   const [scenario, setScenario] = useState<any>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -138,13 +54,19 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   const [showEndConfirm, setShowEndConfirm] = useState(false)
   const [anamFailed, setAnamFailed] = useState(false)
 
-  // Live AI Coaching state (LLM-powered per-turn sentiment)
-  const [liveSentiment, setLiveSentiment] = useState<{
-    customer_sentiment: number
-    rep_tone_type: 'good' | 'warn'
-    coaching_hint: string
-  } | null>(null)
-  const [showCoachingPanel, setShowCoachingPanel] = useState(true)
+  // Live AI HUD coaching state
+  const [hudPayload, setHudPayload] = useState<HudPayload | null>(null)
+  const [showHud, setShowHud] = useState(true)
+  const [hasVoiceData, setHasVoiceData] = useState(false)
+
+  // HUD — frontend-computed hooks
+  const talkRatio = useTalkRatio(messages)
+  const { pace, recordVoiceTurn } = useSpeakingPace()
+  // Silence fires when rep has been idle >20s after customer finishes speaking
+  const { isSilent, resetSilence } = useSilenceDetector({
+    thresholdMs: 20000,
+    active: !isSpeaking && !isTyping && !ending && messages.length > 0,
+  })
 
   // Ref to auto-scroll conversation
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -501,6 +423,9 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
         const transcript = event.results[0][0].transcript
         if (transcript) {
            const durationSec = (Date.now() - recordingStartTimeRef.current) / 1000
+           const wordCount = transcript.trim().split(/\s+/).filter(Boolean).length
+           recordVoiceTurn(wordCount, durationSec)
+           setHasVoiceData(true)
            handleSend(null, transcript, durationSec)
         }
       }
@@ -562,18 +487,24 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
         setMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
         // Groq replied — stop thinking, start speaking
         speakText(data.reply)
-        // ── Fire-and-forget live sentiment call (non-blocking) ──────────────
+        // ── Fire-and-forget HUD coaching call (non-blocking) ───────────────
         ;(async () => {
           try {
-            const lsRes = await fetch(`${API}/api/sessions/live-sentiment`, {
+            const lsRes = await fetch(`${API}/api/sessions/hud-coaching`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({ repMessage: textToSend, customerReply: data.reply, sessionId })
+              body: JSON.stringify({
+                repMessage: textToSend,
+                customerReply: data.reply,
+                sessionId,
+                mode: trainingMode,
+                recentHistory: messages.slice(-6),
+              })
             })
             if (lsRes.ok) {
-              const ls = await lsRes.json()
-              setLiveSentiment(ls)
-              setShowCoachingPanel(true)
+              const hp = await lsRes.json()
+              setHudPayload(hp)
+              setShowHud(true)
             }
           } catch (_) { /* non-fatal */ }
         })()
@@ -584,6 +515,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       console.error(err)
     } finally {
       setIsTyping(false)
+      resetSilence()
     }
   }
 
@@ -1064,22 +996,26 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
           </button>
         )}
 
-        {/* ─── Live AI Coaching Bubble — draggable, collapsible ─── */}
-        {showCoachingPanel && liveSentiment ? (
-          <DraggableCoachingPanel
-            sentiment={liveSentiment}
-            onClose={() => setShowCoachingPanel(false)}
+        {/* ─── Live HUD Coaching Overlay ─── */}
+        {showHud ? (
+          <HudOverlay
+            payload={hudPayload}
+            mode={trainingMode}
+            talkRatio={talkRatio}
+            pace={pace}
+            isSilent={isSilent}
+            hasVoiceData={hasVoiceData}
           />
-        ) : !showCoachingPanel && liveSentiment ? (
+        ) : hudPayload ? (
           /* Collapsed pill — click to re-open */
           <button
-            onClick={() => setShowCoachingPanel(true)}
-            className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[100] bg-[#0F172A]/90 backdrop-blur-md border border-white/10 shadow-2xl rounded-full px-5 py-2.5 flex items-center gap-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/30 transition-all"
+            onClick={() => setShowHud(true)}
+            className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[110] bg-[#0F172A]/90 backdrop-blur-md border border-white/10 shadow-2xl rounded-full px-5 py-2.5 flex items-center gap-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/30 transition-all"
           >
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Live AI Coach
-            <span className={liveSentiment.customer_sentiment >= 70 ? 'text-emerald-400' : liveSentiment.customer_sentiment <= 40 ? 'text-red-400' : 'text-amber-400'}>
-              {liveSentiment.customer_sentiment}%
+            Live Coach
+            <span className={hudPayload.customer_sentiment >= 70 ? 'text-emerald-400' : hudPayload.customer_sentiment <= 40 ? 'text-red-400' : 'text-amber-400'}>
+              {hudPayload.customer_sentiment}%
             </span>
           </button>
         ) : null}
