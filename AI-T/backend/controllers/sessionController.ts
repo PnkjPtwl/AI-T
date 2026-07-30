@@ -544,3 +544,129 @@ RULES:
     })
   }
 }
+
+import { calculateFillerRatio, calculateWPM, calculateTalkListenRatio, calculateQuestionCount, evaluateTriggers, LiveMetrics, CoachTrigger } from '../utils/mechanicsCalculator'
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
+
+export const processLiveTurn = async (req: any, res: any) => {
+  try {
+    const { sessionId, transcript, emotion, confidenceScore, durationMs, userTalkTimeMs, aiTalkTimeMs, interruptionCount, durationSinceLastQuestionMs, pauseQualityMs } = req.body
+    
+    if (!sessionId || !transcript) {
+      return res.status(400).json({ error: 'sessionId and transcript are required' })
+    }
+
+    const groqApiKey = await getSecret('GROQ_API_KEY')
+    const groq = new Groq({ apiKey: groqApiKey || '' })
+
+    if (!transcript.trim()) {
+      return res.json({ aiResponse: '', metrics: null, coachTip: null })
+    }
+
+    const { data: session, error: sessionErr } = await supabase
+      .from('training_sessions')
+      .select('*, training_scenarios(*)')
+      .eq('id', sessionId)
+      .single()
+
+    if (sessionErr || !session) throw new Error('Session not found')
+
+    const scenario = session.training_scenarios
+    const systemInstruction = generateSystemInstruction(scenario)
+    
+    // 1. Compile Metrics Payload
+    const wordCount = transcript.trim().split(/\s+/).length
+    
+    const metrics: LiveMetrics = {
+      wpm: calculateWPM(wordCount, durationMs),
+      fillerRatio: calculateFillerRatio(transcript, wordCount),
+      talkListenRatio: calculateTalkListenRatio(userTalkTimeMs, aiTalkTimeMs),
+      interruptionCount,
+      questionCount: calculateQuestionCount(transcript),
+      emotion,
+      confidenceScore
+    }
+    
+    const trigger = evaluateTriggers(metrics, durationSinceLastQuestionMs, pauseQualityMs)
+
+    const history = session.messages_json || []
+    const normalizedHistory = history.map((m: any) => ({
+      role: (m.role === 'model') ? 'assistant' : m.role,
+      content: m.content || (m.parts && m.parts[0]?.text) || ''
+    }))
+
+    const messagesPayload = [
+      { role: 'system', content: systemInstruction + ' KEEP YOUR RESPONSE UNDER 40 WORDS.' },
+      ...normalizedHistory,
+      { role: 'user', content: transcript }
+    ]
+
+    const accountName = scenario?.account_name || null
+    if (accountName) {
+      try {
+        const ragChunks = await searchKnowledgeBase(transcript, accountName, 5)
+        const ragContext = formatRagContext(ragChunks, accountName)
+        if (ragContext) {
+          messagesPayload.splice(messagesPayload.length - 1, 0, { role: 'system', content: ragContext })
+        }
+      } catch (e) {
+        console.warn('RAG error', e)
+      }
+    }
+
+    // Prompt A: AI Response
+    const chatCompletion = await groq.chat.completions.create({
+      messages: messagesPayload as any,
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.7,
+      max_tokens: 150
+    })
+
+    const aiResponse = chatCompletion.choices[0]?.message?.content || ''
+
+    // Prompt B: Coach Analysis (if triggered)
+    let coachTip: CoachTrigger | null = trigger
+    if (!coachTip && metrics.talkListenRatio > 0) { // Only do AI coach if no hard mechanics trigger
+       try {
+         const coachPrompt = [
+           { role: 'system', content: 'You are an expert sales coach. Keep tips under 15 words. Analyze this live metrics payload and provide a quick tip if needed. If no tip is needed, return empty string.' },
+           { role: 'user', content: JSON.stringify(metrics) + '\nTranscript: ' + transcript }
+         ]
+         const coachCompletion = await groq.chat.completions.create({
+           messages: coachPrompt as any,
+           model: 'llama-3.1-8b-instant',
+           temperature: 0.3,
+           max_tokens: 50
+         })
+         const tipText = coachCompletion.choices[0]?.message?.content || ''
+         if (tipText.trim()) {
+           coachTip = { shouldPopup: true, tip: tipText, severity: 'info' }
+         }
+       } catch (e) {
+         console.warn('Coach AI error', e)
+       }
+    }
+
+    // Save to DB
+    const updatedHistory = [
+      ...history,
+      { role: 'user', content: transcript, timestamp: new Date().toISOString() },
+      { role: 'model', content: aiResponse, timestamp: new Date().toISOString() }
+    ]
+    
+    await safeUpdateTrainingSession(sessionId, { messages_json: updatedHistory })
+
+    res.json({
+      aiResponse,
+      metrics,
+      coachTip
+    })
+
+  } catch (error: any) {
+    console.error('[SessionController] Live turn error:', error)
+    res.status(500).json({ error: error.message })
+  }
+}
+

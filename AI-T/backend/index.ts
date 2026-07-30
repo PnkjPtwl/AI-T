@@ -11,8 +11,6 @@ import sessionRoutes from './routes/sessionRoutes'
 import scenarioRoutes from './routes/scenarioRoutes'
 import personaRoutes from './routes/personaRoutes'
 import ttsRoutes from './routes/ttsRoutes'
-import tavusRoutes from './routes/tavusRoutes'
-import anamRoutes from './routes/anamRoutes'
 import questionRoutes from './routes/questionRoutes'
 
 const app = express()
@@ -37,8 +35,6 @@ app.use('/api/sessions', sessionRoutes)
 app.use('/api/scenarios', scenarioRoutes)
 app.use('/api/persona',   personaRoutes)
 app.use('/api/tts',       ttsRoutes)
-app.use('/api/tavus',     tavusRoutes)
-app.use('/api/anam',      anamRoutes)
 app.use('/api/questions', questionRoutes)
 
 app.get('/health', (req, res) => {
