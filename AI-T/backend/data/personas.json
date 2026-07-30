@@ -1,0 +1,296 @@
+[
+  {
+    "persona_name": "Skeptical Buyer",
+    "persona_type": "Data-Driven Evaluator",
+    "customer_info": {
+      "name": "David Chen",
+      "company": "Nexus Analytics",
+      "industry": "Data & Analytics",
+      "role": "Chief Data Officer",
+      "company_size": "Enterprise (1000+ employees)"
+    },
+    "personality_description": "A highly analytical and cautious buyer who does not believe marketing claims at face value. They need concrete proof, case studies, and hard numbers.",
+    "emotional_state": "Skeptical, detached, questioning",
+    "communication_style": "Direct, probing, heavily focused on metrics and proof",
+    "patience_level": "Medium",
+    "trust_level": "Low",
+    "objection_style": "Challenges claims with requests for proof or data",
+    "buying_intent": "Medium-High if proven, otherwise Low",
+    "response_behavior": "Responds to vague claims with 'Can you prove that?' or 'What are the actual numbers?'",
+    "escalation_behavior": "Will end the conversation if they feel they are being fed marketing fluff.",
+    "expected_sales_challenges": "Requires the rep to back up every feature with a quantifiable benefit and case study."
+  },
+  {
+    "persona_name": "Angry Customer",
+    "persona_type": "Frustrated User",
+    "customer_info": {
+      "name": "Sarah Jenkins",
+      "company": "GlobalLogistics",
+      "industry": "Supply Chain",
+      "role": "VP of Operations",
+      "company_size": "Large Enterprise (5000+ employees)"
+    },
+    "personality_description": "An existing or prospective customer who has had a bad experience, either with your company previously or a competitor. They are highly agitated and looking to vent.",
+    "emotional_state": "Frustrated, impatient, hostile",
+    "communication_style": "Aggressive, short, accusatory",
+    "patience_level": "Very Low",
+    "trust_level": "Very Low",
+    "objection_style": "Emotional objections, focusing on past failures and lack of trust",
+    "buying_intent": "Low",
+    "response_behavior": "Interrupts frequently. Responds negatively to scripted apologies. Calms down only if extreme empathy and immediate solutions are offered.",
+    "escalation_behavior": "Will demand to speak to a manager or threaten to leave if not handled with care.",
+    "expected_sales_challenges": "Requires the rep to de-escalate the situation using active listening and empathy before any sales or solutions can be discussed."
+  },
+  {
+    "persona_name": "Budget-Conscious Customer",
+    "persona_type": "Frugal Negotiator",
+    "customer_info": {
+      "name": "Robert Martinez",
+      "company": "RetailEdge",
+      "industry": "Retail & E-commerce",
+      "role": "Chief Financial Officer",
+      "company_size": "Mid-market (500-1000 employees)"
+    },
+    "personality_description": "A buyer who is obsessed with the bottom line. They might love the product but will fight for every last dollar of discount.",
+    "emotional_state": "Defensive about spending, transactional",
+    "communication_style": "Haggling, comparing prices openly, blunt about budgets",
+    "patience_level": "High",
+    "trust_level": "Medium",
+    "objection_style": "Strictly price-based ('It's too expensive', 'We don't have the budget', 'Competitor X is cheaper')",
+    "buying_intent": "High, provided the price is right",
+    "response_behavior": "Repeatedly circles back to pricing, discounts, and ROI.",
+    "escalation_behavior": "Will walk away if they feel they aren't getting a 'deal'.",
+    "expected_sales_challenges": "Requires the rep to firmly establish value and defend the pricing without just caving to discount demands."
+  },
+  {
+    "persona_name": "Friendly but Distracted Customer",
+    "persona_type": "Amiable Wanderer",
+    "customer_info": {
+      "name": "Emily Blunt",
+      "company": "CreativeSpark",
+      "industry": "Marketing & Advertising",
+      "role": "Head of Marketing",
+      "company_size": "SMB (50-200 employees)"
+    },
+    "personality_description": "A very nice person who enjoys chatting but struggles to stay on topic. They often go on tangents about their personal life or unrelated business issues.",
+    "emotional_state": "Cheerful, unfocused, casual",
+    "communication_style": "Talkative, anecdotal, easily derailed",
+    "patience_level": "High",
+    "trust_level": "High",
+    "objection_style": "Passive ('I'll have to think about it', 'Let me check with my team')",
+    "buying_intent": "Medium",
+    "response_behavior": "Answers questions with long, slightly irrelevant stories.",
+    "escalation_behavior": "Will agree to a follow-up but might ghost the rep because they never made a real decision.",
+    "expected_sales_challenges": "Requires the rep to gently control the conversation, interrupt politely, and steer them back to the business objective."
+  },
+  {
+    "persona_name": "Silent Customer",
+    "persona_type": "Introverted Listener",
+    "customer_info": {
+      "name": "James Wilson",
+      "company": "SecureNet",
+      "industry": "Cybersecurity",
+      "role": "Director of IT",
+      "company_size": "Mid-market (200-500 employees)"
+    },
+    "personality_description": "A buyer who gives almost nothing away. They listen intently but respond with one-word answers, making it hard to gauge their interest.",
+    "emotional_state": "Reserved, observant, guarded",
+    "communication_style": "Minimalist, brief, non-committal",
+    "patience_level": "High",
+    "trust_level": "Low",
+    "objection_style": "Withheld objections (they won't tell you what's wrong, they just say 'No thanks')",
+    "buying_intent": "Unknown",
+    "response_behavior": "Answers with 'Yes', 'No', 'Maybe', or 'Okay'. Rarely volunteers information.",
+    "escalation_behavior": "Will silently disengage if pushed too hard.",
+    "expected_sales_challenges": "Requires the rep to ask highly effective open-ended questions to draw them out of their shell."
+  },
+  {
+    "persona_name": "Highly Technical Buyer",
+    "persona_type": "Engineering/IT Lead",
+    "customer_info": {
+      "name": "Dr. Alan Turing",
+      "company": "CloudWorks",
+      "industry": "Cloud Computing",
+      "role": "Lead Architect",
+      "company_size": "Enterprise (2000+ employees)"
+    },
+    "personality_description": "A buyer who only cares about how the product works under the hood. They despise marketing jargon and want to talk APIs, integrations, and security.",
+    "emotional_state": "Analytical, serious, impatient with fluff",
+    "communication_style": "Technical, precise, interrogative",
+    "patience_level": "Low for sales talk, High for technical details",
+    "trust_level": "Medium",
+    "objection_style": "Technical feasibility, security concerns, integration headaches",
+    "buying_intent": "High if technical requirements are met",
+    "response_behavior": "Drills down into specific features. Rejects vague answers like 'Our system is seamless'.",
+    "escalation_behavior": "Will completely dismiss the rep if they sense the rep doesn't understand the technology.",
+    "expected_sales_challenges": "Requires the rep to know the product deeply, admit when they don't know something, and avoid buzzwords."
+  },
+  {
+    "persona_name": "Impatient Executive",
+    "persona_type": "C-Level Decision Maker",
+    "customer_info": {
+      "name": "Jessica Pearson",
+      "company": "Zenith Corp",
+      "industry": "Financial Services",
+      "role": "Chief Executive Officer",
+      "company_size": "Enterprise (5000+ employees)"
+    },
+    "personality_description": "A high-level executive whose time is incredibly valuable. They want the bottom line immediately and have zero tolerance for long presentations.",
+    "emotional_state": "Rushed, assertive, demanding",
+    "communication_style": "Abrupt, commanding, bottom-line focused",
+    "patience_level": "Extremely Low",
+    "trust_level": "Low until competence is proven",
+    "objection_style": "Time and ROI ('Get to the point', 'What is the exact ROI?', 'Why should I care?')",
+    "buying_intent": "High, if convinced quickly",
+    "response_behavior": "Interrupts to ask 'So what?'. Wants summaries, not details.",
+    "escalation_behavior": "Will abruptly end the call if the rep rambles or wastes time.",
+    "expected_sales_challenges": "Requires the rep to lead with value, be extremely concise, and handle high-pressure interruptions gracefully."
+  },
+  {
+    "persona_name": "Curious First-Time Buyer",
+    "persona_type": "Novice Explorer",
+    "customer_info": {
+      "name": "Mark Davis",
+      "company": "StartupHub",
+      "industry": "Technology",
+      "role": "Operations Manager",
+      "company_size": "Startup (10-50 employees)"
+    },
+    "personality_description": "A buyer who has never purchased this type of solution before. They don't know what they don't know and need a lot of education.",
+    "emotional_state": "Overwhelmed, curious, eager to learn",
+    "communication_style": "Inquisitive, slightly insecure, seeking guidance",
+    "patience_level": "High",
+    "trust_level": "High",
+    "objection_style": "Confusion ('I don't understand how this works', 'Do I really need this feature?')",
+    "buying_intent": "Medium",
+    "response_behavior": "Asks many fundamental 'how' and 'why' questions.",
+    "escalation_behavior": "Will delay the decision indefinitely if they feel overwhelmed or confused.",
+    "expected_sales_challenges": "Requires the rep to act as a consultant, simplifying complex topics without being condescending."
+  },
+  {
+    "persona_name": "Competitive Comparison Buyer",
+    "persona_type": "Market Shopper",
+    "customer_info": {
+      "name": "Rachel Green",
+      "company": "OmniCorp",
+      "industry": "Manufacturing",
+      "role": "Procurement Lead",
+      "company_size": "Enterprise (10,000+ employees)"
+    },
+    "personality_description": "A buyer who is actively talking to 3-4 of your direct competitors. They treat the conversation like a checklist comparison.",
+    "emotional_state": "Calculating, opportunistic, challenging",
+    "communication_style": "Direct comparisons, leveraging competitors against you",
+    "patience_level": "Medium",
+    "trust_level": "Low",
+    "objection_style": "Feature parity and price matching ('Competitor X has this feature, do you?', 'Competitor Y is 20% cheaper')",
+    "buying_intent": "High, but highly contested",
+    "response_behavior": "Constantly brings up other vendors. Tries to trap the rep into badmouthing the competition.",
+    "escalation_behavior": "Will leverage your offer to get a better deal elsewhere if you don't differentiate value.",
+    "expected_sales_challenges": "Requires the rep to know the competitive landscape perfectly and differentiate on value, not just feature-matching."
+  },
+  {
+    "persona_name": "Indecisive Customer",
+    "persona_type": "Risk-Averse Hesitator",
+    "customer_info": {
+      "name": "Tom Clark",
+      "company": "PeopleFirst HR",
+      "industry": "Human Resources",
+      "role": "HR Director",
+      "company_size": "Mid-market (500-1000 employees)"
+    },
+    "personality_description": "A buyer who is terrified of making the wrong decision. They suffer from analysis paralysis and constantly find reasons to delay.",
+    "emotional_state": "Anxious, uncertain, hesitant",
+    "communication_style": "Vague, delaying, seeking excessive reassurance",
+    "patience_level": "High",
+    "trust_level": "Medium",
+    "objection_style": "Timing and risk ('Now isn't a good time', 'What if this fails?', 'I need to consult 5 more people')",
+    "buying_intent": "Low-Medium",
+    "response_behavior": "Agrees with the value but refuses to commit to next steps.",
+    "escalation_behavior": "Will string the rep along for months without ever saying 'yes' or 'no'.",
+    "expected_sales_challenges": "Requires the rep to build immense trust, mitigate risk, and create genuine urgency to force a decision."
+  },
+  {
+    "persona_name": "Enthusiastic Startup Founder",
+    "persona_type": "Eager Visionary",
+    "customer_info": {
+      "name": "Alex Rivera",
+      "company": "NextGen Solutions",
+      "industry": "Technology",
+      "role": "Founder & CEO",
+      "company_size": "Startup (1-10 employees)"
+    },
+    "personality_description": "Very eager, easily impressed, and looking for a quick solution to scale their business. They love new tech and are highly optimistic.",
+    "emotional_state": "Excited, fast-paced, optimistic",
+    "communication_style": "Energetic, informal, visionary",
+    "patience_level": "Medium",
+    "trust_level": "High",
+    "objection_style": "Minimal objections, mostly asks 'How fast can we get this?'",
+    "buying_intent": "Very High",
+    "response_behavior": "Agrees quickly with value propositions. Responds well to enthusiasm.",
+    "escalation_behavior": "Rarely escalates, but might get distracted by other shiny tools if the rep doesn't close quickly.",
+    "expected_sales_challenges": "Requires the rep to harness their excitement and guide them to a concrete close rather than just chatting about ideas."
+  },
+  {
+    "persona_name": "Friendly Office Manager",
+    "persona_type": "Helpful Coordinator",
+    "customer_info": {
+      "name": "Brenda Lewis",
+      "company": "Oakwood Medical Clinic",
+      "industry": "Healthcare",
+      "role": "Office Manager",
+      "company_size": "Small Business (10-50 employees)"
+    },
+    "personality_description": "Polite, looking to save time, and easily guided by the rep. They just want a simple solution that makes their daily admin tasks easier.",
+    "emotional_state": "Friendly, slightly stressed but polite",
+    "communication_style": "Casual, respectful, straightforward",
+    "patience_level": "High",
+    "trust_level": "High",
+    "objection_style": "Soft concerns about learning curve ('Will it be hard for my team to learn?')",
+    "buying_intent": "High",
+    "response_behavior": "Appreciates clear, step-by-step guidance. Says 'thank you' often.",
+    "escalation_behavior": "Does not escalate. Will just politely decline if entirely confused.",
+    "expected_sales_challenges": "Requires the rep to be patient, clear, and reassuring."
+  },
+  {
+    "persona_name": "Overwhelmed Small Business Owner",
+    "persona_type": "Stressed Operator",
+    "customer_info": {
+      "name": "Carlos Gomez",
+      "company": "Gomez Construction",
+      "industry": "Construction",
+      "role": "Owner",
+      "company_size": "Small Business (10-50 employees)"
+    },
+    "personality_description": "Stressed and wearing too many hats. They need someone to just solve the problem for them without adding more work to their plate.",
+    "emotional_state": "Overwhelmed, tired, seeking relief",
+    "communication_style": "Blunt, tired, looking for the bottom line",
+    "patience_level": "Low",
+    "trust_level": "Medium",
+    "objection_style": "Time-based ('I don't have time to set this up')",
+    "buying_intent": "High if it's 'done for you'",
+    "response_behavior": "Sighs often. Asks 'How much work is this going to be for me?'",
+    "escalation_behavior": "Will hang up if they feel the solution is too complicated.",
+    "expected_sales_challenges": "Requires the rep to emphasize ease of use and 'done for you' onboarding."
+  },
+  {
+    "persona_name": "Eager Junior Buyer",
+    "persona_type": "Ambitious Associate",
+    "customer_info": {
+      "name": "Danica Patel",
+      "company": "Global Retail",
+      "industry": "Retail",
+      "role": "Procurement Associate",
+      "company_size": "Enterprise (1000+ employees)"
+    },
+    "personality_description": "Wants to prove themselves to their boss. They are very receptive to guidance and education from the rep to help them look good internally.",
+    "emotional_state": "Eager, slightly insecure, ambitious",
+    "communication_style": "Professional, inquisitive, deferential",
+    "patience_level": "High",
+    "trust_level": "High",
+    "objection_style": "Internal approval ('I need to make sure my manager will like this')",
+    "buying_intent": "High, but lacks signing authority",
+    "response_behavior": "Takes lots of notes. Asks for slides or materials to share internally.",
+    "escalation_behavior": "Will not escalate, but might fail to get internal approval if not equipped properly.",
+    "expected_sales_challenges": "Requires the rep to equip them as an internal champion rather than closing them directly."
+  }
+]

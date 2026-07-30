@@ -1,0 +1,448 @@
+[
+  {
+    "scenario_name": "Product Demo Call",
+    "business_context": "The rep is conducting a 30-minute demonstration of a B2B SaaS platform for a mid-market company.",
+    "customer_goal": "Determine if the product solves their specific workflow inefficiency without being overly complex.",
+    "sales_rep_goal": "Successfully demonstrate value, tie features back to the customer's pain points, and secure a commitment for a pilot or trial.",
+    "recommended_persona_types": [
+      "Curious First-Time Buyer",
+      "Friendly but Distracted Customer"
+    ],
+    "likely_objections": [
+      "Implementation Concerns",
+      "ROI Doubts",
+      "Too Complex"
+    ],
+    "emotional_state": "Neutral, Curious",
+    "difficulty_level": "Easy",
+    "expected_success_outcome": "Customer agrees to a next-step pilot or sends the proposal to procurement.",
+    "failure_conditions": "Customer ends the call early, refuses next steps, or is visibly confused about the product's value.",
+    "coaching_focus_areas": [
+      "discovery",
+      "talk_ratio",
+      "closing"
+    ],
+    "preparation_tips": [
+      "Keep the demo focused only on features that solve their stated pain points.",
+      "Avoid diving into overly technical configurations.",
+      "Check in frequently to ensure they are following."
+    ],
+    "suggested_discovery_questions": [
+      "What is the primary inefficiency in your current workflow?",
+      "How much time is your team currently spending on manual data entry?",
+      "Who else on your team would be using this platform daily?"
+    ]
+  },
+  {
+    "scenario_name": "Pricing Negotiation",
+    "business_context": "The customer likes the product but the proposed contract is 20% over their stated budget. The rep must negotiate the final contract.",
+    "customer_goal": "Get the maximum possible discount or additional features thrown in for free.",
+    "sales_rep_goal": "Defend the pricing, maintain the product's value proposition, and close the deal with minimal discounting.",
+    "recommended_persona_types": [
+      "Budget-Conscious Customer",
+      "Competitive Comparison Buyer"
+    ],
+    "likely_objections": [
+      "Pricing Objections",
+      "Competitor Objections"
+    ],
+    "emotional_state": "Defensive, Transactional",
+    "difficulty_level": "Hard",
+    "expected_success_outcome": "Customer agrees to a price point that maintains healthy margins for the company.",
+    "failure_conditions": "Rep caves immediately to the maximum discount, or the customer walks away entirely.",
+    "coaching_focus_areas": [
+      "objection_handling",
+      "closing"
+    ],
+    "preparation_tips": [
+      "Do not offer a discount immediately; ask for something in return (like a longer contract term).",
+      "Reiterate the ROI discussed in previous calls.",
+      "Be prepared to walk away if the margins fall too low."
+    ],
+    "suggested_discovery_questions": [
+      "Aside from price, is there anything else preventing you from moving forward today?",
+      "If we can align on the budget, are you ready to sign the contract this week?",
+      "How did you arrive at your current budget constraint?"
+    ]
+  },
+  {
+    "scenario_name": "Complaint Resolution",
+    "business_context": "An existing customer is threatening to churn because of a recent major outage that disrupted their business.",
+    "customer_goal": "Vent frustration and demand compensation or immediate cancellation.",
+    "sales_rep_goal": "De-escalate the situation, rebuild trust, and retain the account.",
+    "recommended_persona_types": [
+      "Angry Customer"
+    ],
+    "likely_objections": [
+      "Trust Objections",
+      "Implementation Concerns"
+    ],
+    "emotional_state": "Frustrated, Hostile",
+    "difficulty_level": "Hard",
+    "expected_success_outcome": "Customer calms down and agrees to a remediation plan rather than churning.",
+    "failure_conditions": "Customer cancels the contract or the rep becomes defensive/argumentative.",
+    "coaching_focus_areas": [
+      "discovery",
+      "objection_handling",
+      "talk_ratio"
+    ],
+    "preparation_tips": [
+      "Let the customer vent fully before trying to offer a solution.",
+      "Acknowledge the impact the outage had on their business.",
+      "Do not make excuses for the engineering team."
+    ],
+    "suggested_discovery_questions": [
+      "I want to understand the full impact—how did this outage affect your end users?",
+      "What specifically can we do today to begin rebuilding your trust?",
+      "Before this incident, how was your overall experience with the platform?"
+    ]
+  },
+  {
+    "scenario_name": "Upselling Scenario",
+    "business_context": "The customer has been using the basic tier successfully for 6 months. The rep is calling to pitch the enterprise tier.",
+    "customer_goal": "Avoid spending more money unless there is an overwhelming business case.",
+    "sales_rep_goal": "Identify new pain points that the enterprise tier solves and secure an upgrade commitment.",
+    "recommended_persona_types": [
+      "Indecisive Customer",
+      "Budget-Conscious Customer"
+    ],
+    "likely_objections": [
+      "ROI Doubts",
+      "Pricing Objections"
+    ],
+    "emotional_state": "Hesitant, Content with status quo",
+    "difficulty_level": "Medium",
+    "expected_success_outcome": "Customer agrees to an enterprise upgrade trial or signs the upgrade contract.",
+    "failure_conditions": "Customer strictly refuses or downgrades their current plan due to feeling pressured.",
+    "coaching_focus_areas": [
+      "discovery",
+      "closing"
+    ],
+    "preparation_tips": [
+      "Acknowledge their success on the basic tier before pitching.",
+      "Focus on scalability and how the enterprise tier saves time.",
+      "Do not sound pushy or desperate for the upgrade."
+    ],
+    "suggested_discovery_questions": [
+      "Since you've been using the basic tier, what workflows are still taking too much manual effort?",
+      "How are your data volume needs expected to change over the next 6 months?",
+      "If we could automate your reporting, how many hours would that save your team?"
+    ]
+  },
+  {
+    "scenario_name": "Cold Outreach Call",
+    "business_context": "The rep is cold calling a prospect who downloaded a whitepaper. They have 30 seconds to capture attention.",
+    "customer_goal": "Get off the phone as quickly as possible.",
+    "sales_rep_goal": "Hook the prospect, deliver a strong elevator pitch, and book a 15-minute discovery meeting.",
+    "recommended_persona_types": [
+      "Impatient Executive",
+      "Silent Customer"
+    ],
+    "likely_objections": [
+      "No Time",
+      "Not Interested",
+      "Send me an email"
+    ],
+    "emotional_state": "Annoyed, Rushed",
+    "difficulty_level": "Hard",
+    "expected_success_outcome": "Prospect agrees to a calendar invite for a longer discovery call.",
+    "failure_conditions": "Prospect hangs up or gives a fake 'send me an email' brush-off.",
+    "coaching_focus_areas": [
+      "opening",
+      "objection_handling",
+      "closing"
+    ],
+    "preparation_tips": [
+      "Get straight to the point. Do not ask 'how are you doing today?'.",
+      "Mention the specific whitepaper they downloaded to establish relevance.",
+      "Aim for a 15-minute calendar block, not a full pitch."
+    ],
+    "suggested_discovery_questions": [
+      "I saw you downloaded our guide on team onboarding. Are you currently evaluating new tools for that?",
+      "I know you're busy, do you have 30 seconds for me to explain why I called?",
+      "Would you be open to a 15-minute chat next Tuesday to see if there's a fit?"
+    ]
+  },
+  {
+    "scenario_name": "Enterprise Sales Pitch",
+    "business_context": "The rep is pitching to the VP of Operations at a Fortune 500 company. The deal size is massive.",
+    "customer_goal": "Determine if this vendor is truly enterprise-ready and worth a multi-million dollar risk.",
+    "sales_rep_goal": "Establish extreme credibility, align with strategic business goals, and secure executive sponsorship.",
+    "recommended_persona_types": [
+      "Impatient Executive",
+      "Skeptical Buyer"
+    ],
+    "likely_objections": [
+      "Trust Objections",
+      "Security Concerns",
+      "ROI Doubts"
+    ],
+    "emotional_state": "Commanding, Skeptical",
+    "difficulty_level": "Hard",
+    "expected_success_outcome": "Executive agrees to sponsor the project and introduces the rep to the procurement team.",
+    "failure_conditions": "Executive cuts the meeting short or delegates the rep to a low-level manager permanently.",
+    "coaching_focus_areas": [
+      "opening",
+      "discovery",
+      "objection_handling"
+    ],
+    "preparation_tips": [
+      "Speak in terms of strategic business outcomes, not features.",
+      "Be prepared to answer tough questions about data security and compliance.",
+      "Match the executive's direct, no-nonsense communication style."
+    ],
+    "suggested_discovery_questions": [
+      "What is the top strategic initiative for your operations team this fiscal year?",
+      "How does this project align with your broader digital transformation goals?",
+      "What specific criteria must a vendor meet to be approved by your infosec team?"
+    ]
+  },
+  {
+    "scenario_name": "Renewal Retention Call",
+    "business_context": "The customer's annual contract is up for renewal in 30 days. Usage has dropped slightly over the last quarter.",
+    "customer_goal": "Evaluate if the tool is still worth the investment or if they should explore alternatives.",
+    "sales_rep_goal": "Re-establish value, uncover reasons for dropped usage, and secure the renewal.",
+    "recommended_persona_types": [
+      "Competitive Comparison Buyer",
+      "Indecisive Customer"
+    ],
+    "likely_objections": [
+      "ROI Doubts",
+      "Competitor Objections"
+    ],
+    "emotional_state": "Detached, Evaluating",
+    "difficulty_level": "Medium",
+    "expected_success_outcome": "Customer signs the renewal contract.",
+    "failure_conditions": "Customer decides not to renew or insists on a month-to-month contract.",
+    "coaching_focus_areas": [
+      "discovery",
+      "talk_ratio",
+      "closing"
+    ],
+    "preparation_tips": [
+      "Do not be overly defensive about the drop in usage.",
+      "Act as a consultant trying to help them get more value from the platform.",
+      "Highlight upcoming features that might solve their current challenges."
+    ],
+    "suggested_discovery_questions": [
+      "I noticed a slight drop in login activity recently. Has your team's workflow changed?",
+      "What was the most valuable feature you used during the first 6 months?",
+      "If we were to renew today, what is the #1 thing you'd want to see improved?"
+    ]
+  },
+  {
+    "scenario_name": "Technical Product Discussion",
+    "business_context": "The rep is on a call with the prospect's lead engineer to discuss API capabilities and data security.",
+    "customer_goal": "Ensure the product meets strict technical and compliance requirements.",
+    "sales_rep_goal": "Confidently answer technical questions, build trust with the engineering team, and overcome technical blockers.",
+    "recommended_persona_types": [
+      "Highly Technical Buyer",
+      "Skeptical Buyer"
+    ],
+    "likely_objections": [
+      "Integration Concerns",
+      "Security Concerns"
+    ],
+    "emotional_state": "Analytical, Interrogative",
+    "difficulty_level": "Medium",
+    "expected_success_outcome": "Engineer gives the technical 'green light' for the purchase.",
+    "failure_conditions": "Engineer blocks the deal because they feel the product is technically inadequate or the rep was dishonest.",
+    "coaching_focus_areas": [
+      "discovery",
+      "objection_handling"
+    ],
+    "preparation_tips": [
+      "Admit when you do not know an answer—promise to follow up with your technical team.",
+      "Avoid using marketing fluff; speak directly to architectural capabilities.",
+      "Have the API documentation ready to reference."
+    ],
+    "suggested_discovery_questions": [
+      "What specific data points do you need to sync with your current ERP system?",
+      "What are your team's hard requirements for SOC2 compliance?",
+      "How are you currently handling webhooks in your architecture?"
+    ]
+  },
+  {
+    "scenario_name": "Competitive Product Comparison",
+    "business_context": "The prospect explicitly says they are evaluating your product against your biggest rival, 'TechCorp'.",
+    "customer_goal": "Figure out exactly why they should choose you over TechCorp, especially since TechCorp is cheaper.",
+    "sales_rep_goal": "Differentiate the product on value, subtly trap the competitor's weaknesses, and win the evaluation.",
+    "recommended_persona_types": [
+      "Competitive Comparison Buyer"
+    ],
+    "likely_objections": [
+      "Competitor Objections",
+      "Pricing Objections"
+    ],
+    "emotional_state": "Calculating, Challenging",
+    "difficulty_level": "Hard",
+    "expected_success_outcome": "Customer verbally agrees that your product is the superior choice.",
+    "failure_conditions": "Rep badmouths the competitor unprofessionally or fails to prove differentiated value.",
+    "coaching_focus_areas": [
+      "discovery",
+      "objection_handling",
+      "closing"
+    ],
+    "preparation_tips": [
+      "Do not aggressively bash the competitor. Stay professional.",
+      "Focus on 'total cost of ownership' rather than just the initial price tag.",
+      "Ask trap questions that highlight features only your product has."
+    ],
+    "suggested_discovery_questions": [
+      "What is the primary reason you are evaluating both us and TechCorp?",
+      "When you tested TechCorp, how did they handle [Specific Competitor Weakness]?",
+      "Is initial cost more important to your team than long-term platform scalability?"
+    ]
+  },
+  {
+    "scenario_name": "Follow-up Sales Conversation",
+    "business_context": "The rep had a great first meeting two weeks ago, but the prospect has been dodging emails since then.",
+    "customer_goal": "Avoid confrontation while internally struggling to get team alignment.",
+    "sales_rep_goal": "Uncover the real reason for the delay, create urgency, and re-engage the deal.",
+    "recommended_persona_types": [
+      "Friendly but Distracted Customer",
+      "Indecisive Customer"
+    ],
+    "likely_objections": [
+      "Timing Objections",
+      "Internal Stakeholder Issues"
+    ],
+    "emotional_state": "Guilty (for ghosting), Hesitant",
+    "difficulty_level": "Medium",
+    "expected_success_outcome": "Prospect reveals the true blocker and agrees to an action plan to resolve it.",
+    "failure_conditions": "Prospect gives another vague excuse and disappears again.",
+    "coaching_focus_areas": [
+      "opening",
+      "discovery",
+      "talk_ratio"
+    ],
+    "preparation_tips": [
+      "Do not sound accusatory or annoyed that they ignored your emails.",
+      "Give them an 'out' by suggesting they might be too busy right now.",
+      "Use an upfront contract to establish clear next steps."
+    ],
+    "suggested_discovery_questions": [
+      "Typically, when communication slows down, it means priorities have shifted. Is that the case here?",
+      "What feedback did you receive when you shared the proposal with your team?",
+      "If we pause the evaluation for now, how will you solve the onboarding challenge we discussed?"
+    ]
+  },
+  {
+    "scenario_name": "Inbound Lead Discovery",
+    "business_context": "The prospect just submitted a form on the website requesting a demo of the software.",
+    "customer_goal": "Get a quick overview of what the software does and how much it costs.",
+    "sales_rep_goal": "Qualify the lead, build rapport, and schedule a formal 30-minute demonstration.",
+    "recommended_persona_types": [
+      "Enthusiastic Startup Founder"
+    ],
+    "likely_objections": [
+      "Can't you just give me the price now?"
+    ],
+    "emotional_state": "Curious, warm",
+    "difficulty_level": "Easy",
+    "expected_success_outcome": "Prospect agrees to a scheduled demo time.",
+    "failure_conditions": "Prospect hangs up or refuses to book a time.",
+    "coaching_focus_areas": [
+      "opening",
+      "discovery",
+      "closing"
+    ],
+    "preparation_tips": [
+      "Match their high energy.",
+      "Don't give away all the pricing immediately; build value first.",
+      "Keep it short and focus on booking the next step."
+    ],
+    "suggested_discovery_questions": [
+      "What prompted you to request a demo with us today?",
+      "What is the biggest bottleneck you're hoping to solve?"
+    ]
+  },
+  {
+    "scenario_name": "Warm Referral Follow-up",
+    "business_context": "A mutual connection introduced the rep to the prospect, saying the prospect desperately needs the software.",
+    "customer_goal": "Trust the mutual connection's recommendation and figure out next steps.",
+    "sales_rep_goal": "Validate the pain point and easily close them on a small starter package.",
+    "recommended_persona_types": [
+      "Friendly Office Manager"
+    ],
+    "likely_objections": [
+      "Just learning curve concerns"
+    ],
+    "emotional_state": "Friendly, trusting",
+    "difficulty_level": "Easy",
+    "expected_success_outcome": "Prospect agrees to sign up for the starter package.",
+    "failure_conditions": "Rep completely loses the trust built by the referral by being overly aggressive.",
+    "coaching_focus_areas": [
+      "opening",
+      "closing",
+      "talk_ratio"
+    ],
+    "preparation_tips": [
+      "Mention the mutual connection immediately.",
+      "Focus heavily on how easy the onboarding process is.",
+      "Keep the tone conversational and low-pressure."
+    ],
+    "suggested_discovery_questions": [
+      "How do you know [Mutual Connection's Name]?",
+      "They mentioned you were struggling with manual data entry, is that right?"
+    ]
+  },
+  {
+    "scenario_name": "Basic Feature Inquiry",
+    "business_context": "The prospect called the inbound sales line to ask if the product integrates with QuickBooks.",
+    "customer_goal": "Get a quick 'yes' or 'no' answer to their integration question.",
+    "sales_rep_goal": "Answer 'yes', but pivot the conversation to uncover the deeper pain point and close a deal.",
+    "recommended_persona_types": [
+      "Overwhelmed Small Business Owner"
+    ],
+    "likely_objections": [
+      "I don't have time right now, just wanted to know if it integrates."
+    ],
+    "emotional_state": "Rushed, task-oriented",
+    "difficulty_level": "Easy",
+    "expected_success_outcome": "Prospect buys the software because it solves their immediate integration need.",
+    "failure_conditions": "Rep answers 'yes' and lets the customer hang up without exploring further.",
+    "coaching_focus_areas": [
+      "discovery",
+      "talk_ratio"
+    ],
+    "preparation_tips": [
+      "Give them the direct answer immediately, then follow up with a 'why' question.",
+      "Emphasize how much time the integration will save them.",
+      "Keep responses very concise."
+    ],
+    "suggested_discovery_questions": [
+      "Yes, we do integrate with QuickBooks! How are you currently managing those invoices?",
+      "If we could automate that for you today, how many hours a week would you get back?"
+    ]
+  },
+  {
+    "scenario_name": "Free Trial Upgrade",
+    "business_context": "The prospect has been heavily using the free trial for 13 days. Their trial expires tomorrow.",
+    "customer_goal": "Ensure they don't lose their data and pick the right paid tier.",
+    "sales_rep_goal": "Help them select the right tier, secure the credit card, and close the deal smoothly.",
+    "recommended_persona_types": [
+      "Eager Junior Buyer"
+    ],
+    "likely_objections": [
+      "Need to get my manager to approve the credit card charge."
+    ],
+    "emotional_state": "Eager, satisfied with the product",
+    "difficulty_level": "Easy",
+    "expected_success_outcome": "Prospect agrees to the upgrade and commits to getting the payment processed.",
+    "failure_conditions": "Rep tries to upsell them too hard on the enterprise tier and scares them away.",
+    "coaching_focus_areas": [
+      "objection_handling",
+      "closing"
+    ],
+    "preparation_tips": [
+      "Praise their active usage of the platform during the trial.",
+      "Provide clear, simple justifications for the upgrade that they can tell their boss.",
+      "Offer a direct link to the payment page."
+    ],
+    "suggested_discovery_questions": [
+      "I saw you've been using the reporting dashboard heavily—how has that helped your team?",
+      "What information do you need from me to help get this approved by your manager today?"
+    ]
+  }
+]

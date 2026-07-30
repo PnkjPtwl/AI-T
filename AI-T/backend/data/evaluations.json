@@ -1,0 +1,32 @@
+{
+  "empathy": {
+    "description": "The rep's ability to demonstrate genuine understanding and validation of the customer's emotions and challenges.",
+    "high_score_indicators": "Used active listening cues, validated concerns, and showed emotional intelligence.",
+    "low_score_indicators": "Appeared robotic or dismissive of customer frustrations."
+  },
+  "objection_handling": {
+    "description": "The rep's skill in navigating pushback by acknowledging, clarifying, and resolving concerns.",
+    "high_score_indicators": "Stayed calm, asked clarifying questions about objections, and provided value-based resolutions.",
+    "low_score_indicators": "Became defensive, ignored objections, or gave weak, non-committal answers."
+  },
+  "confidence": {
+    "description": "The rep's tone, pacing, and authoritative presence during the conversation.",
+    "high_score_indicators": "Spoke clearly, avoided filler words, and maintained a steady, professional pace.",
+    "low_score_indicators": "Sounded nervous, over-used filler words like 'um' or 'ah', or appeared unsure of the product value."
+  },
+  "listening": {
+    "description": "The rep's ability to absorb information without interrupting and respond directly to what was said.",
+    "high_score_indicators": "Paused after questions, didn't interrupt, and referenced customer comments later in the call.",
+    "low_score_indicators": "Interrupted frequently, talked over the customer, or asked questions that were already answered."
+  },
+  "executive_communication": {
+    "description": "The rep's ability to speak concisely and frame value in terms of business outcomes rather than just features.",
+    "high_score_indicators": "Focused on ROI and business impact, spoke with clarity, and avoided excessive technical jargon.",
+    "low_score_indicators": "Focused purely on features, rambled, or failed to connect product capabilities to business goals."
+  },
+  "questioning_ability": {
+    "description": "The rep's skill in using open-ended questions to drive discovery and uncover deep pain points.",
+    "high_score_indicators": "Asked multiple 'Why' and 'How' questions, followed up on customer answers, and drove the narrative.",
+    "low_score_indicators": "Asked simple binary (Yes/No) questions or failed to dig deeper into customer statements."
+  }
+}

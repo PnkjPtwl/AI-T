@@ -1,0 +1,128 @@
+# =============================================================================
+# docker-compose.yml — SalesCoach Demo Deployment
+# =============================================================================
+version: '3.8'
+
+services:
+  # ── Backend Service (Express) ──────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: salescoach-backend
+    restart: unless-stopped
+    expose:
+      - "4000"  # Exposed to Docker network, NOT to host
+    environment:
+      - PORT=4000
+      - AWS_REGION=ap-south-1
+      - SECRET_NAME=salescoach/demo/backend
+      - ALLOWED_ORIGIN=3.6.244.139
+      - RAG_API_URL=http://rag-api:8001
+    depends_on:
+      - rag-api
+    # Log to AWS CloudWatch via the Docker awslogs driver
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ap-south-1
+        awslogs-group: /salescoach/demo/backend
+        awslogs-stream: backend-container
+        awslogs-create-group: "true"
+    # Prevent a memory leak from taking down the whole EC2 instance
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ── RAG API Service (Python FastAPI) ──────────────────────────────────────────
+  rag-api:
+    build:
+      context: ./
+      dockerfile: ./rag/Dockerfile
+    container_name: salescoach-rag-api
+    restart: unless-stopped
+    expose:
+      - "8001"
+    environment:
+      - PORT=8001
+      - AWS_REGION=ap-south-1
+      - SECRET_NAME=salescoach/demo/backend
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ap-south-1
+        awslogs-group: /salescoach/demo/rag-api
+        awslogs-stream: rag-api-container
+        awslogs-create-group: "true"
+    deploy:
+      resources:
+        limits:
+          memory: 2048M  # Needs ~1.5GB for embedding + reranker models
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s  # Models take ~30s to load on first start
+
+
+  # ── Frontend Service (Next.js) ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://3.6.244.139
+    container_name: salescoach-frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ap-south-1
+        awslogs-group: /salescoach/demo/frontend
+        awslogs-stream: frontend-container
+        awslogs-create-group: "true"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ── Reverse Proxy (Nginx) ──────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: salescoach-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"     # Map host port 80 to container port 80
+      - "443:443"   # Map host port 443 to container port 443 (for SSL later)
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ap-south-1
+        awslogs-group: /salescoach/demo/nginx
+        awslogs-stream: nginx-container
+        awslogs-create-group: "true"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

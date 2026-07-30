@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+sentence-transformers
+langchain
+langchain-core
+langchain-community
+supabase
+python-dotenv
+python-docx
+pgvector
+numpy
