@@ -552,7 +552,7 @@ import os from 'os'
 
 export const processLiveTurn = async (req: any, res: any) => {
   try {
-    const { sessionId, transcript, emotion, confidenceScore, durationMs, userTalkTimeMs, aiTalkTimeMs, interruptionCount, durationSinceLastQuestionMs, pauseQualityMs } = req.body
+    const { sessionId, transcript, modulateTranscript, emotion, confidenceScore, durationMs, userTalkTimeMs, aiTalkTimeMs, interruptionCount, durationSinceLastQuestionMs, pauseQualityMs } = req.body
     
     if (!sessionId || !transcript) {
       return res.status(400).json({ error: 'sessionId and transcript are required' })
@@ -581,7 +581,7 @@ export const processLiveTurn = async (req: any, res: any) => {
     
     const metrics: LiveMetrics = {
       wpm: calculateWPM(wordCount, durationMs),
-      fillerRatio: calculateFillerRatio(transcript, wordCount),
+      fillerRatio: calculateFillerRatio(modulateTranscript || transcript, wordCount),
       talkListenRatio: calculateTalkListenRatio(userTalkTimeMs, aiTalkTimeMs),
       interruptionCount,
       questionCount: calculateQuestionCount(transcript),
@@ -626,28 +626,8 @@ export const processLiveTurn = async (req: any, res: any) => {
 
     const aiResponse = chatCompletion.choices[0]?.message?.content || ''
 
-    // Prompt B: Coach Analysis (if triggered)
+    // Return immediately after Prompt A (Conversation)
     let coachTip: CoachTrigger | null = trigger
-    if (!coachTip && metrics.talkListenRatio > 0) { // Only do AI coach if no hard mechanics trigger
-       try {
-         const coachPrompt = [
-           { role: 'system', content: 'You are an expert sales coach. Keep tips under 15 words. Analyze this live metrics payload and provide a quick tip if needed. If no tip is needed, return empty string.' },
-           { role: 'user', content: JSON.stringify(metrics) + '\nTranscript: ' + transcript }
-         ]
-         const coachCompletion = await groq.chat.completions.create({
-           messages: coachPrompt as any,
-           model: 'llama-3.1-8b-instant',
-           temperature: 0.3,
-           max_tokens: 50
-         })
-         const tipText = coachCompletion.choices[0]?.message?.content || ''
-         if (tipText.trim()) {
-           coachTip = { shouldPopup: true, tip: tipText, severity: 'info' }
-         }
-       } catch (e) {
-         console.warn('Coach AI error', e)
-       }
-    }
 
     // Save to DB
     const updatedHistory = [
@@ -655,7 +635,6 @@ export const processLiveTurn = async (req: any, res: any) => {
       { role: 'user', content: transcript, timestamp: new Date().toISOString() },
       { role: 'model', content: aiResponse, timestamp: new Date().toISOString() }
     ]
-    
     await safeUpdateTrainingSession(sessionId, { messages_json: updatedHistory })
 
     res.json({
@@ -668,5 +647,46 @@ export const processLiveTurn = async (req: any, res: any) => {
     console.error('[SessionController] Live turn error:', error)
     res.status(500).json({ error: error.message })
   }
+}
+
+// New endpoint dedicated solely to asynchronous AI coaching
+export const processLiveCoach = async (req: any, res: any) => {
+  try {
+    const { metrics, transcript } = req.body
+    
+    if (!metrics || !transcript) {
+      return res.status(400).json({ error: 'metrics and transcript are required' })
+    }
+
+    const groqApiKey = await getSecret('GROQ_API_KEY')
+    const groq = new Groq({ apiKey: groqApiKey || '' })
+
+    let coachTip = null
+    // Prompt B: Coach Analysis
+    try {
+      const coachPrompt = [
+        { role: 'system', content: 'You are an expert sales coach. Keep tips under 15 words. Analyze this live metrics payload and provide a quick tip if needed. If no tip is needed, return empty string.' },
+        { role: 'user', content: JSON.stringify(metrics) + '\nTranscript: ' + transcript }
+      ]
+      const coachCompletion = await groq.chat.completions.create({
+        messages: coachPrompt as any,
+        model: 'llama-3.1-8b-instant',
+        temperature: 0.3,
+        max_tokens: 50
+      })
+      const tipText = coachCompletion.choices[0]?.message?.content || ''
+      if (tipText.trim()) {
+        coachTip = { shouldPopup: true, tip: tipText, severity: 'info' }
+      }
+    } catch (e) {
+      console.warn('Coach AI error', e)
+    }
+
+    res.json({ coachTip })
+  } catch (error: any) {
+    console.error('[SessionController] Live coach error:', error)
+    res.status(500).json({ error: error.message })
+  }
+
 }
 
