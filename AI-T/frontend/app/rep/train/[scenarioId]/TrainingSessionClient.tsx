@@ -30,6 +30,10 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
   const [micActive, setMicActive] = useState(false)
   const [userSpeaking, setUserSpeaking] = useState(false)
   const [micError, setMicError] = useState<string | null>(null)
+  const [isPaused, setIsPaused] = useState(false)
+  const [deepgramKey, setDeepgramKey] = useState<string | null>(null)
+  const [paceWPM, setPaceWPM] = useState(0)
+  const [fillerCount, setFillerCount] = useState(0)
 
   const userTalkTimeMs = useRef(0)
   const aiTalkTimeMs = useRef(0)
@@ -53,6 +57,10 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
   const silenceStartRef = useRef<number>(0)
   const isSpeakingRef = useRef(false)
   const audioChunksRef = useRef<Int16Array[]>([])
+  
+  const deepgramWsRef = useRef<WebSocket | null>(null)
+  const totalWordsRef = useRef<number>(0)
+  const totalFillersRef = useRef<number>(0)
 
   // Fetch session on mount
   useEffect(() => {
@@ -77,7 +85,17 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
         console.error('Failed to fetch session:', e)
       }
     }
+    }
     fetchSession()
+
+    // Fetch Deepgram Key
+    fetch(`${API}/api/auth/deepgram-key`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    })
+      .then(res => res.json())
+      .then(data => { if (data.key) setDeepgramKey(data.key) })
+      .catch(console.error)
+
   }, [sessionId])
 
   const floatTo16BitPCM = (input: Float32Array): Int16Array => {
@@ -222,6 +240,14 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
         wsRef.current = null
       }
 
+      if (deepgramWsRef.current) {
+        try {
+          deepgramWsRef.current.send(JSON.stringify({ type: 'CloseStream' }))
+          deepgramWsRef.current.close()
+        } catch {}
+        deepgramWsRef.current = null
+      }
+
       await handleUserTurnComplete(durationMs)
     } finally {
       isProcessingRef.current = false
@@ -244,43 +270,48 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       const processor = audioContext.createScriptProcessor(4096, 1, 1)
       processorRef.current = processor
 
-      // --- Setup Browser Native STT ---
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition()
-        recognition.continuous = true
-        recognition.interimResults = true
-        recognition.lang = 'en-US'
-
-        recognition.onresult = (event: any) => {
-          let interimTranscript = ''
-          let finalTranscript = ''
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              finalTranscript += event.results[i][0].transcript
-            } else {
-              interimTranscript += event.results[i][0].transcript
-            }
-          }
-          if (finalTranscript) {
-            currentTranscriptRef.current += ' ' + finalTranscript
-          } else if (interimTranscript) {
-            // Keep track of interim if we need to end turn before final fires
-            (recognition as any).latestInterim = interimTranscript
-          }
+      // --- Setup Deepgram STT Streaming ---
+      if (deepgramKey) {
+        const dgWs = new WebSocket(`wss://api.deepgram.com/v1/listen?model=nova-2&filler_words=true&encoding=linear16&sample_rate=16000&channels=1`)
+        
+        dgWs.onopen = () => {
+          console.log('Deepgram WS connected (Streaming)')
+          dgWs.send(JSON.stringify({ type: 'KeepAlive' }))
         }
         
-        recognition.onend = () => {
-          // Restart if it stopped unexpectedly while mic is active
-          if (streamRef.current) {
-            try { recognition.start() } catch (e) { /* ignore */ }
-          }
+        dgWs.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+            if (data.type === 'Results' && data.channel && data.channel.alternatives[0]) {
+              const alt = data.channel.alternatives[0]
+              
+              if (data.is_final && alt.transcript) {
+                currentTranscriptRef.current += ' ' + alt.transcript
+                
+                const words = alt.words || []
+                let chunkFillers = 0
+                words.forEach((w: any) => {
+                  const text = (w.punctuated_word || w.word || '').toLowerCase()
+                  if (['um', 'uh', 'like', 'mhm'].includes(text.replace(/[^a-z]/g, ''))) {
+                    chunkFillers++
+                  }
+                })
+                
+                totalWordsRef.current += words.length
+                totalFillersRef.current += chunkFillers
+                setFillerCount(totalFillersRef.current)
+                
+                const totalTalkMins = (userTalkTimeMs.current + (Date.now() - turnStartTimeRef.current)) / 60000
+                if (totalTalkMins > 0) {
+                  setPaceWPM(Math.round(totalWordsRef.current / totalTalkMins))
+                }
+              }
+            }
+          } catch (e) {}
         }
-
-        recognitionRef.current = recognition
-        recognition.start()
+        deepgramWsRef.current = dgWs
       } else {
-        console.warn('SpeechRecognition API not supported in this browser. Falling back to Modulate STT.')
+        console.warn('Deepgram API key not available.')
       }
 
       // Immediately set user as speaking since it's manual push-to-talk now
@@ -290,7 +321,6 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       audioChunksRef.current = []
       currentTranscriptRef.current = '' // Reset transcript at start of speech
       modulateTranscriptRef.current = '' // Reset modulate transcript
-      if (recognitionRef.current) (recognitionRef.current as any).latestInterim = ''
       if (isAiSpeakingRef.current) handleInterrupt()
 
       // --- Setup Modulate WS ---
@@ -323,6 +353,10 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(pcm.buffer)
         }
+        
+        if (deepgramWsRef.current && deepgramWsRef.current.readyState === WebSocket.OPEN) {
+          deepgramWsRef.current.send(pcm.buffer)
+        }
       }
 
       source.connect(processor)
@@ -338,10 +372,6 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
   }, [processAudioTurn])
 
   const stopMic = useCallback(() => {
-    // If we only have interim transcript, append it before processing
-    if (recognitionRef.current && (recognitionRef.current as any).latestInterim && !currentTranscriptRef.current.trim()) {
-      currentTranscriptRef.current += ' ' + (recognitionRef.current as any).latestInterim
-    }
 
     if (processorRef.current) {
       processorRef.current.disconnect()
@@ -355,10 +385,12 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
     }
-    if (recognitionRef.current) {
-      recognitionRef.current.onend = null // prevent restart loop
-      recognitionRef.current.stop()
-      recognitionRef.current = null
+    if (deepgramWsRef.current) {
+      try { 
+        deepgramWsRef.current.send(JSON.stringify({ type: "CloseStream" })) 
+        deepgramWsRef.current.close() 
+      } catch {}
+      deepgramWsRef.current = null
     }
     
     setMicActive(false)
@@ -402,12 +434,33 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
               Live Audio Training
             </p>
           </div>
-          <button
-            onClick={endSession}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition-all"
-          >
-            End Call
-          </button>
+          
+          {/* Deepgram Real-Time Analytics */}
+          <div className="flex gap-4 ml-6 mr-auto">
+            <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center min-w-[80px]">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Pace (WPM)</p>
+              <p className={`text-xl font-black ${paceWPM > 160 ? 'text-red-500' : 'text-blue-600'}`}>{paceWPM}</p>
+            </div>
+            <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center min-w-[80px]">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Fillers</p>
+              <p className={`text-xl font-black ${fillerCount > 5 ? 'text-amber-500' : 'text-blue-600'}`}>{fillerCount}</p>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => { setIsPaused(true); stopMic(); }}
+              className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-lg transition-all"
+            >
+              Pause
+            </button>
+            <button
+              onClick={endSession}
+              className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition-all"
+            >
+              End Call
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 min-h-[400px]">
@@ -481,6 +534,57 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
           ))}
         </div>
       </div>
+
+      {/* Pause Modal */}
+      {isPaused && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6">
+            <h2 className="text-2xl font-black text-gray-900 text-center">Session Paused</h2>
+            <p className="text-gray-500 text-center font-medium">What would you like to do?</p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => setIsPaused(false)}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all"
+              >
+                Resume Session
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem('token');
+                    await fetch(`${API}/api/sessions/retry`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ sessionId })
+                    });
+                    setMessages([]);
+                    setIsPaused(false);
+                  } catch (e) { console.error(e) }
+                }}
+                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-all"
+              >
+                Retry Session (Start Over)
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem('token');
+                    await fetch(`${API}/api/sessions/pause`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ sessionId })
+                    });
+                    router.push('/rep/dashboard');
+                  } catch (e) { console.error(e) }
+                }}
+                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-all"
+              >
+                Continue Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

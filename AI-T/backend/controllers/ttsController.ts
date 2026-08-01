@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { getSecret } from '../lib/secrets'
+import OpenAI from 'openai'
 
 export const synthesizeSpeech = async (req: any, res: any) => {
   const { text, voice_id } = req.body
@@ -43,11 +44,8 @@ export const synthesizeSpeech = async (req: any, res: any) => {
 
     if (!elevenRes.ok) {
       const errText = await elevenRes.text()
-      console.error('[TTS] ElevenLabs error:', elevenRes.status, errText)
-      return res.status(502).json({
-        error: 'ElevenLabs request failed',
-        detail: errText,
-      })
+      console.warn('[TTS] ElevenLabs error, falling back to OpenAI:', elevenRes.status, errText)
+      throw new Error('ElevenLabs fallback')
     }
 
     res.setHeader('Content-Type', 'audio/mpeg')
@@ -69,6 +67,32 @@ export const synthesizeSpeech = async (req: any, res: any) => {
       res.end()
     }
   } catch (err: any) {
+    if (err.message === 'ElevenLabs fallback' || !apiKey) {
+      try {
+        const openaiApiKey = await getSecret('OPENAI_API_KEY')
+        if (!openaiApiKey) {
+          return res.status(500).json({ error: 'Neither ElevenLabs nor OpenAI API keys configured' })
+        }
+        
+        const openai = new OpenAI({ apiKey: openaiApiKey })
+        const mp3 = await openai.audio.speech.create({
+          model: 'tts-1',
+          voice: 'alloy',
+          input: text.trim(),
+        })
+        
+        const buffer = Buffer.from(await mp3.arrayBuffer())
+        res.setHeader('Content-Type', 'audio/mpeg')
+        res.setHeader('Content-Length', buffer.length)
+        return res.end(buffer)
+      } catch (fallbackErr: any) {
+        console.error('[TTS] OpenAI fallback failed:', fallbackErr)
+        if (!res.headersSent) {
+          return res.status(500).json({ error: fallbackErr.message })
+        }
+      }
+    }
+
     console.error('[TTS] Unexpected error:', err)
     if (!res.headersSent) {
       res.status(500).json({ error: err.message })

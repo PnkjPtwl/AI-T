@@ -1,4 +1,5 @@
 import { getSupabase, getSupabaseAuth } from '../db/supabase'
+import { getSecret } from '../lib/secrets'
 
 export const managerSignup = async (req, res) => {
   const email = req.body.email?.trim().toLowerCase()
@@ -177,4 +178,16 @@ export const login = async (req, res) => {
     orgId: userData.org_id,
     name:  userData.name
   })
+}
+
+export const getDeepgramKey = async (req: any, res: any) => {
+  try {
+    const key = await getSecret('DEEPGRAM_API_KEY')
+    if (!key) {
+      return res.status(500).json({ error: 'Deepgram API key not configured' })
+    }
+    return res.json({ key })
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message })
+  }
 }

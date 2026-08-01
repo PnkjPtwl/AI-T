@@ -85,6 +85,49 @@ export const startPractice = async (req: any, res: any) => {
   const { scenarioId, assignmentId } = req.body
   const repId = req.user.id
 
+  let targetAssignmentId = assignmentId;
+  let assignmentAvatarType = 'female';
+  let existingSessionId = null;
+
+  if (targetAssignmentId) {
+    const { data: assignData } = await supabase
+      .from('training_assignments')
+      .select('avatar_type, session_id, status')
+      .eq('id', targetAssignmentId)
+      .single()
+    if (assignData) {
+      assignmentAvatarType = assignData.avatar_type || 'female';
+      if (assignData.status === 'In Progress' && assignData.session_id) {
+        existingSessionId = assignData.session_id;
+      }
+    }
+  } else {
+    console.log(`[AssignmentLifecycle] No assignmentId provided. searching for pending assignment for rep ${repId} and scenario ${scenarioId}`);
+    const { data: autoAssign } = await supabase
+      .from('training_assignments')
+      .select('id, avatar_type, session_id, status')
+      .eq('rep_id', repId)
+      .eq('scenario_id', scenarioId)
+      .in('status', ['Pending', 'In Progress', 'Overdue'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    
+    if (autoAssign) {
+      console.log(`[AssignmentLifecycle] Auto-linked to assignment ${autoAssign.id}`);
+      targetAssignmentId = autoAssign.id;
+      assignmentAvatarType = autoAssign.avatar_type || 'female';
+      if (autoAssign.status === 'In Progress' && autoAssign.session_id) {
+        existingSessionId = autoAssign.session_id;
+      }
+    }
+  }
+
+  if (existingSessionId) {
+    console.log(`[AssignmentLifecycle] Resuming existing session ${existingSessionId}`);
+    return res.json({ sessionId: existingSessionId, avatarType: assignmentAvatarType })
+  }
+
   const { data, error } = await supabase
     .from('training_sessions')
     .insert({
@@ -97,39 +140,6 @@ export const startPractice = async (req: any, res: any) => {
 
   if (error) {
     return res.status(500).json({ error: error.message })
-  }
-
-  // 1. Link to assignment (either provided or found automatically)
-  let targetAssignmentId = assignmentId;
-  let assignmentAvatarType = 'female';
-  
-  if (!targetAssignmentId) {
-    console.log(`[AssignmentLifecycle] No assignmentId provided. searching for pending assignment for rep ${repId} and scenario ${scenarioId}`);
-    const { data: autoAssign } = await supabase
-      .from('training_assignments')
-      .select('id, avatar_type')
-      .eq('rep_id', repId)
-      .eq('scenario_id', scenarioId)
-      .in('status', ['Pending', 'Overdue'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    
-    if (autoAssign) {
-      console.log(`[AssignmentLifecycle] Auto-linked session ${data.id} to assignment ${autoAssign.id}`);
-      targetAssignmentId = autoAssign.id;
-      assignmentAvatarType = autoAssign.avatar_type || 'female';
-    }
-  } else {
-    // Fetch avatar_type for the provided assignmentId
-    const { data: assignData } = await supabase
-      .from('training_assignments')
-      .select('avatar_type')
-      .eq('id', targetAssignmentId)
-      .single()
-    if (assignData) {
-      assignmentAvatarType = assignData.avatar_type || 'female';
-    }
   }
 
   if (targetAssignmentId) {
@@ -690,3 +700,106 @@ export const processLiveCoach = async (req: any, res: any) => {
 
 }
 
+export const pauseSession = async (req: any, res: any) => {
+  const { sessionId } = req.body
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
+    
+  try {
+    const { data: session } = await supabase
+      .from('training_sessions')
+      .select('*, training_scenarios(*)')
+      .eq('id', sessionId)
+      .single()
+      
+    if (!session) throw new Error('Session not found')
+      
+    const transcript = (session.messages_json || []).map((m: any) => {
+      let content = m.content
+      if (!content && m.parts && m.parts.length > 0) content = m.parts[0].text
+      const roleName = (m.role === 'user') ? 'Human Sales Rep' : 'AI Prospect (Buyer)'
+      return `${roleName}: ${content}`
+    }).join('\n')
+    
+    const scenario = session.training_scenarios
+    const contactTitle = scenario?.contact_title || ''
+    const contactCompany = scenario?.contact_company || ''
+    const scenarioName = (contactTitle && contactCompany)
+      ? `${contactTitle} - ${contactCompany}`
+      : contactTitle || contactCompany || scenario?.persona_name || 'Unknown'
+
+    const dynamicMetrics = scenario?.scorecard_metrics || null
+    let evaluationFocus = ''
+    let metricWeights: Record<string, number> | undefined = undefined
+
+    if (!dynamicMetrics) {
+      const metaMatch = scenario?.context_text?.match(/\[SCENARIO_METADATA:\s*(\{.*?\})\]/)
+      if (metaMatch && metaMatch[1]) {
+        try {
+          const meta = JSON.parse(metaMatch[1])
+          evaluationFocus = meta.evaluation_focus || ''
+          metricWeights = meta.metric_weights
+        } catch (e) {}
+      }
+    }
+
+    const prompt = generateEvaluationPrompt(scenarioName, transcript, evaluationFocus, null, metricWeights, dynamicMetrics || undefined)
+    
+    let feedback;
+    if (!transcript.trim()) {
+      const emptyScores: Record<string, number> = {}
+      getScorecardScoreKeys().forEach(key => { emptyScores[key] = 0 })
+      feedback = {
+        scores: emptyScores, overall_score: 0, summary: "Session paused before any interaction.", strengths: [], improvements: [], objections_analysis: [], highlights: [], outcome_analysis: "No interaction.", next_practice_recommendation: ""
+      };
+    } else {
+      try {
+        const groqApiKey = await getSecret('GROQ_API_KEY')
+        const groq = new Groq({ apiKey: groqApiKey || '' })
+        const completion = await groq.chat.completions.create({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: 'You are an expert sales coach analyst. Return only raw JSON.' },
+            { role: 'user', content: prompt }
+          ],
+          max_tokens: 3000,
+          temperature: 0.3,
+          response_format: { type: 'json_object' }
+        })
+        const text = completion.choices[0].message.content || '{}';
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        feedback = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
+      } catch (evalErr) {
+        console.error("AI Evaluation failed on pause", evalErr);
+        const fallbackScores: Record<string, number> = {}
+        getScorecardScoreKeys().forEach(key => { fallbackScores[key] = 0 })
+        feedback = { scores: fallbackScores, overall_score: 0, summary: "Partial evaluation unavailable.", strengths: [], improvements: [], objections_analysis: [], highlights: [], outcome_analysis: "System fallback triggered.", next_practice_recommendation: "" };
+      }
+    }
+
+    // Do NOT set completed_at so it remains pending
+    await safeUpdateTrainingSession(sessionId, { 
+      feedback_json: feedback
+    })
+      
+    return res.json({ success: true, feedback })
+  } catch (err: any) {
+    console.error("error in pauseSession:", err)
+    return res.status(500).json({ error: err.message })
+  }
+}
+
+export const retrySession = async (req: any, res: any) => {
+  const { sessionId } = req.body
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
+    
+  try {
+    await safeUpdateTrainingSession(sessionId, {
+      messages_json: [],
+      feedback_json: null,
+      completed_at: null
+    })
+    return res.json({ success: true })
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message })
+  }
+}

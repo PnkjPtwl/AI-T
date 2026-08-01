@@ -185,10 +185,16 @@ export default function RepDashboard() {
                                     <p className={`text-sm font-[700] ${assign.priority === 'High' ? 'text-red-600' : 'text-gray-900'}`}>{assign.priority}</p>
                                  </div>
                                  <button
-                                    onClick={() => router.push(`/rep/train/${assign.scenario_id}/briefing?assignmentId=${assign.id}`)}
+                                    onClick={() => {
+                                       if (assign.status === 'In Progress' && assign.session_id) {
+                                          router.push(`/rep/train/${assign.scenario_id}?sessionId=${assign.session_id}`)
+                                       } else {
+                                          router.push(`/rep/train/${assign.scenario_id}/briefing?assignmentId=${assign.id}`)
+                                       }
+                                    }}
                                     className={`px-5 py-2.5 text-white text-sm font-[600] rounded-[8px] transition-all duration-200 ${isUrgent ? 'bg-red-600 hover:bg-red-700 shadow-[0_2px_4px_rgba(239,68,68,0.2)]' : 'bg-[#2C5282] hover:bg-[#1A365D] shadow-sm'}`}
                                  >
-                                    Start Training
+                                    {assign.status === 'In Progress' ? 'Resume Training' : 'Start Training'}
                                  </button>
                               </div>
                            </div>
