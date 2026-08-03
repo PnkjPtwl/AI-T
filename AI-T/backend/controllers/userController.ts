@@ -372,6 +372,18 @@ export const getMyAnalytics = async (req: any, res: any) => {
       ? Math.round(practiceSessions.reduce((acc, s) => acc + (s.feedback_json?.overall_score || 0), 0) / practiceSessions.length)
       : 0;
 
+    const bestScore = practiceSessions.length > 0
+      ? Math.max(...practiceSessions.map((s: any) => s.feedback_json?.overall_score || 0))
+      : 0;
+
+    const totalPracticeSec = practiceSessions.reduce((total: number, s: any) => {
+      const voiceDeliverySec = s.feedback_json?.voice_delivery?.totalDurationSec
+      if (voiceDeliverySec && typeof voiceDeliverySec === 'number') return total + voiceDeliverySec
+      const turns = (s.messages_json || []).length
+      return total + (turns * 30)
+    }, 0)
+    const totalPracticeTimeHrs = Number((totalPracticeSec / 3600).toFixed(1))
+
     const sortedSkills = [...radarData].sort((a, b) => b.A - a.A);
     const strongestSkill = sortedSkills[0]?.subject || 'N/A';
     const weakestSkill = sortedSkills[sortedSkills.length - 1]?.subject || 'N/A';
@@ -384,6 +396,8 @@ export const getMyAnalytics = async (req: any, res: any) => {
 
     res.json({
       avgScore,
+      bestScore,
+      totalPracticeTimeHrs,
       strongestSkill,
       weakestSkill,
       trendValue,

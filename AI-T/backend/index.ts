@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import path from 'path'
 import { initSecrets } from './lib/secrets'
 import { getSupabase, setSyncSupabase } from './db/supabase'
 import authRoutes from './routes/authRoutes'
@@ -12,6 +13,8 @@ import scenarioRoutes from './routes/scenarioRoutes'
 import personaRoutes from './routes/personaRoutes'
 import ttsRoutes from './routes/ttsRoutes'
 import questionRoutes from './routes/questionRoutes'
+import dashboardRoutes from './routes/dashboardRoutes'
+import assignmentRoutes from './routes/assignmentRoutes'
 
 const app = express()
 const PORT = process.env.PORT || 4000
@@ -27,6 +30,9 @@ app.use(cors({
 }))
 app.use(express.json())
 
+// Serve local avatar & asset uploads statically
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')))
+
 app.use('/api/auth',     authRoutes)
 app.use('/api/calls',    callRoutes)
 app.use('/api/users',    userRoutes)
@@ -36,6 +42,9 @@ app.use('/api/scenarios', scenarioRoutes)
 app.use('/api/persona',   personaRoutes)
 app.use('/api/tts',       ttsRoutes)
 app.use('/api/questions', questionRoutes)
+app.use('/api',           dashboardRoutes)
+app.use('/api',           assignmentRoutes)
+
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backend running', timestamp: new Date().toISOString() })

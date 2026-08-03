@@ -46,7 +46,7 @@ export async function searchKnowledgeBase(
       return []
     }
 
-    const data = await res.json()
+    const data: any = await res.json()
     return (data.results || []) as RagChunk[]
 
   } catch (err: any) {
@@ -89,7 +89,7 @@ export async function listKbAccounts(): Promise<Array<{ id: string; name: string
     clearTimeout(timer)
 
     if (!res.ok) return []
-    const data = await res.json()
+    const data: any = await res.json()
     return data.accounts || []
   } catch {
     return []

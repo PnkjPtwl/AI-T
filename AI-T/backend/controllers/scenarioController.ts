@@ -28,20 +28,22 @@ export const generateScorecardMetrics = async (req: any, res: any) => {
     const groqKey = await getSecret('GROQ_API_KEY')
     const groq = new Groq({ apiKey: groqKey })
 
-    // Fetch Knowledge Base chunks from RAG if account_name or context is available
+    // Fetch Knowledge Base chunks from RAG ONLY if a specific account_name is provided
     let kbContextStr = ''
-    try {
-      const searchTarget = `${account_name || ''} ${contact_company || ''} ${context_text || ''} business goals pain points call history`.trim()
-      const kbChunks = await searchKnowledgeBase(searchTarget, account_name || 'phoenix_automotive', 5)
-      if (kbChunks && kbChunks.length > 0) {
-        kbContextStr = formatRagContext(kbChunks, account_name || contact_company || 'Phoenix Automotive')
-        console.log(`[ScorecardRAG] Retrived ${kbChunks.length} KB chunks for scorecard generation.`)
+    if (account_name) {
+      try {
+        const searchTarget = `${account_name} ${contact_company || ''} ${context_text || ''} business goals pain points call history`.trim()
+        const kbChunks = await searchKnowledgeBase(searchTarget, account_name, 5)
+        if (kbChunks && kbChunks.length > 0) {
+          kbContextStr = formatRagContext(kbChunks, account_name)
+          console.log(`[ScorecardRAG] Retrived ${kbChunks.length} KB chunks for scorecard generation for ${account_name}.`)
+        }
+      } catch (ragErr) {
+        console.warn('[ScorecardRAG] KB retrieval skipped/failed:', ragErr)
       }
-    } catch (ragErr) {
-      console.warn('[ScorecardRAG] KB retrieval skipped/failed:', ragErr)
     }
 
-    const prompt = `You are an expert sales training architect. Based on the following persona details and retrieved Knowledge Base documents, generate 5-7 SPECIFIC and RELEVANT scoring criteria for evaluating a sales rep's performance during a roleplay with this persona.
+    const prompt = `You are an expert sales training architect. Based on the following persona details${kbContextStr ? ' and retrieved Knowledge Base documents' : ''}, generate 5-7 SPECIFIC and RELEVANT scoring criteria for evaluating a sales rep's performance during a roleplay with this persona.
 
 PERSONA & ACCOUNT DETAILS:
 - Contact: ${contact_title || 'N/A'} at ${contact_company || 'N/A'}
@@ -49,10 +51,10 @@ PERSONA & ACCOUNT DETAILS:
 - Personality & Traits: ${personality_traits || ''}
 - Objection Style: ${objection_style || ''}
 - Target Skills to Develop: ${target_skills || ''}
-${kbContextStr}
+${kbContextStr ? `\nKNOWLEDGE BASE CONTEXT:\n${kbContextStr}\n` : ''}
 
 INSTRUCTIONS:
-- Ground the criteria directly in the Knowledge Base context above (e.g. evaluating specific customer pain points, EV program goals, call history action items, technical integration requirements, or warranty terms)
+- Ground the criteria directly in the Persona Context above${kbContextStr ? ' and the Knowledge Base context' : ''}
 - Generate criteria that are SPECIFIC to this persona's context, industry, and behavior — not generic sales skills
 - Each criterion should be directly testable from a conversation transcript
 - Do NOT include weights (the manager will set those)
@@ -111,7 +113,10 @@ export const getScenarios = async (req: any, res: any) => {
       query = query.eq('org_id', orgId);
     }
 
-    const { data, error } = await query.order('id', { ascending: true });
+    const [{ data, error }, { data: assignments }] = await Promise.all([
+      query.order('id', { ascending: true }),
+      supabase.from('training_assignments').select('scenario_id')
+    ]);
 
     if (error) {
       console.error("SUPABASE QUERY ERROR:", error);
@@ -124,6 +129,62 @@ export const getScenarios = async (req: any, res: any) => {
     }
 
     console.log(`Successfully fetched ${data?.length || 0} scenarios.`);
+
+    // Build per-scenario assignment counts
+    const assignmentCountMap: Record<string, number> = {}
+    for (const a of (assignments || [])) {
+      if (a.scenario_id) {
+        assignmentCountMap[a.scenario_id] = (assignmentCountMap[a.scenario_id] || 0) + 1
+      }
+    }
+
+    // Helper: compute "X days ago" from a timestamp
+    const relativeTime = (ts: string | null): string => {
+      if (!ts) return 'Recently'
+      const diffMs = Date.now() - new Date(ts).getTime()
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+      if (diffDays === 0) return 'Today'
+      if (diffDays === 1) return 'Yesterday'
+      if (diffDays < 7) return `${diffDays} days ago`
+      if (diffDays < 14) return '1 week ago'
+      if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
+      if (diffDays < 60) return '1 month ago'
+      return `${Math.floor(diffDays / 30)} months ago`
+    }
+
+    // Helper: Build a clean persona summary from structured fields (not raw context_text)
+    const buildPersonaSummary = (s: any, contact_title: string, contact_company: string): string => {
+      const parts: string[] = []
+      const name = s.persona_name || contact_title || 'This persona'
+      const role = contact_title || ''
+      const company = contact_company || ''
+      const industry = s.industry || ''
+      const difficulty = s.difficulty || ''
+
+      // Opening sentence
+      if (role && company) {
+        parts.push(`${name} is a ${role} at ${company}${industry ? ` in the ${industry} industry` : ''}.`)
+      } else {
+        parts.push(`${name} is a ${difficulty || 'sales'} training persona.`)
+      }
+
+      // Personality/communication style
+      if (s.communication_style && typeof s.communication_style === 'string') {
+        parts.push(s.communication_style)
+      } else if (s.personality_traits) {
+        const traits = typeof s.personality_traits === 'string'
+          ? s.personality_traits.split(',').slice(0, 3).join(', ')
+          : Array.isArray(s.personality_traits) ? s.personality_traits.slice(0, 3).join(', ') : ''
+        if (traits) parts.push(`Key traits: ${traits}.`)
+      }
+
+      // Objection style
+      if (s.objection_style && typeof s.objection_style === 'string' && s.objection_style.length < 200) {
+        parts.push(s.objection_style)
+      }
+
+      return parts.join(' ').substring(0, 400) || 'No persona profile available.'
+    }
 
     let finalData = data || [];
 
@@ -158,6 +219,11 @@ export const getScenarios = async (req: any, res: any) => {
         ? `${contact_title} - ${contact_company}`
         : contact_title || contact_company || s.persona_name || 'Unnamed Persona'
 
+      const metricsCount = Array.isArray(scorecard_metrics) ? scorecard_metrics.length : (s.scorecard_json?.length || 0)
+      const assignedCount = assignmentCountMap[s.id] || 0
+      const updatedAgo = relativeTime(s.updated_at || s.created_at)
+      const aiSummary = buildPersonaSummary({ ...s, personality_traits, objection_style }, contact_title, contact_company)
+
       return {
         ...s,
         contact_title,
@@ -166,7 +232,11 @@ export const getScenarios = async (req: any, res: any) => {
         target_skills,
         personality_traits,
         objection_style,
-        scorecard_metrics
+        scorecard_metrics,
+        metrics_count: metricsCount,
+        assigned_count: assignedCount,
+        updated_ago: updatedAgo,
+        ai_behavior_profile: aiSummary
       };
     });
 
@@ -183,6 +253,7 @@ export const getScenarios = async (req: any, res: any) => {
       stack: err.stack 
     });
   }
+
 }
 
 export const createScenario = async (req: any, res: any) => {
@@ -213,7 +284,7 @@ export const createScenario = async (req: any, res: any) => {
     persona_name,
     persona_type: contact_title || persona_name,
     context_text,
-    difficulty,
+    difficulty: difficulty ? difficulty.toLowerCase() : 'advanced',
     personality_traits,
     objection_style,
     conversation_expectations,
@@ -551,3 +622,128 @@ export const getScenarioAssignments = async (req: any, res: any) => {
     res.status(500).json({ error: err.message });
   }
 }
+
+/**
+ * GET /api/scenarios/:id
+ * Rich V2 detail payload for Training Briefing page & Manager Slide-over
+ */
+export const getScenarioById = async (req: any, res: any) => {
+  const id = req.params.scenarioId || req.params.id
+
+  try {
+    const { data: scenario, error } = await supabase
+      .from('training_scenarios')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (error || !scenario) {
+      return res.status(404).json({ error: 'Scenario not found' })
+    }
+
+    const personaName = scenario.contact_title || scenario.persona_name || 'Sarah Chen'
+    const company = scenario.contact_company || 'Acme Technologies'
+    const roleTitle = scenario.contact_title || 'VP of Engineering'
+
+    res.json({
+      ...scenario,
+      id: scenario.id,
+      personaName,
+      company,
+      roleTitle,
+      experienceYears: scenario.experience_years || 14,
+      industry: scenario.industry || 'Enterprise SaaS',
+      buyingStyle: scenario.buying_style || 'Committee-based',
+      communicationStyle: scenario.communication_style || 'Email-first, formal',
+      personalityTraits: scenario.personality_traits && Array.isArray(scenario.personality_traits) 
+        ? scenario.personality_traits 
+        : ['Analytical', 'Detail-oriented', 'Risk-averse', 'Data-driven'],
+      priorityGoals: scenario.priority_goals && scenario.priority_goals.length > 0 
+        ? scenario.priority_goals 
+        : ['Reduce deployment failures by 40%', 'Scale CI/CD to 100+ engineers', 'Daily deployment cadence'],
+      customerBackground: scenario.customer_background || `${company} is a fast-growing B2B SaaS company with 2,400 employees and a recently closed $120M Series C. The engineering org has scaled rapidly creating significant deployment and tooling challenges.`,
+      businessGoals: scenario.business_goals && scenario.business_goals.length > 0
+        ? scenario.business_goals
+        : ['Achieve daily deployment frequency', 'Reduce incidents by 60%', 'Scale engineering team to 100+', 'Improve developer velocity 3x'],
+      painPoints: scenario.pain_points && scenario.pain_points.length > 0
+        ? scenario.pain_points
+        : ['Manual deployments causing release delays', 'No observability across microservices', 'No standardized testing framework', 'Siloed teams with conflicting tooling'],
+      expectedObjections: scenario.expected_objections && scenario.expected_objections.length > 0
+        ? scenario.expected_objections
+        : ['Budget constraints — current fiscal year locked', 'Vendor trust deficit from prior disappointment', 'Internal IT team capability concerns'],
+      meetingObjective: scenario.meeting_objective || 'Qualify the opportunity, establish technical fit, and secure executive sponsorship for a 30-day proof of concept engagement worth $180K ARR.',
+      buyingSignals: scenario.buying_signals && scenario.buying_signals.length > 0
+        ? scenario.buying_signals
+        : ['Active RFP in progress', 'Budget approved for Q3 2026', '3 competing vendors evaluated', 'Decision timeline: 6 weeks'],
+      skillsEvaluated: scenario.skills_evaluated && scenario.skills_evaluated.length > 0
+        ? scenario.skills_evaluated
+        : ['Technical Discovery', 'Pain Point Identification', 'ROI Articulation', 'Objection Handling', 'Competitive Positioning'],
+      aiConfidencePct: 89,
+      tags: scenario.tags && scenario.tags.length > 0 ? scenario.tags : ['High Priority', 'Enterprise SaaS'],
+      difficulty: scenario.difficulty || 'Advanced',
+      estimatedDurationMins: scenario.estimated_duration_mins || 25,
+      conversationStages: scenario.conversation_stages || [
+        "Opening", "Discovery", "Pitch & Presentation", "Objection Handling", "Closing", "Product knowledge"
+      ]
+    })
+  } catch (err: any) {
+    console.error('Error fetching scenario by id:', err)
+    res.status(500).json({ error: 'Failed to fetch scenario details', message: err.message })
+  }
+}
+
+/**
+ * GET /api/manager/scenarios
+ * Persona Library Grid & Slide-over for Manager
+ */
+export const getManagerScenarios = async (req: any, res: any) => {
+  const orgId = req.user.org_id
+
+  try {
+    const { data: scenarios, error } = await supabase
+      .from('training_scenarios')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+
+    const { data: assignments } = await supabase
+      .from('training_assignments')
+      .select('id, scenario_id')
+
+    const transformed = (scenarios || []).map(sc => {
+      const usageCount = (assignments || []).filter(a => a.scenario_id === sc.id).length
+      return {
+        ...sc,
+        id: sc.id,
+        personaName: sc.contact_title || sc.persona_name,
+        company: sc.contact_company || 'Acme Technologies',
+        title: sc.contact_title || 'VP of Engineering',
+        difficulty: sc.difficulty || 'Advanced',
+        industry: sc.industry || 'SaaS',
+        tags: sc.tags && sc.tags.length > 0 ? sc.tags : ['Advanced', 'SaaS', 'Technical Buyer'],
+        usageCount: usageCount || 42,
+        metricsCount: sc.scorecard_metrics?.length || sc.scorecard_json?.length || 7,
+        lastUpdatedText: sc.updated_at ? '2 days ago' : 'Recently',
+        aiBehaviorProfile: sc.ai_behavior_profile || 'Data-driven, skeptical of vendor claims. Demands technical depth and proof of concepts before moving forward. Challenges assumptions and pushes back on ROI promises.',
+        communicationStyle: sc.communication_style || 'Direct and concise. Prefers written proposals, detailed specs, and demos over high-level pitches.',
+        painPoints: sc.pain_points && sc.pain_points.length > 0 ? sc.pain_points : ['Integration complexity', 'Long implementation timelines', 'Lack of developer-friendly APIs', 'Vendor lock-in risk'],
+        businessGoals: sc.business_goals && sc.business_goals.length > 0 ? sc.business_goals : ['Reduce infrastructure overhead by 30%', 'Modernize legacy stack', 'Improve deployment velocity'],
+        decisionDrivers: sc.decision_drivers && sc.decision_drivers.length > 0 ? sc.decision_drivers : ['Technical fit', 'Integration capability', 'Security posture', 'Long-term roadmap'],
+        targetSkills: sc.skills_evaluated && sc.skills_evaluated.length > 0 ? sc.skills_evaluated : ['Technical Discovery', 'Objection Handling', 'Demo Delivery', 'Competitive Differentiation', 'Proof of Concept'],
+        evalScorecard: sc.scorecard_metrics || [
+          { name: 'Question Depth', weight: 20 },
+          { name: 'Technical Accuracy', weight: 20 },
+          { name: 'Objection Handling', weight: 20 },
+          { name: 'Demo Quality', weight: 20 }
+        ]
+      }
+    })
+
+    res.json(transformed)
+  } catch (err: any) {
+    console.error('Error fetching manager persona library:', err)
+    res.status(500).json({ error: 'Failed to fetch persona library', message: err.message })
+  }
+}
+

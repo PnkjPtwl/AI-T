@@ -2,318 +2,437 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import SessionSnapshotModal from '@/components/rep/SessionSnapshotModal'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 export default function RepDashboard() {
-   const router = useRouter()
-   const [loading, setLoading] = useState(true)
-   const [repName, setRepName] = useState('')
-   const [userEmail, setUserEmail] = useState('')
-   const [analytics, setAnalytics] = useState<any>(null)
-   const [recentSessions, setRecentSessions] = useState<any[]>([])
-   const [assignments, setAssignments] = useState<any[]>([])
-   const [notes, setNotes] = useState<any[]>([])
-   const [timeframe, setTimeframe] = useState<'all' | '30d' | '7d'>('all')
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [dashboardData, setDashboardData] = useState<any>(null)
+  const [filterTab, setFilterTab] = useState<'All' | 'Not Started' | 'In Progress' | 'Completed' | 'Overdue'>('Not Started')
+  const [quickFilter, setQuickFilter] = useState<string | null>(null)
+  const [isSnapshotOpen, setIsSnapshotOpen] = useState(false)
+  const [snapshotData, setSnapshotData] = useState<any>(null)
 
-   useEffect(() => {
-      const fetchData = async () => {
-         try {
-            const token = localStorage.getItem('token')
-            if (!token) return
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
 
-            const headers = { 'Authorization': `Bearer ${token}` }
-
-            const [userRes, analyticsRes, assignmentsRes, notesRes, sessionsRes] = await Promise.all([
-               fetch(`${API}/api/users/me`, { headers }),
-               fetch(`${API}/api/users/my-analytics`, { headers }),
-               fetch(`${API}/api/users/my-assignments`, { headers }),
-               fetch(`${API}/api/users/my-notes`, { headers }),
-               fetch(`${API}/api/sessions/my-sessions`, { headers })
-            ])
-
-            if (userRes.ok) {
-               const user = await userRes.json()
-               setRepName(user.name)
-               setUserEmail(user.email)
-            }
-            if (analyticsRes.ok) setAnalytics(await analyticsRes.json())
-            if (assignmentsRes.ok) setAssignments(await assignmentsRes.json())
-            if (notesRes.ok) setNotes(await notesRes.json())
-            if (sessionsRes.ok) {
-               const sessions = await sessionsRes.json()
-               setRecentSessions(sessions.filter((s: any) => s.feedback_json && s.feedback_json.overall_score).slice(0, 5))
-            }
-         } catch (err) {
-            console.error('Failed to fetch data', err)
-         } finally {
-            setLoading(false)
-         }
+        const headers = { 'Authorization': `Bearer ${token}` }
+        const res = await fetch(`${API}/api/reps/me/dashboard`, { headers })
+        
+        if (res.ok) {
+          const data = await res.json()
+          setDashboardData(data)
+        }
+      } catch (err) {
+        console.error('Failed to load rep dashboard', err)
+      } finally {
+        setLoading(false)
       }
-      fetchData()
-   }, [])
+    }
+    fetchDashboard()
+  }, [])
 
-   if (loading) {
-      return (
-         <div className="h-[60vh] flex items-center justify-center">
-            <div className="animate-spin rounded-full h-[32px] w-[32px] border-t-2 border-[#2C5282]"></div>
-         </div>
-      )
-   }
-
-   const now = new Date().getTime();
-
-   const filterByTimeframe = (dateString: string) => {
-      if (timeframe === 'all') return true;
-      if (!dateString) return true; // If no date, include it
-      const date = new Date(dateString).getTime();
-      const diffDays = (now - date) / (1000 * 60 * 60 * 24);
-      if (timeframe === '30d') return diffDays <= 30;
-      if (timeframe === '7d') return diffDays <= 7;
-      return true;
-   };
-
-   const activeAssignments = assignments.filter(a => {
-      if (a.status === 'Completed') return false;
-      if (!filterByTimeframe(a.created_at || a.assigned_at)) return false;
-
-      
-      // Auto-destruct (remove from dashboard) if deadline has passed
-      if (a.deadline) {
-         const dl = new Date(a.deadline);
-         dl.setHours(23, 59, 59, 999);
-         if (now > dl.getTime()) {
-            return false;
-         }
-      }
-      return true;
-   }).sort((a, b) => {
-      const timeA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
-      const timeB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
-      return timeA - timeB;
-   });
-
-   const missedAssignments = assignments.filter(a => {
-      if (a.status === 'Completed') return false;
-      if (!filterByTimeframe(a.deadline)) return false;
-      if (a.deadline) {
-         const dl = new Date(a.deadline);
-         dl.setHours(23, 59, 59, 999);
-         if (now > dl.getTime()) {
-            return true;
-         }
-      }
-      return false;
-   });
-
-   const completedAssignments = assignments.filter(a => a.status === 'Completed' && filterByTimeframe(a.completed_at))
-   const historyAssignments = [...completedAssignments, ...missedAssignments]
-   
-   const filteredRecentSessions = recentSessions.filter(s => filterByTimeframe(s.completed_at))
-
-   const getDeadlineWarning = (deadlineStr: string) => {
-      if (!deadlineStr) return { text: 'No deadline', color: 'text-gray-500' };
-      const dl = new Date(deadlineStr);
-      dl.setHours(23, 59, 59, 999);
-      const diffHours = (dl.getTime() - now) / (1000 * 60 * 60);
-      
-      if (diffHours < 0) {
-         return { text: 'Expired', color: 'text-red-600' };
-      } else if (diffHours <= 24) {
-         return { text: `Due in ${Math.round(diffHours)} hrs 🔥`, color: 'text-red-600 font-[700] animate-pulse bg-red-50 px-[6px] py-[2px] rounded-[4px]' };
-      } else if (diffHours <= 72) {
-         return { text: `Due in ${Math.round(diffHours / 24)} days`, color: 'text-amber-600 font-[600]' };
-      }
-      return { text: `Due ${new Date(deadlineStr).toLocaleDateString()}`, color: 'text-gray-500 font-[500]' };
-   }
-
-   return (
-      <div className="max-w-[1200px] mx-auto space-y-[32px] pb-[48px]">
-         {/* Header */}
-         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-               <h1 className="text-4xl md:text-5xl font-[800] text-gray-900 tracking-tight">Welcome back, {repName.split(' ')[0]} 👋</h1>
-               <p className="text-lg md:text-xl text-gray-600 mt-2 font-[400] leading-relaxed">Here is your daily performance briefing and training metrics.</p>
-            </div>
-            <div>
-               <select
-                  value={timeframe}
-                  onChange={(e) => setTimeframe(e.target.value as any)}
-                  className="w-full md:w-[200px] h-[40px] bg-white border border-[#E2E8F0] rounded-[10px] px-[12px] text-sm font-semibold text-[#1A2A3A] focus:outline-none focus:ring-2 focus:ring-[#2C5282] transition-colors"
-               >
-                  <option value="all">All Time</option>
-                  <option value="30d">Last 30 Days</option>
-                  <option value="7d">Last 7 Days</option>
-               </select>
-            </div>
-         </div>
-
-         {/* 1. Missions Section */}
-         <section className="space-y-[24px]">
-            <div className="flex justify-between items-center">
-               <h2 className="text-2xl font-[700] text-gray-900 tracking-tight">Active Trainings</h2>
-               <Link href="/rep/train" className="text-base text-[#2C5282] hover:underline font-[600]">View All →</Link>
-            </div>
- 
-            {assignments.length === 0 ? (
-               <div className="bg-white border border-gray-900/10 rounded-[12px] p-[64px] text-center shadow-sm">
-                  <p className="text-gray-500 text-[15px]">No trainings assigned yet.</p>
-               </div>
-            ) : (
-               <div className="space-y-8">
-                  {/* Active Sub-section */}
-                  {activeAssignments.length > 0 && (
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {activeAssignments.map((assign) => {
-                           const warning = getDeadlineWarning(assign.deadline);
-                           const isUrgent = warning.text.includes('hours!');
-                           
-                           return (
-                              <div key={assign.id} className={`bg-white border ${isUrgent ? 'border-red-500 shadow-[0_4px_12px_rgba(239,68,68,0.15)] ring-1 ring-red-500' : 'border-gray-900/10'} rounded-[12px] p-[20px] shadow-sm hover:shadow-md transition-all duration-200 flex flex-col`}>
-                                 <div className="flex justify-between items-start mb-[16px]">
-                                    <span className="text-[12px] font-[600] px-[8px] py-[2px] rounded-[4px] bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-[0.6px]">
-                                       {assign.status}
-                                    </span>
-                                    <span className={`text-[12px] ${warning.color}`}>{warning.text}</span>
-                                 </div>
-                                 <h3 className="text-xl font-[600] text-gray-900 mb-[8px] flex-1 leading-[1.4]">{assign.scenario_name}</h3>
-   
-                                 <div className="flex items-center justify-between mt-[24px] pt-[20px] border-t border-gray-900/10">
-                                 <div>
-                                    <p className="text-xs font-[600] text-gray-500 uppercase tracking-widest mb-[4px]">Priority</p>
-                                    <p className={`text-sm font-[700] ${assign.priority === 'High' ? 'text-red-600' : 'text-gray-900'}`}>{assign.priority}</p>
-                                 </div>
-                                 <button
-                                    onClick={() => {
-                                       if (assign.status === 'In Progress' && assign.session_id) {
-                                          router.push(`/rep/train/${assign.scenario_id}?sessionId=${assign.session_id}`)
-                                       } else {
-                                          router.push(`/rep/train/${assign.scenario_id}/briefing?assignmentId=${assign.id}`)
-                                       }
-                                    }}
-                                    className={`px-5 py-2.5 text-white text-sm font-[600] rounded-[8px] transition-all duration-200 ${isUrgent ? 'bg-red-600 hover:bg-red-700 shadow-[0_2px_4px_rgba(239,68,68,0.2)]' : 'bg-[#2C5282] hover:bg-[#1A365D] shadow-sm'}`}
-                                 >
-                                    {assign.status === 'In Progress' ? 'Resume Training' : 'Start Training'}
-                                 </button>
-                              </div>
-                           </div>
-                        )})}
-                     </div>
-                  )}
- 
-                  {/* Training History Sub-section */}
-                  {historyAssignments.length > 0 && (
-                     <div className="space-y-[16px]">
-                        <h3 className="text-sm font-[600] text-gray-500 uppercase tracking-widest">Training History</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[24px]">
-                           {historyAssignments.map((assign) => {
-                              const isMissed = assign.status !== 'Completed'
-                              
-                              return (
-                                 <div key={assign.id} className="bg-gray-50/50 border border-gray-900/10 rounded-[12px] p-[24px] flex flex-col opacity-80 hover:opacity-100 transition-all duration-200 hover:shadow-sm">
-                                    <div className="flex justify-between items-start mb-[16px]">
-                                       <span className={`text-[12px] font-[600] px-[8px] py-[2px] rounded-[4px] border uppercase tracking-[0.6px] ${isMissed ? 'bg-red-50 text-red-700 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
-                                          {isMissed ? 'Missed' : assign.status}
-                                       </span>
-                                       {!isMissed && (
-                                          <span className="text-[13px] font-[700] text-gray-900">
-                                             Score: {assign.score || 0}%
-                                          </span>
-                                       )}
-                                    </div>
-                                    <h3 className="text-xl font-[600] text-gray-900 mb-[8px] flex-1 leading-[1.4]">{assign.scenario_name}</h3>
-    
-                                    <div className="flex items-center justify-between mt-[24px] pt-[20px] border-t border-gray-900/10">
-                                       <p className="text-sm text-gray-500">
-                                          {isMissed ? `Missed ${new Date(assign.deadline).toLocaleDateString()}` : `Done ${new Date(assign.completed_at).toLocaleDateString()}`}
-                                       </p>
-                                       {!isMissed && (
-                                          <Link
-                                             href={`/rep/train/${assign.scenario_id}/review?sessionId=${assign.session_id}`}
-                                             className="text-sm font-[600] text-[#2C5282] hover:underline"
-                                          >
-                                             Review →
-                                          </Link>
-                                       )}
-                                    </div>
-                                 </div>
-                              )
-                           })}
-                        </div>
-                     </div>
-                  )}
-               </div>
-            )}
-         </section>
-
-         <div className="space-y-[32px]">
-               {/* Performance Status Section */}
-               <section className="bg-white border border-gray-900/10 rounded-[12px] overflow-hidden shadow-sm">
-                  <div className="p-8 border-b border-gray-900/10 flex justify-between items-center bg-gray-50/50">
-                     <div>
-                        <h2 className="text-2xl font-[700] text-gray-900 tracking-tight">Performance Overview</h2>
-                     </div>
-                     <div className="text-right">
-                        <p className="text-xs font-[600] text-gray-500 uppercase tracking-widest mb-[4px]">Average Score</p>
-                        <p className="text-4xl font-[700] text-[#2C5282] leading-none">{analytics?.avgScore || 0}%</p>
-                     </div>
-                  </div>
-                  
-                  <div className="p-8">
-                     {/* Skill Highlights */}
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px]">
-                        <div className="p-6 bg-green-50/50 border border-green-100 rounded-xl">
-                           <p className="text-xs font-[600] text-green-700 uppercase tracking-widest mb-2">Top Strength</p>
-                           <h4 className="text-xl font-[600] text-gray-900">{analytics?.strongestSkill || 'Active Listening'}</h4>
-                        </div>
-                        <div className="p-6 bg-yellow-50/50 border border-yellow-100 rounded-xl">
-                           <p className="text-xs font-[600] text-yellow-700 uppercase tracking-widest mb-2">Focus Area</p>
-                           <h4 className="text-xl font-[600] text-gray-900">{analytics?.weakestSkill || 'Objection Handling'}</h4>
-                        </div>
-                     </div>
-                  </div>
-               </section>
-               {/* Recent Reports Table */}
-               <section className="bg-white border border-gray-900/10 rounded-[12px] overflow-hidden shadow-sm">
-                  <div className="p-8 border-b border-gray-900/10 bg-gray-50/50">
-                     <h2 className="text-2xl font-[700] text-gray-900 tracking-tight">Recent Sessions</h2>
-                  </div>
-                  <div className="overflow-x-auto">
-                     <table className="w-full text-base">
-                        <thead>
-                           <tr className="border-b border-gray-900/10 bg-white">
-                              <th className="text-left px-8 py-5 text-xs font-[600] text-gray-500 uppercase tracking-widest">Scenario</th>
-                              <th className="text-left px-8 py-5 text-xs font-[600] text-gray-500 uppercase tracking-widest">Date</th>
-                              <th className="text-right px-8 py-5 text-xs font-[600] text-gray-500 uppercase tracking-widest">Score</th>
-                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-900/5 bg-white">
-                           {filteredRecentSessions.map((session) => (
-                              <tr key={session.id} onClick={() => router.push(`/rep/train/${session.scenario_id}/review?sessionId=${session.id}`)} className="cursor-pointer hover:bg-gray-50 transition-colors">
-                                 <td className="px-8 py-5">
-                                    <p className="font-[600] text-[#2C5282]">{session.scenario_name}</p>
-                                 </td>
-                                 <td className="px-8 py-5 text-gray-600 font-[400]">{new Date(session.completed_at).toLocaleDateString()}</td>
-                                 <td className="px-8 py-5 text-right">
-                                    <span className={`font-[700] ${session.feedback_json.overall_score >= 80 ? 'text-green-600' : 'text-gray-900'}`}>
-                                       {session.feedback_json.overall_score}%
-                                    </span>
-                                 </td>
-                              </tr>
-                           ))}
-                           {filteredRecentSessions.length === 0 && (
-                              <tr>
-                                 <td colSpan={3} className="px-[24px] py-[48px] text-center text-gray-500 text-[14px]">
-                                    No recent sessions.
-                                 </td>
-                              </tr>
-                           )}
-                        </tbody>
-                     </table>
-                  </div>
-               </section>
-            </div>
+  if (loading) {
+    return (
+      <div className="h-[70vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-[#1E1B4B]"></div>
       </div>
-   )
+    )
+  }
+
+  // Use 100% Database Data returned from API
+  const stats = dashboardData?.stats || {
+    activeAssignments: 0,
+    activeAssignmentsSubtext: 'Due this week',
+    completedSessions: 0,
+    completedSessionsSubtext: 'All time',
+    averageScore: 0,
+    averageScoreSubtext: 'Out of 100',
+    practiceTimeHrs: 0,
+    practiceTimeSubtext: 'Cumulative'
+  }
+
+  const inProgress = dashboardData?.inProgressSession || null
+
+  const assignmentsList: any[] = dashboardData?.assignments || []
+
+  // Filter assignments based on tabs & quick filter
+  const filteredAssignments = assignmentsList.filter((item: any) => {
+    if (filterTab !== 'All' && item.status !== filterTab) return false
+    if (quickFilter === 'Today' && !item.lastAttemptText?.includes('today')) return false
+    if (quickFilter === 'Overdue' && item.status !== 'Overdue') return false
+    if (quickFilter === 'High Priority' && item.priority !== 'High') return false
+    if (quickFilter === 'Advanced' && item.difficulty !== 'Advanced') return false
+    return true
+  })
+
+  const stages = inProgress?.conversationStages || ['Opening', 'Discovery', 'Value Prop', 'Objections', 'Closing']
+
+  const openSnapshotModal = () => {
+    if (!inProgress) return
+    setSnapshotData(inProgress.snapshotData || null)
+    setIsSnapshotOpen(true)
+  }
+
+  return (
+    <div className="space-y-8 pb-12 font-sans max-w-[1360px] mx-auto">
+      {/* Dashboard Content */}
+
+      {/* IN PROGRESS: Continue Your Last Training Banner Card (Figma media__1785582272981.png) */}
+      {inProgress && (
+        <div className="bg-white rounded-[24px] border border-gray-200/80 p-8 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-500"></div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* Left Info Column */}
+            <div className="lg:col-span-4 space-y-4">
+              <span className="inline-block px-3 py-1 bg-red-50 text-red-600 text-[11px] font-[800] rounded-full uppercase tracking-wider">
+                IN PROGRESS
+              </span>
+              <div>
+                <h2 className="text-2xl font-[800] text-[#1E293B] tracking-tight">Continue Your Last Training</h2>
+                <p className="text-xs text-[#64748B] font-[500] mt-1">Pick up exactly where you left off.</p>
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-gray-100 text-xs">
+                <div className="flex items-center justify-between text-[#64748B]">
+                  <span>Training Scenario</span>
+                  <span className="font-[700] text-[#1E293B]">{inProgress.title}</span>
+                </div>
+                <div className="flex items-center justify-between text-[#64748B]">
+                  <span>Persona</span>
+                  <span className="font-[700] text-[#1E293B]">{inProgress.personaName}</span>
+                </div>
+                <div className="flex items-center justify-between text-[#64748B]">
+                  <span>Company</span>
+                  <span className="font-[700] text-[#1E293B]">{inProgress.company}</span>
+                </div>
+                <div className="flex items-center justify-between text-[#64748B] pt-1">
+                  <span>Difficulty</span>
+                  <span className="px-2.5 py-0.5 bg-red-50 text-red-600 font-[700] text-[10px] rounded-md">
+                    {inProgress.difficulty}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[#64748B]">
+                  <span>Training Mode</span>
+                  <span className="px-2.5 py-0.5 bg-purple-50 text-purple-700 font-[700] text-[10px] rounded-md">
+                    {inProgress.trainingMode}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Progress & Stepper Column */}
+            <div className="lg:col-span-8 bg-gray-50/60 border border-gray-100 rounded-[20px] p-6 space-y-6">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-[800] text-[#64748B] tracking-wider uppercase">SESSION PROGRESS</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-[800] text-[#1E293B] text-base">{inProgress.progressPercentage}%</span>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#1E1B4B] rounded-full transition-all duration-500"
+                  style={{ width: `${inProgress.progressPercentage}%` }}
+                ></div>
+              </div>
+
+              {/* Tiles Row */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-white p-3.5 rounded-xl border border-gray-200/60 shadow-sm">
+                  <p className="text-[10px] font-[600] text-[#64748B]">Est. Time Remaining</p>
+                  <p className="text-sm font-[800] text-[#1E293B] mt-0.5">{inProgress.estTimeRemainingMins} min</p>
+                </div>
+                <div className="bg-white p-3.5 rounded-xl border border-gray-200/60 shadow-sm col-span-2">
+                  <p className="text-[10px] font-[600] text-[#64748B]">Current Stage</p>
+                  <p className="text-sm font-[800] text-[#1E293B] mt-0.5">{inProgress.currentStage}</p>
+                  <p className="text-[10px] text-[#64748B] font-[500]">{inProgress.stageProgressText}</p>
+                </div>
+              </div>
+
+              {/* Conversation Stages Stepper Bar */}
+              <div className="space-y-2 pt-2">
+                <p className="text-[10px] font-[800] text-[#64748B] tracking-wider uppercase">Conversation Stages</p>
+                <div className="flex items-center justify-between relative px-2">
+                  <div className="absolute left-6 right-6 top-2 h-0.5 bg-gray-200 -z-0"></div>
+                  {stages.map((stageName: string, idx: number) => {
+                    const isActive = idx === (inProgress.activeStepIndex ?? 1)
+                    const isPassed = idx < (inProgress.activeStepIndex ?? 1)
+
+                    return (
+                      <div key={stageName} className="flex flex-col items-center z-10 space-y-1">
+                        <div
+                          className={`w-4 h-4 rounded-full flex items-center justify-center transition-all ${
+                            isActive
+                              ? 'bg-[#7C3AED] ring-4 ring-purple-100 scale-110'
+                              : isPassed
+                              ? 'bg-[#1E1B4B]'
+                              : 'bg-gray-300'
+                          }`}
+                        >
+                          {isPassed && <span className="text-[8px] text-white">✓</span>}
+                        </div>
+                        <span
+                          className={`text-[10px] font-[600] ${
+                            isActive ? 'text-[#7C3AED] font-[800]' : 'text-[#64748B]'
+                          }`}
+                        >
+                          {stageName}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-4 border-t border-gray-200/60">
+                <span className="text-xs text-[#64748B] font-[500]">{inProgress.pausedAgoText}</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={openSnapshotModal}
+                    className="px-4 py-2.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-xs font-[700] text-[#334155] shadow-sm transition-colors"
+                  >
+                    📊 View Snapshot
+                  </button>
+                  <button
+                    onClick={() => {
+                      const params = new URLSearchParams()
+                      if (inProgress.assignmentId) params.append('assignmentId', inProgress.assignmentId)
+                      if (inProgress.sessionId) params.append('sessionId', inProgress.sessionId)
+                      router.push(`/rep/train/${inProgress.scenarioId}/briefing?${params.toString()}`)
+                    }}
+                    className="px-6 py-2.5 rounded-xl bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] flex items-center gap-2 shadow-md transition-colors"
+                  >
+                    <span>▷</span> Resume Training
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4 Aggregated Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs font-[700] text-[#64748B]">Active Assignments</p>
+            <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{stats.activeAssignments}</h3>
+            <p className="text-xs text-[#64748B] mt-1">{stats.activeAssignmentsSubtext}</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-[700]">
+            📋
+          </div>
+        </div>
+
+        <div
+          onClick={() => router.push('/rep/train')}
+          className="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm flex items-center justify-between cursor-pointer hover:border-green-300 transition-colors"
+        >
+          <div>
+            <p className="text-xs font-[700] text-[#64748B]">Completed Sessions</p>
+            <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{stats.completedSessions}</h3>
+            <p className="text-xs text-green-600 font-[600] mt-1">View in Assignments →</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center font-[700]">
+            ✓
+          </div>
+        </div>
+
+        <div
+          onClick={() => router.push('/rep/my-stats')}
+          className="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-300 transition-colors"
+        >
+          <div>
+            <p className="text-xs font-[700] text-[#64748B]">Average Score</p>
+            <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{stats.averageScore}%</h3>
+            <p className="text-xs text-blue-600 font-[600] mt-1">View My Stats →</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-[700]">
+            📈
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs font-[700] text-[#64748B]">Practice Time</p>
+            <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{stats.practiceTimeHrs} hrs</h3>
+            <p className="text-xs text-[#64748B] mt-1">{stats.practiceTimeSubtext}</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-[700]">
+            ⏱️
+          </div>
+        </div>
+      </div>
+
+      {/* Your Assignments Grid Section */}
+      <div className="space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-[800] text-[#1E293B] tracking-tight">Your Assignments</h2>
+            <p className="text-xs text-[#64748B] font-[500] mt-0.5">
+              {filteredAssignments.length} of {assignmentsList.length} shown
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-[700] text-[#334155] hover:bg-gray-50 flex items-center gap-1.5 shadow-sm">
+              <span>🔍</span> Filters
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-2 border-b border-gray-200 pb-3 overflow-x-auto">
+          {(['All', 'Not Started', 'In Progress', 'Completed', 'Overdue'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setFilterTab(tab)}
+              className={`px-4 py-2 rounded-xl text-xs font-[700] whitespace-nowrap transition-colors ${
+                filterTab === tab
+                  ? 'bg-[#1E1B4B] text-white shadow-sm'
+                  : 'bg-white text-[#64748B] border border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {/* Quick Filter Pills */}
+        <div className="flex items-center gap-2 text-xs overflow-x-auto pb-1">
+          <span className="font-[700] text-[#64748B] mr-1">Quick:</span>
+          {['Today', 'Overdue', 'High Priority', 'Advanced', 'Due This Week'].map((pill) => (
+            <button
+              key={pill}
+              onClick={() => setQuickFilter(quickFilter === pill ? null : pill)}
+              className={`px-3 py-1 rounded-full border text-[11px] font-[600] transition-colors ${
+                quickFilter === pill
+                  ? 'bg-purple-100 text-purple-800 border-purple-300'
+                  : 'bg-white text-[#64748B] border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              {pill}
+            </button>
+          ))}
+        </div>
+
+        {/* Assignments 3-Column Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredAssignments.map((assign: any) => {
+            let statusBadge = (
+              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-[10px] font-[800] rounded-full border border-blue-100 uppercase">
+                {assign.status}
+              </span>
+            )
+            if (assign.status === 'Overdue') {
+              statusBadge = (
+                <span className="px-2.5 py-1 bg-red-50 text-red-700 text-[10px] font-[800] rounded-full border border-red-100 uppercase">
+                  Overdue
+                </span>
+              )
+            } else if (assign.status === 'Completed') {
+              statusBadge = (
+                <span className="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-[800] rounded-full border border-green-100 uppercase">
+                  Completed
+                </span>
+              )
+            }
+
+            return (
+              <div
+                key={assign.id}
+                onClick={() => router.push(`/rep/train/${assign.scenarioId}/briefing?${assign.id ? `assignmentId=${assign.id}` : ''}`)}
+                className="bg-white rounded-[20px] border border-gray-200/80 p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between space-y-5 group"
+              >
+                <div className="space-y-4">
+                  {/* Top Avatar & Status Header */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#1E1B4B] text-white font-[800] text-sm flex items-center justify-center shadow-sm">
+                        {assign.avatarType || 'SC'}
+                      </div>
+                      <div>
+                        <h3 className="font-[800] text-[#1E293B] text-base group-hover:text-purple-700 transition-colors">
+                          {assign.personaName}
+                        </h3>
+                        <p className="text-xs text-[#64748B]">{assign.roleTitle}</p>
+                        <p className="text-[11px] font-[600] text-purple-600">{assign.company}</p>
+                      </div>
+                    </div>
+                    {statusBadge}
+                  </div>
+
+                  {/* Title & Tags */}
+                  <div>
+                    <h4 className="font-[700] text-[#1E293B] text-sm">{assign.title}</h4>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {(assign.tags || ['Technical Discovery', 'High', 'SaaS']).map((tag: string, idx: number) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 bg-gray-100 text-[#475569] text-[10px] font-[600] rounded-md"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Difficulty & Duration */}
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-gray-100">
+                    <div>
+                      <p className="text-[10px] font-[600] text-[#64748B]">DIFFICULTY</p>
+                      <p className="font-[700] text-red-600 mt-0.5">{assign.difficulty}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-[600] text-[#64748B]">DURATION</p>
+                      <p className="font-[700] text-[#1E293B] mt-0.5">⏱️ {assign.durationMins} min</p>
+                    </div>
+                  </div>
+
+                  {/* Due Date & Avg Score */}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <p className="text-[10px] font-[600] text-[#64748B]">DUE DATE</p>
+                      <p className="font-[600] text-[#334155] mt-0.5">📅 {assign.dueDate}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-[600] text-[#64748B]">AVG SCORE</p>
+                      <p className="font-[800] text-[#1E1B4B] mt-0.5">
+                        {assign.avgScore ? `${assign.avgScore} /100` : 'Not attempted'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-[#64748B]">
+                  <span>{assign.lastAttemptText}</span>
+                  <span className="text-purple-600 font-[700] group-hover:translate-x-1 transition-transform">
+                    Start →
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Session Snapshot Modal */}
+      <SessionSnapshotModal
+        isOpen={isSnapshotOpen}
+        onClose={() => setIsSnapshotOpen(false)}
+        snapshotData={snapshotData}
+        scenarioId={inProgress?.scenarioId || ''}
+        sessionId={inProgress?.sessionId || ''}
+      />
+    </div>
+  )
 }

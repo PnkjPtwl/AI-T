@@ -194,12 +194,14 @@ export function generateConversationAnalyticsPrompt(transcript: string, voiceAgg
   const steps: { step: number; rep: string; customer: string }[] = []
   let step = 0
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith('Human Sales Rep:')) {
-      const rep = lines[i].replace('Human Sales Rep:', '').trim()
-      const customer = (lines[i + 1] || '').replace('AI Prospect (Buyer):', '').trim()
+    const line = lines[i].trim()
+    if (/^(Human Sales Rep|Human|Sales Rep|user|rep):/i.test(line)) {
+      const rep = line.replace(/^(Human Sales Rep|Human|Sales Rep|user|rep):\s*/i, '').trim()
+      const nextLine = (lines[i + 1] || '').trim()
+      const customer = nextLine.replace(/^(AI Prospect \(Buyer\)|AI Prospect|Prospect|Buyer|assistant|model):\s*/i, '').trim()
       step++
       steps.push({ step, rep, customer })
-      i++ // skip next line (already consumed as customer)
+      i++
     }
   }
 

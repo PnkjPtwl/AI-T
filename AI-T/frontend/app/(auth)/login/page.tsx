@@ -39,7 +39,7 @@ export default function LoginPage() {
         if (data.role === 'manager') {
           router.push('/dashboard')
         } else {
-          router.push('/rep/train')
+          router.push('/rep/dashboard')
         }
       } else {
         console.error(`--- [AUTH] Login failed: ${data.error} ---`)

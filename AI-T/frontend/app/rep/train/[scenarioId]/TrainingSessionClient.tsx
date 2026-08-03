@@ -1,124 +1,441 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import LiveMetricsBoard, { LiveMetrics, CoachTrigger } from '@/components/training/LiveMetricsBoard'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
-const MODULATE_API_KEY = process.env.NEXT_PUBLIC_MODULATE_API_KEY || ''
-const MODULATE_WS_URL = `wss://platform.modulate.ai/api/velma-2-stt-streaming?api_key=${MODULATE_API_KEY}&audio_format=s16le&sample_rate=16000&num_channels=1`
-
-// Silence detection config
-const SILENCE_THRESHOLD = 0.01   // Volume level below which we consider silence
-const SILENCE_DURATION_MS = 1500 // How long silence must last before ending a turn
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'model' | 'system'
   content: string
+  timestamp?: string
+  inlineCoachNote?: string
+}
+
+interface LiveMetricsState {
+  wpm: number
+  fillerRatio: number
+  talkListenRatio: number
+  userTalkTimeMs: number
+  aiTalkTimeMs: number
+  questionCount: number
+}
+
+interface CoachingInsight {
+  id: string
+  severity: 'warning' | 'danger' | 'info' | 'success'
+  title: string
+  text: string
+  timestamp: string
 }
 
 export default function TrainingSessionClient({ scenarioId }: { scenarioId: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const sessionId = searchParams.get('sessionId')
+  const paramSessionId = searchParams.get('sessionId')
+  const assignmentId = searchParams.get('assignmentId')
 
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(paramSessionId)
   const [scenario, setScenario] = useState<any>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [textInput, setTextInput] = useState('')
   const [isAiSpeaking, setIsAiSpeaking] = useState(false)
-  const [metrics, setMetrics] = useState<LiveMetrics | null>(null)
-  const [coachTip, setCoachTip] = useState<CoachTrigger | null>(null)
   const [micActive, setMicActive] = useState(false)
-  const [userSpeaking, setUserSpeaking] = useState(false)
-  const [micError, setMicError] = useState<string | null>(null)
+  const [autoSendOnSilence, setAutoSendOnSilence] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
-  const [deepgramKey, setDeepgramKey] = useState<string | null>(null)
-  const [paceWPM, setPaceWPM] = useState(0)
-  const [fillerCount, setFillerCount] = useState(0)
+  const [isEnding, setIsEnding] = useState(false)
+  const [audioLevel, setAudioLevel] = useState(0)
 
-  const userTalkTimeMs = useRef(0)
-  const aiTalkTimeMs = useRef(0)
-  const interruptionCount = useRef(0)
-  const lastQuestionTime = useRef<number>(Date.now())
+  // Real-time analytics state
+  const [moodScore, setMoodScore] = useState(65)
+  const [toneClarity, setToneClarity] = useState(88)
+  const [sentimentShift, setSentimentShift] = useState(0)
+  const [currentStage, setCurrentStage] = useState('Opening')
+  const [progressPct, setProgressPct] = useState(15)
+  const [inlineCoachNote, setInlineCoachNote] = useState<string | null>(
+    '💡 Tip: Open with an engaging question to uncover the prospect\'s key challenges.'
+  )
+
+  // Tone distribution percentages (dynamic based on live sentiment)
+  const [toneDistribution, setToneDistribution] = useState({
+    alert: 12,
+    hesitant: 25,
+    warm: 72,
+    wise: 40
+  })
+
+  // Live metrics state
+  const [metrics, setMetrics] = useState<LiveMetricsState>({
+    wpm: 130,
+    fillerRatio: 2.1,
+    talkListenRatio: 45,
+    userTalkTimeMs: 0,
+    aiTalkTimeMs: 0,
+    questionCount: 0
+  })
+
+  // Real-time insights array for AI Coach sidebar
+  const [coachingInsights, setCoachingInsights] = useState<CoachingInsight[]>([
+    {
+      id: 'init-1',
+      severity: 'info',
+      title: 'Active Listening',
+      text: 'Listen carefully for subtle pain points regarding deployment or scaling.',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+  ])
+
+  // Suggested follow-ups state
+  const [suggestedFollowUps, setSuggestedFollowUps] = useState<string[]>([
+    "What's your current deployment failure rate?",
+    "How is your team managing rollback procedures?",
+    "What key metrics define success for your engineering team this quarter?"
+  ])
+
+  const trainingMode = searchParams.get('mode') || scenario?.training_mode || 'Coach Mode'
+  const isExamMode = trainingMode === 'Exam Mode'
+  const isLearningMode = trainingMode === 'Learning Mode'
+
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const isAiSpeakingRef = useRef(false)
-  const turnStartTimeRef = useRef<number>(0)
-  const currentTranscriptRef = useRef<string>('')
-  const currentEmotionRef = useRef<string>('Neutral')
-  const currentConfidenceRef = useRef<number>(0.9)
-
-  // Mic/audio refs
-  const streamRef = useRef<MediaStream | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const processorRef = useRef<ScriptProcessorNode | null>(null)
-  const wsRef = useRef<WebSocket | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const micActiveRef = useRef(false)
+  const speechStartTimeRef = useRef<number | null>(null)
+  const speechSilenceTimerRef = useRef<NodeJS.Timeout | null>(null)
   const recognitionRef = useRef<any>(null)
-  const modulateTranscriptRef = useRef<string>('')
-  const isProcessingRef = useRef(false)
-  const silenceStartRef = useRef<number>(0)
-  const isSpeakingRef = useRef(false)
-  const audioChunksRef = useRef<Int16Array[]>([])
-  
-  const deepgramWsRef = useRef<WebSocket | null>(null)
-  const totalWordsRef = useRef<number>(0)
-  const totalFillersRef = useRef<number>(0)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const animFrameRef = useRef<number | null>(null)
 
-  // Fetch session on mount
   useEffect(() => {
-    if (!sessionId) return
-    const fetchSession = async () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, inlineCoachNote, coachingInsights])
+
+  // Clean up audio & speech resources on unmount
+  useEffect(() => {
+    return () => {
+      micActiveRef.current = false
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop() } catch (e) {}
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(t => t.stop())
+      }
+      if (audioContextRef.current) {
+        try { audioContextRef.current.close() } catch (e) {}
+      }
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current)
+      }
+      if (speechSilenceTimerRef.current) {
+        clearTimeout(speechSilenceTimerRef.current)
+      }
+    }
+  }, [])
+
+  // Auto-initialize session if activeSessionId is missing
+  useEffect(() => {
+    const ensureSession = async () => {
+      const token = localStorage.getItem('token')
+      let sessId = activeSessionId || paramSessionId
+
+      if (!sessId) {
+        try {
+          const startRes = await fetch(`${API}/api/sessions/start`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ scenarioId, assignmentId: assignmentId || null })
+          })
+          if (startRes.ok) {
+            const startData = await startRes.json()
+            sessId = startData.sessionId
+            if (sessId) {
+              setActiveSessionId(sessId)
+              const newUrl = window.location.pathname + `?sessionId=${sessId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}`
+              window.history.replaceState(null, '', newUrl)
+            }
+          }
+        } catch (e) {
+          console.error('Failed to auto-start session:', e)
+        }
+      }
+
+      if (!sessId) return
+
       try {
-        const token = localStorage.getItem('token')
-        const res = await fetch(`${API}/api/sessions/${sessionId}`, {
+        const res = await fetch(`${API}/api/sessions/${sessId}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
         if (res.ok) {
           const data = await res.json()
-          setScenario(data.scenario)
-          if (data.session?.messages_json) {
-            setMessages(data.session.messages_json.map((m: any) => ({
-              role: m.role === 'model' ? 'assistant' : m.role,
+          const sess = data.session || data
+          setScenario(data.scenario || sess.training_scenarios)
+
+          if (sess.current_stage) setCurrentStage(sess.current_stage)
+          if (sess.progress_percentage) setProgressPct(sess.progress_percentage)
+
+          if (sess.messages_json && sess.messages_json.length > 0) {
+            const parsedMsgs: ChatMessage[] = sess.messages_json.map((m: any) => ({
+              role: (m.role === 'model' || m.role === 'persona' || m.role === 'bot') ? 'assistant' : m.role,
               content: m.content || (m.parts && m.parts[0]?.text) || ''
-            })))
+            }))
+            setMessages(parsedMsgs)
+
+            // Re-calculate metrics from loaded conversation
+            const userMsgs = parsedMsgs.filter(m => m.role === 'user')
+            const assistantMsgs = parsedMsgs.filter(m => m.role === 'assistant')
+
+            const totalUserWords = userMsgs.reduce((acc, m) => acc + m.content.split(/\s+/).length, 0)
+            const totalAiWords = assistantMsgs.reduce((acc, m) => acc + m.content.split(/\s+/).length, 0)
+            const userEstMs = totalUserWords * 400
+            const aiEstMs = totalAiWords * 400
+            const totalMs = userEstMs + aiEstMs
+            const calcRatio = totalMs > 0 ? Math.round((userEstMs / totalMs) * 100) : 45
+            const questionCount = userMsgs.filter(m => m.content.includes('?')).length
+
+            setMetrics({
+              wpm: 135,
+              fillerRatio: 1.5,
+              talkListenRatio: calcRatio,
+              userTalkTimeMs: userEstMs,
+              aiTalkTimeMs: aiEstMs,
+              questionCount
+            })
+
+            // Restore suggested followups & coaching insights from the last turn
+            if (userMsgs.length > 0 && assistantMsgs.length > 0) {
+              const lastUser = userMsgs[userMsgs.length - 1].content
+              const lastAi = assistantMsgs[assistantMsgs.length - 1].content
+              try {
+                const sentRes = await fetch(`${API}/api/sessions/live-sentiment`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                  },
+                  body: JSON.stringify({
+                    repMessage: lastUser,
+                    customerReply: lastAi,
+                    sessionId: sessId
+                  })
+                })
+                if (sentRes.ok) {
+                  const sentData = await sentRes.json()
+                  if (sentData.suggested_followups && sentData.suggested_followups.length > 0) {
+                    setSuggestedFollowUps(sentData.suggested_followups)
+                  }
+                  if (sentData.coaching_hint) {
+                    setInlineCoachNote(`🎯 ${sentData.coaching_hint}`)
+                    setCoachingInsights(prev => [
+                      {
+                        id: `restored-${Date.now()}`,
+                        severity: 'info',
+                        title: 'Customer Sentiment',
+                        text: sentData.coaching_hint,
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      },
+                      ...prev
+                    ])
+                  }
+                  if (sentData.customer_sentiment !== undefined) {
+                    setMoodScore(sentData.customer_sentiment)
+                  }
+                  if (sentData.tone_distribution) {
+                    setToneDistribution(sentData.tone_distribution)
+                  }
+                }
+              } catch (e) {
+                console.warn('Restoring sentiment failed (non-fatal):', e)
+              }
+            }
           }
         }
-      } catch (e) {
-        console.error('Failed to fetch session:', e)
+      } catch (err) {
+        console.error('Failed to fetch session:', err)
       }
     }
+    ensureSession()
+  }, [scenarioId, paramSessionId])
+
+  const [sttStatus, setSttStatus] = useState<string | null>(null)
+
+  // Initialize Web Audio volume meter for real-time visual feedback
+  const initAudioVisualizer = (stream: MediaStream) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtx) return
+      const audioCtx = new AudioCtx()
+      audioContextRef.current = audioCtx
+      const source = audioCtx.createMediaStreamSource(stream)
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 64
+      source.connect(analyser)
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      const updateLevel = () => {
+        analyser.getByteFrequencyData(dataArray)
+        let sum = 0
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i]
+        }
+        const avg = sum / dataArray.length
+        setAudioLevel(Math.min(100, Math.round((avg / 128) * 100)))
+        if (micActiveRef.current) {
+          animFrameRef.current = requestAnimationFrame(updateLevel)
+        }
+      }
+      updateLevel()
+    } catch (e) {
+      console.warn('Audio visualizer init error:', e)
     }
-    fetchSession()
-
-    // Fetch Deepgram Key
-    fetch(`${API}/api/auth/deepgram-key`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-    })
-      .then(res => res.json())
-      .then(data => { if (data.key) setDeepgramKey(data.key) })
-      .catch(console.error)
-
-  }, [sessionId])
-
-  const floatTo16BitPCM = (input: Float32Array): Int16Array => {
-    const output = new Int16Array(input.length)
-    for (let i = 0; i < input.length; i++) {
-      const s = Math.max(-1, Math.min(1, input[i]))
-      output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF
-    }
-    return output
   }
 
-  const handleInterrupt = () => {
-    if (isAiSpeakingRef.current && audioRef.current) {
-      audioRef.current.pause()
-      setIsAiSpeaking(false)
-      isAiSpeakingRef.current = false
-      interruptionCount.current += 1
+  const startListening = async (isAutoRestart = false) => {
+    if (typeof window === 'undefined') return
+
+    // 1. Request Browser Mic Permission explicitly
+    let stream: MediaStream | null = null
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        mediaStreamRef.current = stream
+        if (!isAutoRestart) {
+          initAudioVisualizer(stream)
+        }
+      }
+    } catch (err: any) {
+      console.warn('Microphone permission denied:', err)
+      alert('Microphone access is blocked. Please allow microphone permissions in your browser address bar.')
+      setMicActive(false)
+      micActiveRef.current = false
+      return
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      alert('Speech-to-Text is not supported in this browser. Please use Chrome, Edge, or Brave.')
+      setMicActive(false)
+      micActiveRef.current = false
+      return
+    }
+
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch (e) {}
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+
+    recognition.onstart = () => {
+      setMicActive(true)
+      micActiveRef.current = true
+      setSttStatus('🎙️ Listening... Speak clearly into your mic.')
+      if (!speechStartTimeRef.current) {
+        speechStartTimeRef.current = Date.now()
+      }
+    }
+
+    recognition.onresult = (event: any) => {
+      let interim = ''
+      let final = ''
+
+      for (let i = 0; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript
+        if (event.results[i].isFinal) {
+          final += transcript + ' '
+        } else {
+          interim += transcript
+        }
+      }
+
+      const combined = (final + interim).trim()
+      if (combined) {
+        setTextInput(combined)
+        setSttStatus(`🎙️ Hearing: "${combined.slice(-35)}"`)
+
+        // Silence auto-send detection if enabled
+        if (autoSendOnSilence) {
+          if (speechSilenceTimerRef.current) clearTimeout(speechSilenceTimerRef.current)
+          speechSilenceTimerRef.current = setTimeout(() => {
+            if (combined.trim().length > 3) {
+              handleSendMessage(combined)
+            }
+          }, 1800)
+        }
+      }
+    }
+
+    recognition.onerror = (event: any) => {
+      if (event.error !== 'aborted') {
+        console.warn('Speech recognition error event:', event.error)
+      }
+      if (event.error === 'not-allowed') {
+        alert('Microphone permission was denied. Please allow microphone access in your browser settings.')
+        setMicActive(false)
+        micActiveRef.current = false
+      } else if (event.error === 'no-speech') {
+        setSttStatus('🎙️ Listening... Speak into your mic.')
+      }
+    }
+
+    recognition.onend = () => {
+      // Auto-restart speech recognition if micActiveRef is still true
+      if (micActiveRef.current) {
+        try {
+          recognition.start()
+        } catch (e) {
+          setSttStatus(null)
+        }
+      } else {
+        setSttStatus(null)
+        setMicActive(false)
+      }
+    }
+
+    try {
+      recognition.start()
+      recognitionRef.current = recognition
+    } catch (err: any) {
+      console.error('Failed to start speech recognition:', err)
+    }
+  }
+
+  const stopListening = () => {
+    micActiveRef.current = false
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch (e) {}
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop())
+      mediaStreamRef.current = null
+    }
+    if (audioContextRef.current) {
+      try { audioContextRef.current.close() } catch (e) {}
+      audioContextRef.current = null
+    }
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current)
+      animFrameRef.current = null
+    }
+    setAudioLevel(0)
+    setMicActive(false)
+    setSttStatus(null)
+  }
+
+  const toggleMic = () => {
+    if (micActive) {
+      stopListening()
+    } else {
+      startListening()
     }
   }
 
   const playTTS = async (text: string) => {
     setIsAiSpeaking(true)
-    isAiSpeakingRef.current = true
     try {
       const token = localStorage.getItem('token')
       const res = await fetch(`${API}/api/tts`, {
@@ -130,454 +447,638 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
         if (audioRef.current) {
-          const aiTurnStart = Date.now()
           audioRef.current.src = url
           audioRef.current.play()
-          audioRef.current.onended = () => {
-            setIsAiSpeaking(false)
-            isAiSpeakingRef.current = false
-            aiTalkTimeMs.current += (Date.now() - aiTurnStart)
-          }
+          audioRef.current.onended = () => setIsAiSpeaking(false)
+          return
         }
-      } else {
-        setIsAiSpeaking(false)
-        isAiSpeakingRef.current = false
       }
-    } catch (e) {
-      console.error('TTS Failed', e)
+    } catch (err) {
+      console.warn('Backend TTS failed, using Web Speech Synthesis fallback', err)
+    }
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.rate = 1.0
+      utterance.pitch = 1.0
+      utterance.onend = () => setIsAiSpeaking(false)
+      utterance.onerror = () => setIsAiSpeaking(false)
+      window.speechSynthesis.speak(utterance)
+    } else {
       setIsAiSpeaking(false)
-      isAiSpeakingRef.current = false
     }
   }
 
-  const handleUserTurnComplete = async (durationMs: number) => {
-    const transcript = currentTranscriptRef.current.trim() || 'Hmm, could you repeat that?'
-    const emotion = currentEmotionRef.current
+  const handleSendMessage = async (textToSend?: string) => {
+    const messageText = textToSend || textInput
+    if (!messageText.trim()) return
 
-    setMessages(prev => [...prev, { role: 'user', content: transcript }])
-
-    const payload = {
-      sessionId,
-      transcript: currentTranscriptRef.current.trim(),
-      modulateTranscript: modulateTranscriptRef.current.trim(),
-      emotion: currentEmotionRef.current || 'Neutral',
-      confidenceScore: 0.9,
-      userTalkTimeMs: userTalkTimeMs.current,
-      aiTalkTimeMs: aiTalkTimeMs.current,
-      interruptionCount: interruptionCount.current,
-      durationMs,
-      durationSinceLastQuestionMs: Date.now() - lastQuestionTime.current,
-      pauseQualityMs: 1500
+    if (speechSilenceTimerRef.current) {
+      clearTimeout(speechSilenceTimerRef.current)
     }
+
+    // Calculate actual speech duration
+    const speechEndTime = Date.now()
+    const rawDurationMs = speechStartTimeRef.current ? Math.max(1500, speechEndTime - speechStartTimeRef.current) : 3500
+    speechStartTimeRef.current = null
+
+    // Temporarily pause mic active ref while processing message
+    if (micActive && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop()
+      } catch (e) {}
+    }
+
+    const userMsg: ChatMessage = { role: 'user', content: messageText.trim() }
+    setMessages(prev => [...prev, userMsg])
+    setTextInput('')
+
+    // Update cumulative metrics
+    const userWords = messageText.trim().split(/\s+/).length
+    const calculatedWpm = Math.round((userWords / (rawDurationMs / 60000))) || 135
+    const fillerRegex = /\b(um|uh|like|you know|so|basically)\b/gi
+    const fillerMatches = messageText.match(fillerRegex) || []
+    const calculatedFillerRatio = Math.round((fillerMatches.length / userWords) * 1000) / 10
+
+    const updatedUserTalkMs = metrics.userTalkTimeMs + rawDurationMs
+    const currentAiTalkMs = metrics.aiTalkTimeMs || 4000
+    const totalTalkMs = updatedUserTalkMs + currentAiTalkMs
+    const calcTalkListenRatio = Math.round((updatedUserTalkMs / totalTalkMs) * 100)
+
+    setMetrics(prev => ({
+      ...prev,
+      wpm: calculatedWpm,
+      fillerRatio: calculatedFillerRatio,
+      userTalkTimeMs: updatedUserTalkMs,
+      talkListenRatio: calcTalkListenRatio,
+      questionCount: prev.questionCount + (messageText.includes('?') ? 1 : 0)
+    }))
 
     try {
       const token = localStorage.getItem('token')
+      let currentSessionId = activeSessionId || paramSessionId
+
+      // Auto-start session if not initialized yet
+      if (!currentSessionId) {
+        try {
+          const startRes = await fetch(`${API}/api/sessions/start`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ scenarioId, assignmentId: assignmentId || null })
+          })
+          if (startRes.ok) {
+            const startData = await startRes.json()
+            currentSessionId = startData.sessionId
+            if (currentSessionId) {
+              setActiveSessionId(currentSessionId)
+              const newUrl = window.location.pathname + `?sessionId=${currentSessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}`
+              window.history.replaceState(null, '', newUrl)
+            }
+          }
+        } catch (e) {
+          console.error('Auto start session failed:', e)
+        }
+      }
+
+      if (!currentSessionId) return
+      
+      // 1. Process Live Turn (Conversation & AI Response)
       const res = await fetch(`${API}/api/sessions/live-turn`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          sessionId: currentSessionId,
+          transcript: messageText,
+          durationMs: rawDurationMs,
+          userTalkTimeMs: updatedUserTalkMs,
+          aiTalkTimeMs: currentAiTalkMs,
+          interruptionCount: 0,
+          emotion: calculatedWpm > 160 ? 'Anxious' : 'Confident',
+          confidenceScore: 0.88
+        })
       })
+
       if (res.ok) {
         const data = await res.json()
-        if (data.metrics) setMetrics(data.metrics)
-        
-        // If there's a hard trigger tip, show it immediately. Otherwise, ask LLM coach asynchronously.
-        if (data.coachTip) {
-          setCoachTip(data.coachTip)
-        } else if (data.metrics) {
-          fetch(`${API}/api/sessions/live-coach`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ metrics: data.metrics, transcript: payload.transcript })
-          })
-            .then(res => res.json())
-            .then(coachData => {
-              if (coachData.coachTip) setCoachTip(coachData.coachTip)
-            })
-            .catch(err => console.error('Live coach failed', err))
+        const aiRespText = data.aiResponse || ''
+        if (aiRespText) {
+          const aiMsg: ChatMessage = { role: 'assistant', content: aiRespText }
+          setMessages(prev => [...prev, aiMsg])
+          
+          // Estimate AI talk duration for talk/listen ratio
+          const aiWords = aiRespText.split(/\s+/).length
+          const estAiDurationMs = Math.max(2000, (aiWords / 150) * 60000)
+          setMetrics(prev => ({
+            ...prev,
+            aiTalkTimeMs: prev.aiTalkTimeMs + estAiDurationMs,
+            talkListenRatio: Math.round((prev.userTalkTimeMs / (prev.userTalkTimeMs + prev.aiTalkTimeMs + estAiDurationMs)) * 100)
+          }))
+
+          await playTTS(aiRespText)
         }
 
-        if (data.aiResponse) {
-          setMessages(prev => [...prev, { role: 'assistant', content: data.aiResponse }])
-          if (data.aiResponse.includes('?')) lastQuestionTime.current = Date.now()
-          await playTTS(data.aiResponse)
+        if (data.inline_coach_note) setInlineCoachNote(data.inline_coach_note)
+        if (data.current_stage) setCurrentStage(data.current_stage)
+        if (data.progress_percentage) setProgressPct(data.progress_percentage)
+
+        // Process Coach Tip trigger from live-turn
+        if (data.coachTip && data.coachTip.shouldPopup) {
+          const newInsight: CoachingInsight = {
+            id: `insight-${Date.now()}`,
+            severity: data.coachTip.severity || 'warning',
+            title: data.coachTip.severity === 'danger' ? 'High Friction' : 'Pace & Tone',
+            text: data.coachTip.tip,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+          setCoachingInsights(prev => [newInsight, ...prev.slice(0, 4)])
+        }
+
+        // 2. Process Live Sentiment & Sentiment Analytics
+        try {
+          const sentRes = await fetch(`${API}/api/sessions/live-sentiment`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              repMessage: messageText,
+              customerReply: aiRespText,
+              sessionId: currentSessionId
+            })
+          })
+
+          if (sentRes.ok) {
+            const sentData = await sentRes.json()
+            const newMood = sentData.customer_sentiment !== undefined ? sentData.customer_sentiment : moodScore
+            const shift = newMood - moodScore
+            setMoodScore(newMood)
+            setSentimentShift(shift)
+
+            if (sentData.coaching_hint) {
+              setInlineCoachNote(`🎯 ${sentData.coaching_hint}`)
+              const newInsight: CoachingInsight = {
+                id: `sent-insight-${Date.now()}`,
+                severity: sentData.rep_tone_type === 'warn' ? 'warning' : 'info',
+                title: sentData.rep_tone_type === 'warn' ? 'Tone Adjustment' : 'Customer Sentiment',
+                text: sentData.coaching_hint,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              }
+              setCoachingInsights(prev => [newInsight, ...prev.slice(0, 4)])
+            }
+
+            // Update Tone Distribution dynamically
+            if (sentData.tone_distribution) {
+              setToneDistribution(sentData.tone_distribution)
+            } else {
+              if (newMood >= 70) {
+                setToneDistribution({ alert: 10, hesitant: 10, warm: 50, wise: 30 })
+              } else if (newMood <= 45) {
+                setToneDistribution({ alert: 40, hesitant: 40, warm: 10, wise: 10 })
+              } else {
+                setToneDistribution({ alert: 15, hesitant: 35, warm: 30, wise: 20 })
+              }
+            }
+
+            if (sentData.suggested_followups && sentData.suggested_followups.length > 0) {
+              setSuggestedFollowUps(sentData.suggested_followups)
+            }
+          }
+        } catch (sentErr) {
+          console.warn('[LiveSentiment] call failed (non-fatal):', sentErr)
         }
       }
     } catch (err) {
-      console.error('Live turn failed', err)
+      console.error('Failed to send live message', err)
+    } finally {
+      if (micActiveRef.current) {
+        startListening(true)
+      }
     }
   }
 
-  // Finalize turn and send to backend
-  const processAudioTurn = useCallback(async () => {
-    if (isProcessingRef.current) return
-    isProcessingRef.current = true
-
-    const durationMs = Date.now() - turnStartTimeRef.current
-    userTalkTimeMs.current += durationMs
-
-    try {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        // Send EOF to Modulate
-        wsRef.current.send("")
-        
-        // Wait for final Modulate response (should be almost instant since we streamed in real-time)
-        await new Promise<void>((resolve) => {
-          const timeout = setTimeout(resolve, 2000)
-          const origHandler = wsRef.current!.onmessage
-          wsRef.current!.onmessage = (event) => {
-            if (origHandler) (origHandler as any).call(wsRef.current, event)
-            try {
-              const data = JSON.parse(event.data)
-              if (data.type === 'done') { clearTimeout(timeout); setTimeout(resolve, 50) }
-            } catch {}
-          }
-        })
-        try { wsRef.current.close() } catch {}
-        wsRef.current = null
-      }
-
-      if (deepgramWsRef.current) {
-        try {
-          deepgramWsRef.current.send(JSON.stringify({ type: 'CloseStream' }))
-          deepgramWsRef.current.close()
-        } catch {}
-        deepgramWsRef.current = null
-      }
-
-      await handleUserTurnComplete(durationMs)
-    } finally {
-      isProcessingRef.current = false
-    }
-  }, [])
-
-  // Start mic and audio streaming
-  const startMic = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
-      })
-      streamRef.current = stream
-
-      const audioContext = new AudioContext({ sampleRate: 16000 })
-      audioContextRef.current = audioContext
-
-      const source = audioContext.createMediaStreamSource(stream)
-      // ScriptProcessorNode with 4096 buffer size (~256ms per chunk at 16kHz)
-      const processor = audioContext.createScriptProcessor(4096, 1, 1)
-      processorRef.current = processor
-
-      // --- Setup Deepgram STT Streaming ---
-      if (deepgramKey) {
-        const dgWs = new WebSocket(`wss://api.deepgram.com/v1/listen?model=nova-2&filler_words=true&encoding=linear16&sample_rate=16000&channels=1`)
-        
-        dgWs.onopen = () => {
-          console.log('Deepgram WS connected (Streaming)')
-          dgWs.send(JSON.stringify({ type: 'KeepAlive' }))
-        }
-        
-        dgWs.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-            if (data.type === 'Results' && data.channel && data.channel.alternatives[0]) {
-              const alt = data.channel.alternatives[0]
-              
-              if (data.is_final && alt.transcript) {
-                currentTranscriptRef.current += ' ' + alt.transcript
-                
-                const words = alt.words || []
-                let chunkFillers = 0
-                words.forEach((w: any) => {
-                  const text = (w.punctuated_word || w.word || '').toLowerCase()
-                  if (['um', 'uh', 'like', 'mhm'].includes(text.replace(/[^a-z]/g, ''))) {
-                    chunkFillers++
-                  }
-                })
-                
-                totalWordsRef.current += words.length
-                totalFillersRef.current += chunkFillers
-                setFillerCount(totalFillersRef.current)
-                
-                const totalTalkMins = (userTalkTimeMs.current + (Date.now() - turnStartTimeRef.current)) / 60000
-                if (totalTalkMins > 0) {
-                  setPaceWPM(Math.round(totalWordsRef.current / totalTalkMins))
-                }
-              }
-            }
-          } catch (e) {}
-        }
-        deepgramWsRef.current = dgWs
-      } else {
-        console.warn('Deepgram API key not available.')
-      }
-
-      // Immediately set user as speaking since it's manual push-to-talk now
-      isSpeakingRef.current = true
-      setUserSpeaking(true)
-      turnStartTimeRef.current = Date.now()
-      audioChunksRef.current = []
-      currentTranscriptRef.current = '' // Reset transcript at start of speech
-      modulateTranscriptRef.current = '' // Reset modulate transcript
-      if (isAiSpeakingRef.current) handleInterrupt()
-
-      // --- Setup Modulate WS ---
-      if (MODULATE_API_KEY) {
-        const ws = new WebSocket(MODULATE_WS_URL)
-        ws.onopen = () => console.log('Modulate WS connected (Streaming)')
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-            if (data.type === 'utterance' && data.utterance) {
-              const txt = data.utterance.text || ''
-              if (txt) modulateTranscriptRef.current += ' ' + txt
-              
-              if (data.utterance.emotion) currentEmotionRef.current = data.utterance.emotion
-              if (data.utterance.sentiment) currentEmotionRef.current = data.utterance.sentiment
-            }
-          } catch (e) {}
-        }
-        wsRef.current = ws
-      }
-
-      processor.onaudioprocess = (e) => {
-        if (isAiSpeakingRef.current || isProcessingRef.current || !isSpeakingRef.current) return
-
-        const input = e.inputBuffer.getChannelData(0)
-        
-        // Store audio chunk and stream to Modulate in real-time
-        const pcm = floatTo16BitPCM(input)
-        
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(pcm.buffer)
-        }
-        
-        if (deepgramWsRef.current && deepgramWsRef.current.readyState === WebSocket.OPEN) {
-          deepgramWsRef.current.send(pcm.buffer)
-        }
-      }
-
-      source.connect(processor)
-      processor.connect(audioContext.destination)
-
-      setMicActive(true)
-      setMicError(null)
-      console.log('Mic started — manual push-to-talk mode')
-    } catch (e: any) {
-      console.error('Mic error:', e)
-      setMicError(e.message || 'Failed to access microphone')
-    }
-  }, [processAudioTurn])
-
-  const stopMic = useCallback(() => {
-
-    if (processorRef.current) {
-      processorRef.current.disconnect()
-      processorRef.current = null
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close()
-      audioContextRef.current = null
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop())
-      streamRef.current = null
-    }
-    if (deepgramWsRef.current) {
-      try { 
-        deepgramWsRef.current.send(JSON.stringify({ type: "CloseStream" })) 
-        deepgramWsRef.current.close() 
-      } catch {}
-      deepgramWsRef.current = null
-    }
-    
-    setMicActive(false)
-    setUserSpeaking(false)
-    isSpeakingRef.current = false
-    
-    // Process the turn now that user clicked stop
-    processAudioTurn()
-  }, [processAudioTurn])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => { stopMic() }
-  }, [stopMic])
-
-  const endSession = async () => {
-    stopMic()
+  const handleEndAndReview = async () => {
+    setIsEnding(true)
+    const currentSessionId = activeSessionId || paramSessionId
     try {
       const token = localStorage.getItem('token')
-      await fetch(`${API}/api/sessions/end`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ sessionId })
-      })
-    } catch (e) { console.error('End session failed:', e) }
-    router.push('/rep/dashboard')
+      if (currentSessionId) {
+        await fetch(`${API}/api/sessions/end`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ sessionId: currentSessionId })
+        })
+      }
+    } catch (err) {
+      console.error('End session failed:', err)
+    } finally {
+      router.push(`/rep/train/${scenarioId}/review?sessionId=${currentSessionId}`)
+    }
   }
 
+  const handlePauseAndExit = async () => {
+    const currentSessionId = activeSessionId || paramSessionId
+    try {
+      const token = localStorage.getItem('token')
+      if (currentSessionId) {
+        await fetch(`${API}/api/sessions/pause`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ sessionId: currentSessionId })
+        })
+      }
+    } catch (err) {
+      console.error('Pause session failed:', err)
+    } finally {
+      router.push('/rep/dashboard')
+    }
+  }
+
+  const personaName = scenario?.persona_name || scenario?.contact_title || 'Sarah Chen'
+  const roleTitle = scenario?.contact_title || 'VP of Engineering'
+  const company = scenario?.contact_company || 'Acme Technologies'
+
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex flex-col h-screen bg-[#F8FAFC] font-sans text-xs overflow-hidden">
       <audio ref={audioRef} className="hidden" />
 
-      {/* LEFT PANEL */}
-      <div className="flex-1 flex flex-col border-r border-gray-200 bg-gray-50/50 p-8">
-        <div className="flex items-center justify-between mb-8">
+      {/* Top Command Center Bar */}
+      <div className="bg-[#1E1B4B] text-white px-6 py-3 flex items-center justify-between shadow-md z-20 shrink-0">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-400 font-[800] text-[10px]">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+            LIVE
+          </span>
           <div>
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-              {scenario?.persona_name || 'AI Prospect'}
-            </h1>
-            <p className="text-gray-500 font-medium uppercase tracking-widest text-xs mt-1">
-              Live Audio Training
-            </p>
-          </div>
-          
-          {/* Deepgram Real-Time Analytics */}
-          <div className="flex gap-4 ml-6 mr-auto">
-            <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center min-w-[80px]">
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Pace (WPM)</p>
-              <p className={`text-xl font-black ${paceWPM > 160 ? 'text-red-500' : 'text-blue-600'}`}>{paceWPM}</p>
-            </div>
-            <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center min-w-[80px]">
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Fillers</p>
-              <p className={`text-xl font-black ${fillerCount > 5 ? 'text-amber-500' : 'text-blue-600'}`}>{fillerCount}</p>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => { setIsPaused(true); stopMic(); }}
-              className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-lg transition-all"
-            >
-              Pause
-            </button>
-            <button
-              onClick={endSession}
-              className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition-all"
-            >
-              End Call
-            </button>
+            <h1 className="font-[800] text-sm leading-none">{scenario?.persona_name || 'Technical Discovery'}</h1>
+            <p className="text-[10px] text-purple-200 mt-0.5">Mode: {trainingMode}</p>
           </div>
         </div>
 
-        <div className="flex-1 min-h-[400px]">
-          <LiveMetricsBoard
-            metrics={metrics}
-            coachTip={coachTip}
-            isRecording={userSpeaking}
-            isAiSpeaking={isAiSpeaking}
-          />
-        </div>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10">
+            <span className={`w-2 h-2 rounded-full ${isAiSpeaking ? 'bg-green-400 animate-pulse' : 'bg-blue-400'}`}></span>
+            <span className="text-[11px] font-[600]">
+              {isAiSpeaking ? `${personaName} is speaking...` : `Listening to You`}
+            </span>
+          </div>
 
-        <div className="mt-8 flex flex-col items-center gap-4">
+          {/* Customer Sentiment Badge */}
+          <div className="flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full border border-white/10">
+            <span className="text-[10px] font-[600] text-purple-200">Sentiment Score</span>
+            <span className={`text-[11px] font-[800] ${moodScore >= 70 ? 'text-green-300' : moodScore >= 50 ? 'text-amber-300' : 'text-red-300'}`}>
+              {moodScore}/100 ({sentimentShift >= 0 ? `+${sentimentShift}` : sentimentShift})
+            </span>
+          </div>
+
           <button
-            onClick={() => {
-              if (micActive) {
-                stopMic()
-              } else {
-                startMic()
-              }
-            }}
-            disabled={isProcessingRef.current}
-            className={`px-12 py-5 rounded-full font-black text-lg transition-all shadow-xl ${
-              micError
-                ? 'bg-red-600 text-white'
-                : userSpeaking
-                  ? 'bg-red-500 text-white shadow-red-500/40 scale-105 animate-pulse'
-                  : isAiSpeaking
-                    ? 'bg-gray-200 text-gray-400'
-                    : micActive
-                      ? 'bg-green-500 hover:bg-green-600 text-white shadow-green-500/40'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/40'
-            }`}
+            onClick={handleEndAndReview}
+            disabled={isEnding}
+            className="px-4 py-1.5 rounded-xl border border-red-400/40 text-red-300 hover:bg-red-500/20 font-[700] text-xs transition-colors flex items-center gap-1.5"
           >
-            {micError
-              ? `Mic Error: ${micError}`
-              : userSpeaking
-                ? '🎙️ Listening...'
-                : isAiSpeaking
-                  ? '🔊 AI Speaking...'
-                  : micActive
-                    ? '✅ Waiting for Voice...'
-                    : '🎤 Click to Start Mic'}
+            {isEnding ? 'Ending...' : '🔴 End Session'}
           </button>
-          {!micActive && !micError && (
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest text-center">
-              Click to start your microphone. Speak naturally — turns are detected automatically.
-            </p>
-          )}
         </div>
       </div>
 
-      {/* RIGHT PANEL: Transcript */}
-      <div className="w-[400px] flex flex-col bg-white border-l border-gray-200">
-        <div className="p-6 border-b border-gray-200 bg-gray-50/80">
-          <h2 className="text-xs font-black uppercase tracking-widest text-gray-500">Live Transcript</h2>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {messages.map((m, i) => (
-            <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-              <div className={`px-5 py-4 max-w-[85%] rounded-2xl text-sm font-medium leading-relaxed ${
-                m.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-tr-sm'
-                  : 'bg-gray-100 text-gray-800 rounded-tl-sm'
-              }`}>
-                {m.content}
-              </div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-2">
-                {m.role === 'user' ? 'You' : scenario?.persona_name || 'AI'}
+      {/* Main 3-Column Command Layout */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* LEFT COLUMN: Persona Brief & Live Voice Metrics */}
+        <div className="w-72 bg-white border-r border-gray-200 p-5 overflow-y-auto space-y-5 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#1E1B4B] text-white font-[800] flex items-center justify-center text-sm shadow-sm">
+              SC
+            </div>
+            <div>
+              <h2 className="font-[800] text-[#1E293B] text-sm">{personaName}</h2>
+              <p className="text-[11px] text-[#64748B]">{roleTitle}</p>
+              <span className="inline-block mt-0.5 px-2 py-0.5 bg-blue-50 text-blue-700 text-[9px] font-[700] rounded">
+                {isAiSpeaking ? 'Speaking' : 'Listening'}
               </span>
             </div>
-          ))}
+          </div>
+
+          <div className="space-y-2 text-[11px]">
+            <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">Persona Brief</p>
+            <div className="space-y-1.5 text-[#334155]">
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Role</span>
+                <span className="font-[600]">{roleTitle}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Company</span>
+                <span className="font-[600]">{company}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Comm. Style</span>
+                <span className="font-[600]">Direct, Data-driven</span>
+              </div>
+            </div>
+          </div>
+
+          {/* REAL-TIME VOICE ANALYTICS CARD */}
+          <div className="space-y-2.5 pt-3 border-t border-gray-100">
+            <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px] flex items-center justify-between">
+              <span>🎙️ Voice Delivery Metrics</span>
+              <span className="text-[9px] text-purple-600 font-[700]">LIVE</span>
+            </p>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="bg-purple-50/60 border border-purple-100 p-2 rounded-xl text-center">
+                <p className="text-[9px] font-[700] text-purple-600 uppercase">Pace (WPM)</p>
+                <p className="text-sm font-[800] text-[#1E293B]">{metrics.wpm}</p>
+                <span className="text-[8px] text-gray-500">Target: 120-150</span>
+              </div>
+              <div className="bg-amber-50/60 border border-amber-100 p-2 rounded-xl text-center">
+                <p className="text-[9px] font-[700] text-amber-600 uppercase">Fillers</p>
+                <p className="text-sm font-[800] text-[#1E293B]">{metrics.fillerRatio}%</p>
+                <span className="text-[8px] text-gray-500">&lt;5% ideal</span>
+              </div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 p-2.5 rounded-xl space-y-1.5">
+              <div className="flex justify-between text-[10px] font-[700] text-[#334155]">
+                <span>Talk / Listen Ratio</span>
+                <span>{metrics.talkListenRatio}% Rep</span>
+              </div>
+              <div className="w-full h-2 bg-blue-100 rounded-full overflow-hidden flex">
+                <div className="h-full bg-indigo-600" style={{ width: `${metrics.talkListenRatio}%` }}></div>
+                <div className="h-full bg-blue-400 flex-1"></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-3 border-t border-gray-100">
+            <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">Sales Stages</p>
+            <div className="space-y-1">
+              {['Opening', 'Needs Discovery', 'Value Pitch', 'Objection Handling', 'Closing'].map((stage, idx) => {
+                const stagesList = ['Opening', 'Needs Discovery', 'Value Pitch', 'Objection Handling', 'Closing'];
+                const isActive = currentStage === stage;
+                const isPast = stagesList.indexOf(currentStage) > idx;
+                return (
+                  <div key={stage} className={`text-[10px] font-[700] flex items-center gap-2 ${isActive ? 'text-purple-700' : isPast ? 'text-green-600' : 'text-gray-400'}`}>
+                    <span>{isPast ? '✓' : isActive ? '▶' : '○'}</span>
+                    <span>{stage}</span>
+                  </div>
+                )
+              })}
+            </div>
+            {inlineCoachNote && (
+              <div className="mt-2 p-2 bg-purple-50 text-purple-900 text-[10px] font-[600] rounded-lg border border-purple-100 shadow-sm leading-snug">
+                🚀 <span className="font-[800]">Next Step:</span> {inlineCoachNote}
+              </div>
+            )}
+            <div className="flex justify-between text-[10px] font-[800] text-[#64748B] mt-3 pt-2 border-t border-gray-100">
+              <span>Overall Progress</span>
+              <span>{progressPct}%</span>
+            </div>
+            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-1">
+              <div className="h-full bg-purple-600 transition-all duration-500 rounded-full" style={{ width: `${progressPct}%` }}></div>
+            </div>
+          </div>
         </div>
+
+        {/* MIDDLE COLUMN: Chat Stream & Voice Controls */}
+        <div className="flex-1 flex flex-col bg-[#F8FAFC] overflow-hidden">
+          {/* Tone & Sentiment Meter Header */}
+          <div className="bg-white border-b border-gray-200 p-4 space-y-3 shrink-0">
+            <div className="flex items-center justify-between text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">
+              <span className="flex items-center gap-2">
+                <span>Live Tone & Sentiment Analytics</span>
+                <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded text-[9px]">Active Analysis</span>
+              </span>
+              {micActive && (
+                <span className="text-red-500 font-[800] animate-pulse flex items-center gap-1">
+                  🔴 Recording Mic Audio
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              <div className="bg-blue-50/60 border border-blue-100 p-2 rounded-lg text-center">
+                <p className="text-[10px] font-[600] text-blue-600">Alert</p>
+                <p className="text-sm font-[800] text-[#1E293B]">{toneDistribution.alert}%</p>
+              </div>
+              <div className="bg-amber-50/60 border border-amber-100 p-2 rounded-lg text-center">
+                <p className="text-[10px] font-[600] text-amber-600">Hesitant</p>
+                <p className="text-sm font-[800] text-[#1E293B]">{toneDistribution.hesitant}%</p>
+              </div>
+              <div className="bg-yellow-50/80 border-2 border-yellow-400 p-2 rounded-lg text-center shadow-sm">
+                <p className="text-[10px] font-[800] text-yellow-700">Warm</p>
+                <p className="text-sm font-[800] text-[#1E293B]">{toneDistribution.warm}%</p>
+              </div>
+              <div className="bg-indigo-50/60 border border-indigo-100 p-2 rounded-lg text-center">
+                <p className="text-[10px] font-[600] text-indigo-600">Wise</p>
+                <p className="text-sm font-[800] text-[#1E293B]">{toneDistribution.wise}%</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Transcript Chat Stream */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {messages.map((m, idx) => {
+              const isUser = m.role === 'user'
+              return (
+                <div key={idx} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+                  <div
+                    className={`max-w-[75%] p-4 rounded-2xl text-xs leading-relaxed shadow-sm ${
+                      isUser
+                        ? 'bg-[#1E1B4B] text-white rounded-tr-none'
+                        : 'bg-white border border-gray-200 text-[#1E293B] rounded-tl-none'
+                    }`}
+                  >
+                    <p className={isUser ? "text-white" : ""}>{m.content}</p>
+                  </div>
+                  <span className="text-[10px] font-[600] text-[#64748B] mt-1 px-1 flex items-center gap-1">
+                    {isUser ? 'You (Sales Rep)' : personaName}
+                  </span>
+                </div>
+              )
+            })}
+
+            {!isExamMode && inlineCoachNote && (
+              <div className="my-3 bg-amber-50 border border-amber-200 text-amber-900 p-3.5 rounded-xl text-xs font-[600] flex items-center gap-2 shadow-sm animate-fadeIn">
+                <span>{inlineCoachNote}</span>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Live Mic Audio Level Visualizer & STT Status */}
+          {(micActive || sttStatus) && (
+            <div className="px-6 py-2 bg-purple-50/80 border-t border-purple-100 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-xs font-[600] text-purple-900">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+                <span>{sttStatus || 'Microphone Active — Speak continuously...'}</span>
+              </div>
+
+              {/* Audio Wave Volume Level Bar */}
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] text-purple-700 font-[700]">MIC LEVEL</span>
+                <div className="w-24 h-2 bg-purple-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-purple-600 transition-all duration-75"
+                    style={{ width: `${Math.max(10, audioLevel)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Bottom Chat Input & Controls */}
+          <div className="bg-white border-t border-gray-200 p-4 flex items-center justify-between gap-4 shrink-0">
+            <div className="flex-1 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2">
+              <input
+                type="text"
+                value={textInput}
+                onChange={e => setTextInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+                placeholder={micActive ? 'Listening to your voice... (or type here)' : 'Type your response...'}
+                className="w-full bg-transparent text-xs font-[500] text-[#1E293B] focus:outline-none"
+              />
+              <button
+                onClick={() => handleSendMessage()}
+                className="px-3 py-1 bg-[#1E1B4B] text-white font-[700] text-xs rounded-lg hover:bg-[#2E2A72] transition-colors"
+              >
+                Send
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Voice Capture Microphone Toggle Button */}
+              <button
+                onClick={toggleMic}
+                className={`px-3 py-2 rounded-xl border font-[700] text-xs transition-colors flex items-center gap-1.5 ${
+                  micActive
+                    ? 'bg-red-500 text-white border-red-600 shadow-md animate-pulse'
+                    : 'bg-white text-[#334155] border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {micActive ? '🔴 Mic Active' : '🎙️ Enable Mic'}
+              </button>
+
+              {/* Silence Auto-Send Toggle */}
+              <label className="flex items-center gap-1.5 text-[10px] font-[600] text-gray-600 bg-gray-50 px-2 py-1.5 rounded-lg border border-gray-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoSendOnSilence}
+                  onChange={e => setAutoSendOnSilence(e.target.checked)}
+                  className="rounded text-purple-600 focus:ring-purple-500"
+                />
+                Auto-Send
+              </label>
+
+              <button
+                onClick={() => setIsPaused(true)}
+                className="px-3 py-2 rounded-xl border border-gray-300 bg-white text-[#334155] font-[700] text-xs hover:bg-gray-50 transition-colors"
+              >
+                ⏸️ Pause
+              </button>
+              <button
+                onClick={handleEndAndReview}
+                disabled={isEnding}
+                className="px-5 py-2 rounded-xl bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] shadow-md transition-colors"
+              >
+                {isEnding ? 'Ending...' : 'End & Review'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: AI Coach Live Insights Sidebar */}
+        {!isExamMode && (
+          <div className="w-80 bg-white border-l border-gray-200 p-5 overflow-y-auto space-y-6 shrink-0">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h2 className="font-[800] text-sm text-[#1E293B] flex items-center gap-2">
+                🤖 AI Coach
+              </h2>
+              <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[10px] font-[800] rounded">
+                {isLearningMode ? 'AI ASSISTED' : 'LIVE'}
+              </span>
+            </div>
+
+            {/* REAL-TIME AI COACHING INSIGHTS */}
+            <div className="space-y-3">
+              <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">REAL-TIME COACHING INSIGHTS</p>
+              <div className="space-y-2 text-xs">
+                {coachingInsights.map(insight => (
+                  <div
+                    key={insight.id}
+                    className={`p-3 rounded-xl space-y-1 border shadow-sm ${
+                      insight.severity === 'danger'
+                        ? 'bg-red-50/80 border-red-200 text-red-900'
+                        : insight.severity === 'warning'
+                        ? 'bg-amber-50/80 border-amber-200 text-amber-900'
+                        : 'bg-blue-50/80 border-blue-200 text-blue-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="font-[800] text-[10px] uppercase">
+                        {insight.severity === 'danger' ? '🚨 Warning' : insight.severity === 'warning' ? '⚠️ Tip' : '💡 Insight'} — {insight.title}
+                      </p>
+                      <span className="text-[9px] opacity-70">{insight.timestamp}</span>
+                    </div>
+                    <p className="leading-snug text-[11px] font-[500]">{insight.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* CONTEXTUAL SUGGESTED FOLLOW-UPS (REP SUGGESTIONS) */}
+            <div className="space-y-3 pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-between">
+                <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">SUGGESTED FOLLOW-UPS</p>
+                <span className="text-[9px] text-purple-600 font-[600]">Click to Send</span>
+              </div>
+              <div className="space-y-2">
+                {suggestedFollowUps.map((question, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSendMessage(question)}
+                    title="Click to send this response"
+                    className="w-full p-2.5 text-left bg-purple-50/50 hover:bg-purple-100/80 border border-purple-200/80 rounded-xl text-xs font-[600] text-purple-950 hover:text-purple-900 transition-all shadow-sm flex items-start gap-2 group"
+                  >
+                    <span className="text-purple-600 text-sm group-hover:scale-110 transition-transform shrink-0">💡</span>
+                    <span className="leading-snug">"{question}"</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Pause Modal */}
       {isPaused && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6">
-            <h2 className="text-2xl font-black text-gray-900 text-center">Session Paused</h2>
-            <p className="text-gray-500 text-center font-medium">What would you like to do?</p>
-            <div className="flex flex-col gap-3">
-              <button 
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-5 text-center">
+            <h3 className="text-lg font-[800] text-[#1E293B]">Session Paused</h3>
+            <p className="text-xs text-[#64748B]">Select an action to continue.</p>
+
+            <div className="space-y-2">
+              <button
                 onClick={() => setIsPaused(false)}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all"
+                className="w-full py-2.5 bg-[#1E1B4B] hover:bg-[#2E2A72] text-white font-[700] rounded-xl text-xs transition-colors"
               >
                 Resume Session
               </button>
-              <button 
-                onClick={async () => {
-                  try {
-                    const token = localStorage.getItem('token');
-                    await fetch(`${API}/api/sessions/retry`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                      body: JSON.stringify({ sessionId })
-                    });
-                    setMessages([]);
-                    setIsPaused(false);
-                  } catch (e) { console.error(e) }
+              <button
+                onClick={() => {
+                  setIsPaused(false)
+                  setMessages([])
                 }}
-                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-all"
+                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-[#334155] font-[700] rounded-xl text-xs transition-colors"
               >
                 Retry Session (Start Over)
               </button>
-              <button 
-                onClick={async () => {
-                  try {
-                    const token = localStorage.getItem('token');
-                    await fetch(`${API}/api/sessions/pause`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                      body: JSON.stringify({ sessionId })
-                    });
-                    router.push('/rep/dashboard');
-                  } catch (e) { console.error(e) }
-                }}
-                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-all"
+              <button
+                onClick={handlePauseAndExit}
+                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-[#334155] font-[700] rounded-xl text-xs transition-colors"
               >
                 Continue Later
               </button>

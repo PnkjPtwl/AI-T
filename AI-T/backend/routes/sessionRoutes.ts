@@ -2,7 +2,7 @@ import express from 'express'
 import multer from 'multer'
 import { authenticate } from '../middleware/auth'
 import { repOnly } from '../middleware/roleGuard'
-import { getMySessions, startPractice, sendMessage, endSession, getSession, deleteSession, liveSentiment, processLiveTurn, processLiveCoach, pauseSession, retrySession } from '../controllers/sessionController'
+import { getMySessions, startPractice, sendMessage, endSession, submitSessionToManager, getSession, deleteSession, liveSentiment, processLiveTurn, processLiveCoach, pauseSession, retrySession } from '../controllers/sessionController'
 
 const router = express.Router()
 
@@ -29,6 +29,9 @@ router.post('/live-coach', authenticate, repOnly, processLiveCoach)
 // POST /api/sessions/end
 router.post('/end', authenticate, repOnly, endSession)
 
+// POST /api/sessions/submit
+router.post('/submit', authenticate, repOnly, submitSessionToManager)
+
 // POST /api/sessions/pause
 router.post('/pause', authenticate, repOnly, pauseSession)
 
@@ -36,7 +39,7 @@ router.post('/pause', authenticate, repOnly, pauseSession)
 router.post('/retry', authenticate, repOnly, retrySession)
 
 // GET /api/sessions/:sessionId
-router.get('/:sessionId', authenticate, getSession)
+router.get('/:sessionId', getSession)
 
 // DELETE /api/sessions/:sessionId
 router.delete('/:sessionId', authenticate, deleteSession)

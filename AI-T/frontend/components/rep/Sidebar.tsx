@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 
 const NAV_ITEMS = [
+  { name: 'Dashboard', href: '/rep/dashboard' },
   { name: 'Assignments', href: '/rep/train' },
   { name: 'My Stats', href: '/rep/my-stats' },
 ]

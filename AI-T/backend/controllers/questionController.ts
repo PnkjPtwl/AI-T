@@ -16,17 +16,19 @@ export const generateQuestions = async (req: Request, res: Response) => {
     const groqApiKey = await getSecret('GROQ_API_KEY')
     const groq = new Groq({ apiKey: groqApiKey || '' })
 
-    // Fetch Knowledge Base chunks from RAG if account_name or context is available
+    // Fetch Knowledge Base chunks from RAG ONLY if a specific account_name is provided
     let kbContextStr = ''
-    try {
-      const searchTarget = `${account_name || ''} ${persona_name || ''} ${context_text || ''} ${categories.join(' ')} questions discovery objections`.trim()
-      const kbChunks = await searchKnowledgeBase(searchTarget, account_name || 'phoenix_automotive', 5)
-      if (kbChunks && kbChunks.length > 0) {
-        kbContextStr = formatRagContext(kbChunks, account_name || persona_name || 'Phoenix Automotive')
-        console.log(`[QuestionsRAG] Retrived ${kbChunks.length} KB chunks for question generation.`)
+    if (account_name) {
+      try {
+        const searchTarget = `${account_name} ${persona_name || ''} ${context_text || ''} ${categories.join(' ')} questions discovery objections`.trim()
+        const kbChunks = await searchKnowledgeBase(searchTarget, account_name, 5)
+        if (kbChunks && kbChunks.length > 0) {
+          kbContextStr = formatRagContext(kbChunks, account_name)
+          console.log(`[QuestionsRAG] Retrived ${kbChunks.length} KB chunks for question generation for ${account_name}.`)
+        }
+      } catch (ragErr) {
+        console.warn('[QuestionsRAG] KB retrieval skipped/failed:', ragErr)
       }
-    } catch (ragErr) {
-      console.warn('[QuestionsRAG] KB retrieval skipped/failed:', ragErr)
     }
 
     const prompt = `
@@ -34,11 +36,11 @@ You are an expert sales trainer. The user wants to generate test questions for a
 Persona Name: ${persona_name || 'N/A'}
 Persona Type: ${persona_type || 'N/A'}
 Context: ${context_text || 'No additional context provided.'}
-${kbContextStr}
+${kbContextStr ? `\nKNOWLEDGE BASE CONTEXT:\n${kbContextStr}\n` : ''}
 
 Please generate exactly 2 distinct questions for EACH of the following categories: ${categories.join(', ')}.
 INSTRUCTIONS:
-- Base the questions directly on real facts, pain points, call history, or technical requirements found in the Knowledge Base context above (e.g. asking about EV project goals, SAP ERP integration, warranty claims, or action items from previous calls).
+- Base the questions directly on the Persona Context provided above${kbContextStr ? ' and the facts, pain points, or requirements in the Knowledge Base context' : ''}.
 - These questions are what the Sales Rep should aim to ask the Persona or answer during the roleplay to succeed.
 - Phrase them as "Questions the Rep should aim to ask/answer".
 

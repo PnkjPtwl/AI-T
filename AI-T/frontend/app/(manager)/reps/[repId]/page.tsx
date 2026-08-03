@@ -146,7 +146,7 @@ function RepPerformanceContent() {
           <div className="h-[300px] flex items-center justify-center text-gray-400 text-sm">No session data yet.</div>
         ) : (
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="99%" height="100%" minHeight={300}>
               <LineChart data={chartData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                 <XAxis dataKey="idx" tick={{ fontSize: 12, fill: '#9CA3AF' }} tickLine={false} axisLine={false} label={{ value: 'Session #', position: 'insideBottomRight', offset: -4, fontSize: 11, fill: '#9CA3AF' }} />

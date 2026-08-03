@@ -14,6 +14,9 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
   const [loading, setLoading] = useState(true)
   const [session, setSession] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'transcript' | 'skills' | 'objections' | 'analytics'>('overview')
+  const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!sessionId) {
@@ -29,7 +32,11 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
         })
         if (res.ok) {
           const data = await res.json()
-          setSession(data)
+          const sess = data.session || data
+          setSession(sess)
+          if (sess.completed_at || sess.status === 'Completed') {
+            setSubmitted(true)
+          }
         } else {
           router.back()
         }
@@ -42,6 +49,35 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
 
     fetchSession()
   }, [sessionId, router])
+
+  const handleSubmitToManager = async () => {
+    if (submitted || submitting) return
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API}/api/sessions/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ sessionId })
+      })
+
+      if (res.ok) {
+        setSubmitted(true)
+        setToastMessage('🎉 Successfully submitted evaluation to your manager! Your stats and team analytics have been updated.')
+        setTimeout(() => setToastMessage(null), 5000)
+      } else {
+        alert('Failed to submit session to manager. Please try again.')
+      }
+    } catch (err) {
+      console.error('Submit to manager failed:', err)
+      alert('Error connecting to server.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   if (loading || !session) {
     return (
@@ -66,13 +102,37 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
 
   return (
     <div className="space-y-8 pb-12 text-left">
-      {/* Navigation */}
+      {toastMessage && (
+        <div className="bg-emerald-600 text-white px-6 py-3.5 rounded-xl text-xs font-[700] shadow-md flex items-center justify-between animate-fade-in">
+          <span>{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="text-white hover:text-emerald-200 text-sm font-bold">✕</button>
+        </div>
+      )}
+
+      {/* Navigation & Submit Action */}
       <div className="flex items-center justify-between">
         <button onClick={() => router.push('/rep/train')} className="text-[#64748B] hover:text-[#1A2A3A] text-sm font-medium flex items-center gap-2">
           &larr; Back
         </button>
-        <div className="text-[#64748B] text-xs font-medium">
-          Session ID: {sessionId?.substring(0, 12)}
+        
+        <div className="flex items-center gap-4">
+          {submitted ? (
+            <div className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-[700] rounded-xl text-xs flex items-center gap-2">
+              <span>✓</span> Submitted to Manager
+            </div>
+          ) : (
+            <button
+              onClick={handleSubmitToManager}
+              disabled={submitting}
+              className="px-5 py-2.5 bg-[#1E1B4B] hover:bg-[#2A2467] text-white font-[700] rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <span>🚀</span> {submitting ? 'Submitting...' : 'Submit to Manager'}
+            </button>
+          )}
+
+          <div className="text-[#64748B] text-xs font-medium">
+            Session ID: {sessionId?.substring(0, 12)}
+          </div>
         </div>
       </div>
 
@@ -85,7 +145,9 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
                 {scenario.difficulty || 'Medium'}
               </span>
               <span className="text-[#E2E8F0]">|</span>
-              <span className="text-[#64748B] text-xs font-medium">{new Date(session.completed_at).toLocaleDateString()}</span>
+              <span className="text-[#64748B] text-xs font-medium">
+                {session.completed_at ? new Date(session.completed_at).toLocaleDateString() : new Date().toLocaleDateString()}
+              </span>
             </div>
             <h1 className="text-3xl font-bold text-[#1A2A3A]">
               {scenario.persona_name || 'Training Interaction'}

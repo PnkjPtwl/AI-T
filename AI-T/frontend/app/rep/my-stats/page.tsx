@@ -104,18 +104,22 @@ export default function PerformancePage() {
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Sessions Completed</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{recentSessions.length}</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions Completed</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{analytics?.sessionsCount ?? recentSessions.length}</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Average Score</p>
-          <p className={`text-3xl font-bold mt-2 ${scoreColor(avgScore)}`}>{avgScore}%</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Average Score</p>
+          <p className={`text-3xl font-bold mt-2 ${scoreColor(analytics?.avgScore ?? avgScore)}`}>{analytics?.avgScore ?? avgScore}%</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Best Score</p>
-          <p className={`text-3xl font-bold mt-2 ${scoreColor(best)}`}>{best}%</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Best Score</p>
+          <p className={`text-3xl font-bold mt-2 ${scoreColor(analytics?.bestScore ?? best)}`}>{analytics?.bestScore ?? best}%</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Practice Time</p>
+          <p className="text-3xl font-bold text-[#1E1B4B] mt-2">{analytics?.totalPracticeTimeHrs ?? 0} hrs</p>
         </div>
       </div>
 
@@ -140,7 +144,7 @@ export default function PerformancePage() {
           <div className="h-[300px] flex items-center justify-center text-gray-400 text-sm">No session data yet.</div>
         ) : (
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="99%" height="100%" minHeight={300}>
               <LineChart data={chartData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                 <XAxis dataKey="idx" tick={{ fontSize: 12, fill: '#9CA3AF' }} tickLine={false} axisLine={false} label={{ value: 'Session #', position: 'insideBottomRight', offset: -4, fontSize: 11, fill: '#9CA3AF' }} />

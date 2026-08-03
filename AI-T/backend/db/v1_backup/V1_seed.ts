@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { supabase } from './supabase'
+import { supabase } from '../supabase'
 
 async function seed() {
   console.log('🌱 Starting database seed...')
