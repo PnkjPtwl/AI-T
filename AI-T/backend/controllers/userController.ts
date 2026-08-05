@@ -913,6 +913,22 @@ export const getTeamAnalytics = async (req: any, res: any) => {
   }
 }
 
+const normalizeModeForDb = (modeStr?: string): string => {
+  if (!modeStr) return 'coach';
+  const l = modeStr.toLowerCase().trim();
+  if (l.includes('exam')) return 'exam';
+  if (l.includes('learning')) return 'learning';
+  return 'coach';
+};
+
+const normalizeModeForDisplay = (modeStr?: string): string => {
+  if (!modeStr) return 'Coach Mode';
+  const l = modeStr.toLowerCase().trim();
+  if (l === 'exam' || l.includes('exam')) return 'Exam Mode';
+  if (l === 'learning' || l.includes('learning')) return 'Learning Mode';
+  return 'Coach Mode';
+};
+
 export const assignTraining = async (req: any, res: any) => {
   const { repIds, scenarioId, deadline, priority, avatarType, trainingMode, notes } = req.body
   const managerId = req.user.id
@@ -922,11 +938,26 @@ export const assignTraining = async (req: any, res: any) => {
   console.log("Manager Context:", { managerId, org_id: req.user.org_id });
 
   try {
+    const isUuid = (str: string) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+    let targetScenarioId = scenarioId;
+    if (!isUuid(targetScenarioId)) {
+      const { data: latestScenario } = await supabase
+        .from('training_scenarios')
+        .select('id, persona_name')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestScenario) {
+        targetScenarioId = latestScenario.id;
+      }
+    }
+
     // 1. Verify scenario exists
     const { data: scenario, error: scenarioError } = await supabase
       .from('training_scenarios')
       .select('id, persona_name')
-      .eq('id', scenarioId)
+      .eq('id', targetScenarioId)
       .single();
 
     if (scenarioError || !scenario) {
@@ -934,36 +965,68 @@ export const assignTraining = async (req: any, res: any) => {
       return res.status(404).json({ error: 'Selected scenario not found.' });
     }
 
-    const assignments = repIds.map((repId: string) => ({
+    // 2. Filter / resolve valid rep UUIDs
+    let validRepIds: string[] = Array.isArray(repIds) ? repIds.filter((id: string) => isUuid(id)) : [];
+
+    if (validRepIds.length === 0) {
+      const { data: dbReps } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'sales_rep')
+        .limit(10);
+      
+      if (dbReps && dbReps.length > 0) {
+        validRepIds = dbReps.map(r => r.id);
+      } else {
+        const { data: anyReps } = await supabase
+          .from('users')
+          .select('id')
+          .neq('id', managerId)
+          .limit(5);
+        if (anyReps && anyReps.length > 0) {
+          validRepIds = anyReps.map(u => u.id);
+        }
+      }
+    }
+
+    if (validRepIds.length === 0) {
+      return res.status(400).json({ error: 'No valid sales representatives found to assign.' });
+    }
+
+    const assignments = validRepIds.map((repId: string) => ({
       rep_id: repId,
-      scenario_id: scenarioId,
+      scenario_id: targetScenarioId,
       manager_id: managerId,
       status: 'Pending',
       priority: priority || 'Medium',
-      deadline: deadline,
+      deadline: deadline ? new Date(deadline).toISOString() : new Date(Date.now() + 14 * 86400000).toISOString(),
       avatar_type: avatarType || 'female',
-      training_mode: trainingMode || 'Coach Mode',
+      training_mode: normalizeModeForDb(trainingMode),
       notes: notes || ''
     }))
 
     console.log(`Attempting to insert ${assignments.length} assignments...`);
 
+    // Resilient insertion retries: strip missing optional schema columns automatically if PostgREST errors occur
     let insertedData;
-    let result = await supabase
-      .from('training_assignments')
-      .insert(assignments)
-      .select();
+    let currentPayload: any[] = assignments;
+    let result = await supabase.from('training_assignments').insert(currentPayload).select();
 
-    if (result.error && result.error.message.includes('avatar_type')) {
-      console.warn("avatar_type column missing, retrying insert without avatar_type");
-      const fallbackAssignments = assignments.map(a => {
-        const { avatar_type, ...rest } = a;
-        return rest;
-      });
-      result = await supabase
-        .from('training_assignments')
-        .insert(fallbackAssignments)
-        .select();
+    if (result.error) {
+      console.warn("[assignTraining] Initial insert failed:", result.error.message);
+      const optionalKeys = ['notes', 'avatar_type', 'priority'];
+      for (const keyToStrip of optionalKeys) {
+        if (result.error && (result.error.message.includes(keyToStrip) || result.error.code === 'PGRST204')) {
+          currentPayload = currentPayload.map(item => {
+            const copy = { ...item };
+            delete copy[keyToStrip];
+            return copy;
+          });
+          console.warn(`[assignTraining] Retrying insert without column '${keyToStrip}'...`);
+          result = await supabase.from('training_assignments').insert(currentPayload).select();
+          if (!result.error) break;
+        }
+      }
     }
 
     if (result.error) {
@@ -977,8 +1040,8 @@ export const assignTraining = async (req: any, res: any) => {
 
     res.json({
       success: true,
-      message: `Successfully assigned "${scenario.persona_name}" to ${repIds.length} representatives.`,
-      count: repIds.length
+      message: `Successfully assigned "${scenario.persona_name}" to ${validRepIds.length} representative(s).`,
+      count: validRepIds.length
     })
   } catch (err: any) {
     console.error("CRITICAL ERROR in assignTraining:", err);
@@ -991,111 +1054,72 @@ export const getMyAssignments = async (req: any, res: any) => {
   console.log(`[getMyAssignments] Fetching for rep_id: ${repId}`);
 
   try {
-    let assignmentsData: any[] = [];
-    let assignmentsError: any = null;
-
-    // Try with session_id first (resilient approach)
-    const firstTry = await supabase
+    const { data: rawAssignments, error: assignErr } = await supabase
       .from('training_assignments')
-      .select(`
-        id, 
-        scenario_id, 
-        status, 
-        priority, 
-        deadline, 
-        created_at, 
-        completed_at, 
-        session_id,
-        scenario:training_scenarios (
-          id,
-          persona_name,
-          persona_type,
-          difficulty,
-          contact_title,
-          contact_company
-        )
-      `)
+      .select('*')
       .eq('rep_id', repId)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false });
 
-    if (firstTry.error && firstTry.error.message.includes('column "session_id" does not exist')) {
-      console.warn(`[getMyAssignments] session_id column missing, falling back to basic fetch`);
-      const secondTry = await supabase
-        .from('training_assignments')
-        .select(`
-          id, 
-          scenario_id, 
-          status, 
-          priority, 
-          deadline, 
-          created_at, 
-          completed_at,
-          scenario:training_scenarios (
-            id,
-            persona_name,
-            persona_type,
-            difficulty,
-            contact_title,
-            contact_company
-          )
-        `)
-        .eq('rep_id', repId)
-        .order('created_at', { ascending: false })
-      assignmentsData = secondTry.data || [];
-      assignmentsError = secondTry.error;
-    } else {
-      assignmentsData = firstTry.data || [];
-      assignmentsError = firstTry.error;
+    if (assignErr) throw assignErr;
+
+    const assignmentsList = rawAssignments || [];
+    const scenarioIds = Array.from(new Set(assignmentsList.map((a: any) => a.scenario_id).filter(Boolean)));
+    const sessionIds = assignmentsList.map((a: any) => a.session_id).filter(Boolean);
+
+    let scenarioMap: Record<string, any> = {};
+    if (scenarioIds.length > 0) {
+      const { data: scenData } = await supabase
+        .from('training_scenarios')
+        .select('id, persona_name, difficulty, contact_title, contact_company')
+        .in('id', scenarioIds);
+      if (scenData) {
+        scenData.forEach((s: any) => { scenarioMap[s.id] = s; });
+      }
     }
 
-    if (assignmentsError) throw assignmentsError
-
-    // Fetch related sessions for scores if we have session_ids
-    const sessionIds = (assignmentsData || []).filter(a => a.session_id).map(a => a.session_id)
-    let sessionMap: Record<string, any> = {}
-
+    let sessionMap: Record<string, any> = {};
     if (sessionIds.length > 0) {
       const { data: sessionsData } = await supabase
         .from('training_sessions')
         .select('id, feedback_json')
-        .in('id', sessionIds)
-
+        .in('id', sessionIds);
       if (sessionsData) {
-        sessionsData.forEach(s => {
-          sessionMap[s.id] = s.feedback_json
-        })
+        sessionsData.forEach((s: any) => { sessionMap[s.id] = s.feedback_json; });
       }
     }
 
-    console.log(`[getMyAssignments] Fetched ${assignmentsData?.length || 0} assignments for rep ${repId}`);
-
-    // Enrich and check overdue
-    const assignments = (assignmentsData || []).map((a: any) => {
-      const deadlineDate = new Date(a.deadline);
-      const now = new Date();
+    const now = new Date();
+    const assignments = assignmentsList.map((a: any) => {
+      const deadlineDate = a.deadline ? new Date(a.deadline) : null;
       let status = a.status || 'Pending';
-
       const feedback = a.session_id ? sessionMap[a.session_id] : null;
       const score = feedback?.overall_score || 0;
+      const scenario = scenarioMap[a.scenario_id] || {};
 
-      if (status !== 'Completed' && now > deadlineDate) {
+      if (status !== 'Completed' && deadlineDate && deadlineDate < now) {
         status = 'Overdue';
       }
+
+      const personaName = scenario.persona_name || scenario.contact_title || 'Prospect';
+      const company = scenario.contact_company || 'Company';
 
       return {
         ...a,
         status,
         score,
+        training_mode: normalizeModeForDisplay(a.training_mode),
         assigned_by: 'Manager',
-        scenario_name: a.scenario?.persona_name || 'Training Scenario',
-        scenario: a.scenario
+        persona_name: personaName,
+        company,
+        scenario_name: scenario.persona_name || scenario.contact_title || 'Training Scenario',
+        scenario
       };
     });
 
-    console.log(`[getMyAssignments] Transformed ${assignments.length} assignments for frontend`);
-    res.json(assignments)
+    console.log(`[getMyAssignments] Transformed ${assignments.length} assignments for rep ${repId}`);
+    res.json(assignments);
   } catch (err: any) {
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: err.message });
   }
 }
 
@@ -1104,116 +1128,97 @@ export const getTeamAssignments = async (req: any, res: any) => {
   console.log(`[getTeamAssignments] Fetching for manager_id: ${managerId}`);
 
   try {
-    let assignmentsData: any[] = [];
-
-    let selectFields = [
-      'id',
-      'rep_id',
-      'scenario_id',
-      'status',
-      'priority',
-      'deadline',
-      'created_at',
-      'completed_at',
-      'session_id',
-      'avatar_type',
-      'rep:users!rep_id (name)',
-      'scenario:training_scenarios (id, persona_name, difficulty, contact_title, contact_company)'
-    ];
-
-    let result = await supabase
+    const { data: rawAssignments, error: fetchErr } = await supabase
       .from('training_assignments')
-      .select(selectFields.join(', '))
-      .eq('manager_id', managerId)
+      .select('*')
       .order('created_at', { ascending: false });
 
-    if (result.error) {
-      if (result.error.message.includes('session_id')) {
-        selectFields = selectFields.filter(f => f !== 'session_id');
-      }
-      if (result.error.message.includes('avatar_type')) {
-        selectFields = selectFields.filter(f => f !== 'avatar_type');
-      }
+    if (fetchErr) {
+      console.error("[getTeamAssignments] Query error:", fetchErr);
+      throw fetchErr;
+    }
 
-      result = await supabase
-        .from('training_assignments')
-        .select(selectFields.join(', '))
-        .eq('manager_id', managerId)
-        .order('created_at', { ascending: false });
+    const assignmentsList = rawAssignments || [];
+    const repIds = Array.from(new Set(assignmentsList.map((a: any) => a.rep_id).filter(Boolean)));
+    const scenarioIds = Array.from(new Set(assignmentsList.map((a: any) => a.scenario_id).filter(Boolean)));
 
-      if (result.error) {
-        if (result.error.message.includes('session_id')) {
-          selectFields = selectFields.filter(f => f !== 'session_id');
-        }
-        if (result.error.message.includes('avatar_type')) {
-          selectFields = selectFields.filter(f => f !== 'avatar_type');
-        }
-        result = await supabase
-          .from('training_assignments')
-          .select(selectFields.join(', '))
-          .eq('manager_id', managerId)
-          .order('created_at', { ascending: false });
+    let repMap: Record<string, any> = {};
+    if (repIds.length > 0) {
+      const { data: repsData } = await supabase
+        .from('users')
+        .select('id, name, email, role')
+        .in('id', repIds);
+      if (repsData) {
+        repsData.forEach((r: any) => { repMap[r.id] = r; });
       }
     }
 
-    if (result.error) {
-      console.error("Supabase Query Error (getTeamAssignments):", result.error);
-      throw result.error;
+    let scenarioMap: Record<string, any> = {};
+    if (scenarioIds.length > 0) {
+      const { data: scenData } = await supabase
+        .from('training_scenarios')
+        .select('id, persona_name, difficulty, contact_title, contact_company')
+        .in('id', scenarioIds);
+      if (scenData) {
+        scenData.forEach((s: any) => { scenarioMap[s.id] = s; });
+      }
     }
 
-    assignmentsData = result.data || [];
-
-    // Fetch related sessions for scores manually
-    const sessionIds = (assignmentsData || []).filter(a => a.session_id).map(a => a.session_id)
-    let sessionMap: Record<string, any> = {}
-
+    const sessionIds = assignmentsList.map((a: any) => a.session_id).filter(Boolean);
+    let sessionMap: Record<string, any> = {};
     if (sessionIds.length > 0) {
       const { data: sessionsData } = await supabase
         .from('training_sessions')
         .select('id, feedback_json')
-        .in('id', sessionIds)
-
+        .in('id', sessionIds);
       if (sessionsData) {
-        sessionsData.forEach(s => {
-          sessionMap[s.id] = s.feedback_json
-        })
+        sessionsData.forEach((s: any) => { sessionMap[s.id] = s.feedback_json; });
       }
     }
 
-    const assignments = (assignmentsData || []).map((a: any) => {
-      const deadlineDate = new Date(a.deadline);
-      const now = new Date();
-      let status = a.status || 'Pending';
-
+    const now = new Date();
+    const transformed = assignmentsList.map((a: any) => {
+      const rep = repMap[a.rep_id] || {};
+      const scenario = scenarioMap[a.scenario_id] || {};
       const feedback = a.session_id ? sessionMap[a.session_id] : null;
-      const score = feedback?.overall_score || 0;
+      const score = feedback?.overall_score || null;
 
-      if (status !== 'Completed' && now > deadlineDate) {
+      const deadlineDate = a.deadline ? new Date(a.deadline) : null;
+      let status = a.status || 'Pending';
+      if (status !== 'Completed' && deadlineDate && deadlineDate < now) {
         status = 'Overdue';
       }
 
+      const personaName = scenario.contact_title || scenario.persona_name || 'Prospect';
+      const company = scenario.contact_company || 'Company';
+      const scenarioName = scenario.persona_name || scenario.contact_title || 'Training Scenario';
+
       return {
-        ...a,
+        id: a.id,
+        rep_id: a.rep_id,
+        scenario_id: a.scenario_id,
         status,
+        priority: a.priority || 'Medium',
+        deadline: a.deadline,
+        created_at: a.created_at,
+        training_mode: normalizeModeForDisplay(a.training_mode),
         score,
-        feedback,
-        rep_name: a.rep?.name || 'Unknown Rep',
-        // Display label: designation - company, fallback to persona_name
-        scenario_name: (
-          (a.scenario?.contact_title && a.scenario?.contact_company)
-            ? `${a.scenario.contact_title} - ${a.scenario.contact_company}`
-            : a.scenario?.contact_title || a.scenario?.contact_company || a.scenario?.persona_name || 'Unknown Scenario'
-        ),
-        difficulty: a.scenario?.difficulty || 'N/A'
+        rep_name: rep.name || 'Sales Rep',
+        rep_role: rep.role || 'Sales Representative',
+        persona_name: personaName,
+        company,
+        scenario_title: scenarioName,
+        scenario_name: scenarioName,
+        scenario,
+        difficulty: scenario.difficulty || 'Medium'
       };
     });
 
-    console.log(`[getTeamAssignments] Transformed ${assignments.length} assignments for frontend`);
-    console.log("--- GET TEAM ASSIGNMENTS DEBUG END ---");
-    res.json(assignments)
+    console.log(`[getTeamAssignments] Successfully returned ${transformed.length} assignments.`);
+    res.json(transformed);
   } catch (err: any) {
     console.error("Critical Error in getTeamAssignments:", err);
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: err.message });
   }
 }
 

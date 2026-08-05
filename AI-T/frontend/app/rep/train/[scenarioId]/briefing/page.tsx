@@ -16,6 +16,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
 
   const [scenario, setScenario] = useState<any>(null)
   const [session, setSession] = useState<any>(null)
+  const [assignmentMode, setAssignmentMode] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
 
@@ -38,6 +39,18 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
             setSession(sessData)
           }
         }
+
+        if (assignmentId) {
+          try {
+            const assignRes = await fetch(`${API}/api/users/assignments/${assignmentId}`, { headers })
+            if (assignRes.ok) {
+              const assignData = await assignRes.json()
+              if (assignData.training_mode) {
+                setAssignmentMode(assignData.training_mode)
+              }
+            }
+          } catch (e) {}
+        }
       } catch (err) {
         console.error('Failed to fetch briefing data', err)
       } finally {
@@ -46,15 +59,15 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
     }
 
     fetchBriefing()
-  }, [scenarioId, sessionId])
+  }, [scenarioId, sessionId, assignmentId])
 
   const handleStartOrCreateSession = async () => {
     setStarting(true)
-    const trainingMode = urlMode || scenario?.training_mode || 'Coach Mode'
-    const modeParam = `&mode=${encodeURIComponent(trainingMode)}`
+    const initialMode = urlMode || assignmentMode || scenario?.training_mode || 'Coach Mode'
     try {
       if (sessionId) {
         // Resume existing active session
+        const modeParam = `&mode=${encodeURIComponent(initialMode)}`
         router.push(`/rep/train/${scenarioId}?sessionId=${sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}${modeParam}`)
         return
       }
@@ -71,6 +84,8 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
 
       if (res.ok) {
         const data = await res.json()
+        const resolvedMode = urlMode || data.trainingMode || assignmentMode || scenario?.training_mode || 'Coach Mode'
+        const modeParam = `&mode=${encodeURIComponent(resolvedMode)}`
         const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}${modeParam}`
         router.push(targetUrl)
       } else {

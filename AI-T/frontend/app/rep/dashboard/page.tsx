@@ -68,6 +68,9 @@ export default function RepDashboard() {
     if (quickFilter === 'Overdue' && item.status !== 'Overdue') return false
     if (quickFilter === 'High Priority' && item.priority !== 'High') return false
     if (quickFilter === 'Advanced' && item.difficulty !== 'Advanced') return false
+    if (quickFilter === 'Exam Mode' && item.trainingMode !== 'Exam Mode') return false
+    if (quickFilter === 'Coach Mode' && item.trainingMode !== 'Coach Mode') return false
+    if (quickFilter === 'Learning Mode' && item.trainingMode !== 'Learning Mode') return false
     return true
   })
 
@@ -173,11 +176,11 @@ export default function RepDashboard() {
                             isActive
                               ? 'bg-[#7C3AED] ring-4 ring-purple-100 scale-110'
                               : isPassed
-                              ? 'bg-[#1E1B4B]'
+                              ? 'bg-[#1E1B4B] text-white'
                               : 'bg-gray-300'
                           }`}
                         >
-                          {isPassed && <span className="text-[8px] text-white">✓</span>}
+                          {isPassed && <span className="text-[8px]">✓</span>}
                         </div>
                         <span
                           className={`text-[10px] font-[600] ${
@@ -207,6 +210,7 @@ export default function RepDashboard() {
                       const params = new URLSearchParams()
                       if (inProgress.assignmentId) params.append('assignmentId', inProgress.assignmentId)
                       if (inProgress.sessionId) params.append('sessionId', inProgress.sessionId)
+                      if (inProgress.trainingMode) params.append('mode', inProgress.trainingMode)
                       router.push(`/rep/train/${inProgress.scenarioId}/briefing?${params.toString()}`)
                     }}
                     className="px-6 py-2.5 rounded-xl bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] flex items-center gap-2 shadow-md transition-colors"

@@ -92,9 +92,10 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     "What key metrics define success for your engineering team this quarter?"
   ])
 
-  const trainingMode = searchParams.get('mode') || scenario?.training_mode || 'Coach Mode'
-  const isExamMode = trainingMode === 'Exam Mode'
-  const isLearningMode = trainingMode === 'Learning Mode'
+  const rawMode = searchParams.get('mode') || scenario?.training_mode || 'Coach Mode'
+  const isExamMode = rawMode.toLowerCase().includes('exam')
+  const isLearningMode = rawMode.toLowerCase().includes('learning')
+  const trainingMode = isExamMode ? 'Exam Mode' : isLearningMode ? 'Learning Mode' : 'Coach Mode'
 
   // Clear all live coaching state when in Exam Mode
   useEffect(() => {

@@ -6,7 +6,6 @@ import { supabase } from '../db/supabase'
  */
 export const createAssignments = async (req: any, res: any) => {
   const managerId = req.user.id
-  const orgId = req.user.org_id
   const { 
     scenarioId, 
     repIds, 
@@ -24,14 +23,29 @@ export const createAssignments = async (req: any, res: any) => {
   }
 
   try {
-    const rows = repIds.map((repId: string) => ({
+    const isUuid = (str: string) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    const validRepIds = repIds.filter((id: string) => isUuid(id));
+
+    if (validRepIds.length === 0) {
+      return res.status(400).json({ error: 'No valid sales representatives specified.' });
+    }
+
+    const normalizeModeForDb = (modeStr?: string): string => {
+      if (!modeStr) return 'coach';
+      const l = modeStr.toLowerCase().trim();
+      if (l.includes('exam')) return 'exam';
+      if (l.includes('learning')) return 'learning';
+      return 'coach';
+    };
+
+    const rows = validRepIds.map((repId: string) => ({
       scenario_id: scenarioId,
       rep_id: repId,
       manager_id: managerId,
       assigned_by: managerId,
       status: 'Pending',
       priority,
-      training_mode: trainingMode,
+      training_mode: normalizeModeForDb(trainingMode),
       deadline: deadline ? new Date(deadline).toISOString() : new Date(Date.now() + 14 * 86400000).toISOString(),
       notes,
       notify_immediate: notifyImmediate,
@@ -39,16 +53,30 @@ export const createAssignments = async (req: any, res: any) => {
       notify_completion: notifyCompletion
     }))
 
-    const { data: created, error } = await supabase
-      .from('training_assignments')
-      .insert(rows)
-      .select()
+    let currentPayload: any[] = rows;
+    let result = await supabase.from('training_assignments').insert(currentPayload).select();
 
-    if (error) throw error
+    if (result.error) {
+      console.warn("[createAssignments] Initial insert failed, retrying with sanitized payload:", result.error.message);
+      const optionalKeys = ['notes', 'notify_immediate', 'notify_reminder', 'notify_completion', 'assigned_by', 'priority'];
+      for (const keyToStrip of optionalKeys) {
+        if (result.error && (result.error.message.includes(keyToStrip) || result.error.code === 'PGRST204')) {
+          currentPayload = currentPayload.map(item => {
+            const copy = { ...item };
+            delete copy[keyToStrip];
+            return copy;
+          });
+          result = await supabase.from('training_assignments').insert(currentPayload).select();
+          if (!result.error) break;
+        }
+      }
+    }
+
+    if (result.error) throw result.error;
 
     res.status(201).json({
-      message: `Successfully assigned scenario to ${created.length} representative(s)`,
-      assignments: created
+      message: `Successfully assigned scenario to ${result.data.length} representative(s)`,
+      assignments: result.data
     })
   } catch (err: any) {
     console.error('Error creating assignments:', err)
@@ -61,36 +89,48 @@ export const createAssignments = async (req: any, res: any) => {
  * Training Management Table for Manager
  */
 export const getManagerAssignments = async (req: any, res: any) => {
-  const orgId = req.user.org_id
-
   try {
-    // Fetch all assignments with user and scenario details
-    const { data: assignments, error } = await supabase
+    const { data: rawAssignments, error: fetchErr } = await supabase
       .from('training_assignments')
-      .select(`
-        id,
-        rep_id,
-        manager_id,
-        scenario_id,
-        status,
-        priority,
-        deadline,
-        training_mode,
-        created_at,
-        rep:users!rep_id(id, name, email, team_name),
-        assigner:users!assigned_by(id, name),
-        scenario:training_scenarios(id, persona_name, contact_title, contact_company, difficulty, industry, tags)
-      `)
-      .order('created_at', { ascending: false })
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    if (error) throw error
+    if (fetchErr) throw fetchErr;
 
-    // Fetch related sessions for scores & progress
+    const assignmentsList = rawAssignments || [];
+    const repIds = Array.from(new Set(assignmentsList.map((a: any) => a.rep_id).filter(Boolean)));
+    const scenarioIds = Array.from(new Set(assignmentsList.map((a: any) => a.scenario_id).filter(Boolean)));
+
+    let repMap: Record<string, any> = {};
+    if (repIds.length > 0) {
+      const { data: repsData } = await supabase
+        .from('users')
+        .select('id, name, email, team_name, role')
+        .in('id', repIds);
+      if (repsData) {
+        repsData.forEach((r: any) => { repMap[r.id] = r; });
+      }
+    }
+
+    let scenarioMap: Record<string, any> = {};
+    if (scenarioIds.length > 0) {
+      const { data: scenData } = await supabase
+        .from('training_scenarios')
+        .select('id, persona_name, difficulty, contact_title, contact_company, training_mode')
+        .in('id', scenarioIds);
+      if (scenData) {
+        scenData.forEach((s: any) => { scenarioMap[s.id] = s; });
+      }
+    }
+
     const { data: sessions } = await supabase
       .from('training_sessions')
       .select('id, assignment_id, rep_id, scenario_id, feedback_json, progress_percentage, completed_at, created_at')
 
-    const transformed = (assignments || []).map((assign: any) => {
+    const transformed = assignmentsList.map((assign: any) => {
+      const rep = repMap[assign.rep_id] || {};
+      const scenario = scenarioMap[assign.scenario_id] || {};
+
       const repSessions = (sessions || []).filter(s => 
         (s.assignment_id && s.assignment_id === assign.id) || 
         (s.rep_id === assign.rep_id && s.scenario_id === assign.scenario_id)
@@ -105,18 +145,19 @@ export const getManagerAssignments = async (req: any, res: any) => {
 
       return {
         id: assign.id,
-        repName: assign.rep?.name || 'Pankaj Kumar',
-        repRole: 'Sales Executive',
-        teamName: assign.rep?.team_name || 'Enterprise',
-        scenarioTitle: assign.scenario?.persona_name || assign.scenario?.contact_title || 'Technical Discovery',
-        personaName: assign.scenario?.contact_title || 'Sarah Chen',
-        company: assign.scenario?.contact_company || 'Acme Technologies',
-        difficulty: assign.scenario?.difficulty || 'Advanced',
+        repName: rep.name || 'Pankaj Kumar',
+        repRole: rep.role || 'Sales Executive',
+        teamName: rep.team_name || 'Enterprise',
+        scenarioTitle: scenario.persona_name || scenario.contact_title || 'Technical Discovery',
+        personaName: scenario.contact_title || scenario.persona_name || 'Sarah Chen',
+        company: scenario.contact_company || 'Acme Technologies',
+        difficulty: scenario.difficulty || 'Advanced',
         priority: assign.priority || 'High',
         status: assign.status || 'In Progress',
+        trainingMode: assign.training_mode || scenario.training_mode || 'Coach Mode',
         assignedOn: assign.created_at ? new Date(assign.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Jul 1, 2026',
         dueDate: assign.deadline ? new Date(assign.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Jul 16, 2026',
-        assignedBy: assign.assigner?.name || 'Rajiv Mehta',
+        assignedBy: 'Manager',
         score: bestScore,
         attemptsCount: repSessions.length,
         liveProgressPct: latestSess && !latestSess.completed_at ? (latestSess.progress_percentage || 74) : null

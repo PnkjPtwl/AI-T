@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
 interface AssignTrainingWizardProps {
   isOpen: boolean
@@ -36,6 +36,16 @@ export default function AssignTrainingWizard({
   const [notifyReminder, setNotifyReminder] = useState(true)
   const [notifyCompletion, setNotifyCompletion] = useState(true)
   const [assigning, setAssigning] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      if (initialScenarioId) {
+        setSelectedScenarioId(initialScenarioId)
+      } else if (scenarios && scenarios.length > 0) {
+        setSelectedScenarioId(scenarios[0].id)
+      }
+    }
+  }, [isOpen, initialScenarioId, scenarios])
 
   if (!isOpen) return null
 
@@ -73,6 +83,13 @@ export default function AssignTrainingWizard({
       const token = localStorage.getItem('token')
       const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
+      const isUuid = (str: string) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)
+      const validSelectedRepIds = selectedRepIds.filter(id => isUuid(id))
+      const validRepsFromProps = reps.map(r => r.id).filter(id => isUuid(id))
+      const finalRepIds = validSelectedRepIds.length > 0
+        ? validSelectedRepIds
+        : (validRepsFromProps.length > 0 ? validRepsFromProps : [])
+
       const res = await fetch(`${API}/api/users/assign-training`, {
         method: 'POST',
         headers: {
@@ -80,8 +97,8 @@ export default function AssignTrainingWizard({
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          repIds: selectedRepIds.length > 0 ? selectedRepIds : [reps[0]?.id || 'rep-1'],
-          scenarioId: selectedScenario.id,
+          repIds: finalRepIds,
+          scenarioId: isUuid(selectedScenario?.id) ? selectedScenario.id : (isUuid(scenarios[0]?.id) ? scenarios[0].id : selectedScenario?.id),
           deadline,
           priority,
           trainingMode,
@@ -96,7 +113,8 @@ export default function AssignTrainingWizard({
         onSuccess()
         onClose()
       } else {
-        alert('Failed to assign training.')
+        const errData = await res.json().catch(() => ({}))
+        alert(errData.error || 'Failed to assign training.')
       }
     } catch (err) {
       console.error(err)

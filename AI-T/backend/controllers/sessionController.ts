@@ -103,16 +103,18 @@ export const startPractice = async (req: any, res: any) => {
 
   let targetAssignmentId = assignmentId;
   let assignmentAvatarType = 'female';
+  let assignmentTrainingMode = 'Coach Mode';
   let existingSessionId = null;
 
   if (targetAssignmentId) {
     const { data: assignData } = await supabase
       .from('training_assignments')
-      .select('avatar_type, session_id, status')
+      .select('avatar_type, training_mode, session_id, status')
       .eq('id', targetAssignmentId)
       .single()
     if (assignData) {
       assignmentAvatarType = assignData.avatar_type || 'female';
+      assignmentTrainingMode = assignData.training_mode || 'Coach Mode';
       if (assignData.status === 'In Progress' && assignData.session_id) {
         existingSessionId = assignData.session_id;
       }
@@ -121,7 +123,7 @@ export const startPractice = async (req: any, res: any) => {
     console.log(`[AssignmentLifecycle] No assignmentId provided. searching for pending assignment for rep ${repId} and scenario ${scenarioId}`);
     const { data: autoAssign } = await supabase
       .from('training_assignments')
-      .select('id, avatar_type, session_id, status')
+      .select('id, avatar_type, training_mode, session_id, status')
       .eq('rep_id', repId)
       .eq('scenario_id', scenarioId)
       .in('status', ['Pending', 'In Progress', 'Overdue'])
@@ -133,6 +135,7 @@ export const startPractice = async (req: any, res: any) => {
       console.log(`[AssignmentLifecycle] Auto-linked to assignment ${autoAssign.id}`);
       targetAssignmentId = autoAssign.id;
       assignmentAvatarType = autoAssign.avatar_type || 'female';
+      assignmentTrainingMode = autoAssign.training_mode || 'Coach Mode';
       if (autoAssign.status === 'In Progress' && autoAssign.session_id) {
         existingSessionId = autoAssign.session_id;
       }
@@ -148,25 +151,41 @@ export const startPractice = async (req: any, res: any) => {
 
     if (checkSession) {
       console.log(`[AssignmentLifecycle] Resuming existing session ${existingSessionId}`);
-      return res.json({ sessionId: existingSessionId, avatarType: assignmentAvatarType })
+      return res.json({ sessionId: existingSessionId, avatarType: assignmentAvatarType, trainingMode: assignmentTrainingMode })
     } else {
       console.log(`[AssignmentLifecycle] Existing session ${existingSessionId} was not found (likely deleted). Creating new session.`);
       existingSessionId = null;
     }
   }
 
-  const { data, error } = await supabase
+  const insertPayload: any = {
+    rep_id: repId,
+    scenario_id: scenarioId,
+    messages_json: []
+  }
+  if (targetAssignmentId) {
+    insertPayload.assignment_id = targetAssignmentId;
+  }
+
+  let { data, error } = await supabase
     .from('training_sessions')
-    .insert({
-      rep_id: repId,
-      scenario_id: scenarioId,
-      messages_json: []
-    })
+    .insert(insertPayload)
     .select('id')
     .single()
 
-  if (error) {
-    return res.status(500).json({ error: error.message })
+  if (error && error.message && error.message.includes('assignment_id')) {
+    delete insertPayload.assignment_id;
+    const retry = await supabase
+      .from('training_sessions')
+      .insert(insertPayload)
+      .select('id')
+      .single()
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error || !data) {
+    return res.status(500).json({ error: error?.message || 'Failed to create training session' })
   }
 
   if (targetAssignmentId) {
@@ -177,7 +196,7 @@ export const startPractice = async (req: any, res: any) => {
     })
   }
 
-  res.json({ sessionId: data.id, avatarType: assignmentAvatarType })
+  res.json({ sessionId: data.id, avatarType: assignmentAvatarType, trainingMode: assignmentTrainingMode })
 }
 
 export const sendMessage = async (req: any, res: any) => {

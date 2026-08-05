@@ -19,6 +19,7 @@ export default function ManagerTrainingPage() {
 
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
+  const [modeFilter, setModeFilter] = useState('All')
 
   const fetchData = async () => {
     try {
@@ -60,8 +61,11 @@ export default function ManagerTrainingPage() {
     if (statusFilter !== 'All') {
       result = result.filter(a => (a.status || '').toLowerCase() === statusFilter.toLowerCase())
     }
+    if (modeFilter !== 'All') {
+      result = result.filter(a => (a.training_mode || a.trainingMode || 'Coach Mode').toLowerCase() === modeFilter.toLowerCase())
+    }
     return result
-  }, [assignments, searchTerm, statusFilter])
+  }, [assignments, searchTerm, statusFilter, modeFilter])
 
   const handleRowClick = (assign: any) => {
     setSelectedAssignment(assign)
@@ -98,7 +102,7 @@ export default function ManagerTrainingPage() {
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-1">
           <input
             type="text"
@@ -109,21 +113,37 @@ export default function ManagerTrainingPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-[700] text-[#64748B]">Status:</span>
-          {(['All', 'In Progress', 'Completed', 'Overdue', 'Pending'] as const).map(st => (
-            <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-[700] transition-colors ${
-                statusFilter === st
-                  ? 'bg-[#1E1B4B] text-white shadow-sm'
-                  : 'bg-gray-50 text-[#64748B] border border-gray-200 hover:bg-gray-100'
-              }`}
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-[700] text-[#64748B]">Mode:</span>
+            <select
+              value={modeFilter}
+              onChange={e => setModeFilter(e.target.value)}
+              className="h-9 bg-gray-50 border border-gray-200 rounded-xl px-3 text-xs font-[700] text-[#1E293B] focus:outline-none"
             >
-              {st}
-            </button>
-          ))}
+              <option value="All">All Modes</option>
+              <option value="Exam Mode">Exam Mode</option>
+              <option value="Coach Mode">Coach Mode</option>
+              <option value="Learning Mode">Learning Mode</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-[700] text-[#64748B]">Status:</span>
+            {(['All', 'In Progress', 'Completed', 'Overdue', 'Pending'] as const).map(st => (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-[700] transition-colors ${
+                  statusFilter === st
+                    ? 'bg-[#1E1B4B] text-white shadow-sm'
+                    : 'bg-gray-50 text-[#64748B] border border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -134,6 +154,7 @@ export default function ManagerTrainingPage() {
             <tr>
               <th className="p-4">SALES REP</th>
               <th className="p-4">SCENARIO & PERSONA</th>
+              <th className="p-4">MODE</th>
               <th className="p-4">PRIORITY</th>
               <th className="p-4">DUE DATE</th>
               <th className="p-4">SCORE</th>
@@ -222,14 +243,20 @@ export default function ManagerTrainingPage() {
                 >
                   <td className="p-4 font-[800] text-[#1E293B] flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-[#1E1B4B] text-white flex items-center justify-center font-[800] text-xs">
-                      {assign.rep_name?.substring(0, 2).toUpperCase() || 'PK'}
+                      {assign.rep_name?.substring(0, 2).toUpperCase() || 'SR'}
                     </div>
-                    <span>{assign.rep_name || 'Pankaj Kumar'}</span>
+                    <span>{assign.rep_name || 'Sales Rep'}</span>
                   </td>
 
                   <td className="p-4">
                     <p className="font-[700] text-[#1E293B]">{assign.scenario_name || assign.scenario?.persona_name || 'Technical Discovery'}</p>
-                    <p className="text-[11px] text-[#64748B]">{assign.scenario?.persona_name || 'Prospect'} · {assign.scenario?.contact_company || 'Company'}</p>
+                    <p className="text-[11px] text-[#64748B]">{assign.persona_name || assign.scenario?.persona_name || 'Prospect'} · {assign.company || assign.scenario?.contact_company || 'Company'}</p>
+                  </td>
+
+                  <td className="p-4 font-[700]">
+                    <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-md font-[700] text-[10px]">
+                      {assign.training_mode || assign.trainingMode || 'Coach Mode'}
+                    </span>
                   </td>
 
                   <td className="p-4 font-[700] text-red-600">{assign.priority || 'High'}</td>

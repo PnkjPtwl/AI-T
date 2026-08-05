@@ -154,15 +154,18 @@ export const getRepDashboard = async (req: any, res: any) => {
         stages_completed: `${stageStep} / ${stages.length}`
       }
 
+      const matchingAssign = inProgressAssignments.find(a => a.scenario_id === latest.scenario_id)
+      const resolvedMode = matchingAssign?.training_mode || latest.training_mode || sc.training_mode || 'Coach Mode'
+
       inProgressSession = {
         sessionId: latest.id,
         scenarioId: latest.scenario_id,
-        assignmentId: inProgressAssignments.find(a => a.scenario_id === latest.scenario_id)?.id || null,
+        assignmentId: matchingAssign?.id || null,
         title: sc.persona_name || sc.contact_title || 'Training Session',
         personaName: sc.contact_title || sc.persona_name || 'Prospect Persona',
         company: sc.contact_company || 'Target Account',
         difficulty: sc.difficulty || 'Medium',
-        trainingMode: 'Coach Mode',
+        trainingMode: resolvedMode,
         progressPercentage: latest.progress_percentage || Math.min(90, (stageStep * 20)),
         estTimeRemainingMins: 15,
         currentStage: latest.current_stage || 'Needs Discovery',

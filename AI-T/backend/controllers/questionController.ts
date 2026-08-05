@@ -7,11 +7,11 @@ import { searchKnowledgeBase, formatRagContext } from '../utils/ragClient'
 // POST /api/questions/generate
 export const generateQuestions = async (req: Request, res: Response) => {
   try {
-    const { categories, context_text, persona_name, persona_type, account_name } = req.body
+    const { categories, context_text, persona_name, persona_type, account_name, scorecard_metrics } = req.body
     
-    if (!categories || !Array.isArray(categories) || categories.length === 0) {
-      return res.status(400).json({ error: 'categories array is required' })
-    }
+    const validCategories = Array.isArray(categories) && categories.length > 0
+      ? categories
+      : ['Discovery', 'Objection Handling', 'Value Proposition', 'Closing Skills']
 
     const groqApiKey = await getSecret('GROQ_API_KEY')
     const groq = new Groq({ apiKey: groqApiKey || '' })
@@ -20,7 +20,7 @@ export const generateQuestions = async (req: Request, res: Response) => {
     let kbContextStr = ''
     if (account_name) {
       try {
-        const searchTarget = `${account_name} ${persona_name || ''} ${context_text || ''} ${categories.join(' ')} questions discovery objections`.trim()
+        const searchTarget = `${account_name} ${persona_name || ''} ${context_text || ''} ${validCategories.join(' ')} questions discovery objections`.trim()
         const kbChunks = await searchKnowledgeBase(searchTarget, account_name, 5)
         if (kbChunks && kbChunks.length > 0) {
           kbContextStr = formatRagContext(kbChunks, account_name)
@@ -31,16 +31,22 @@ export const generateQuestions = async (req: Request, res: Response) => {
       }
     }
 
+    let metricsContextStr = ''
+    if (Array.isArray(scorecard_metrics) && scorecard_metrics.length > 0) {
+      metricsContextStr = scorecard_metrics.map((m: any) => `- ${m.name}: ${m.description || ''}`).join('\n')
+    }
+
     const prompt = `
 You are an expert sales trainer. The user wants to generate test questions for a sales training scenario.
 Persona Name: ${persona_name || 'N/A'}
 Persona Type: ${persona_type || 'N/A'}
 Context: ${context_text || 'No additional context provided.'}
+${metricsContextStr ? `\nSCORECARD EVALUATION METRICS:\n${metricsContextStr}\n` : ''}
 ${kbContextStr ? `\nKNOWLEDGE BASE CONTEXT:\n${kbContextStr}\n` : ''}
 
-Please generate exactly 2 distinct questions for EACH of the following categories: ${categories.join(', ')}.
+Please generate exactly 2 distinct questions for EACH of the following categories: ${validCategories.join(', ')}.
 INSTRUCTIONS:
-- Base the questions directly on the Persona Context provided above${kbContextStr ? ' and the facts, pain points, or requirements in the Knowledge Base context' : ''}.
+- Base the questions directly on the Persona Context and Scorecard Metrics provided above${kbContextStr ? ' and the facts, pain points, or requirements in the Knowledge Base context' : ''}.
 - These questions are what the Sales Rep should aim to ask the Persona or answer during the roleplay to succeed.
 - Phrase them as "Questions the Rep should aim to ask/answer".
 
@@ -72,21 +78,28 @@ Return ONLY raw JSON with this format:
     const aiQuestions = data.questions || []
 
     // Fetch top questions from the bank for these categories
-    const { data: bankQuestions, error: bankErr } = await supabase
-      .from('question_bank')
-      .select('id, category, question_text, average_rating')
-      .in('category', categories)
-      .order('average_rating', { ascending: false })
-      .order('total_ratings', { ascending: false })
-      .limit(20);
-      
-    const formattedBankQuestions = (bankQuestions || []).map(q => ({
-      id: q.id,
-      category: q.category,
-      text: q.question_text,
-      isBank: true,
-      rating: q.average_rating
-    }))
+    let formattedBankQuestions: any[] = []
+    try {
+      const { data: bankQuestions } = await supabase
+        .from('question_bank')
+        .select('id, category, question_text, average_rating')
+        .in('category', validCategories)
+        .order('average_rating', { ascending: false })
+        .order('total_ratings', { ascending: false })
+        .limit(20);
+        
+      if (bankQuestions) {
+        formattedBankQuestions = bankQuestions.map(q => ({
+          id: q.id,
+          category: q.category,
+          text: q.question_text,
+          isBank: true,
+          rating: q.average_rating
+        }))
+      }
+    } catch (bankErr) {
+      console.warn('[QuestionsBank] question_bank query fallback:', bankErr)
+    }
 
     // Combine them
     const allQuestions = [...aiQuestions.map((q: any) => ({...q, isBank: false})), ...formattedBankQuestions]

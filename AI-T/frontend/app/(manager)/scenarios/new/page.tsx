@@ -136,7 +136,7 @@ export default function NewScenarioPage() {
     if (step === 3 && !scorecardGenerated && formData.context_text) {
       handleGenerateScorecard()
     }
-    if (step === 5 && questions.length === 0 && scorecardMetrics.length > 0) {
+    if (step === 5 && questions.length === 0) {
       handleGenerateQuestions()
     }
   }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -188,12 +188,16 @@ export default function NewScenarioPage() {
     setError('')
     try {
       const token = localStorage.getItem('token')
-      const categories = scorecardMetrics.map(m => m.name) || ['Discovery', 'Objection Handling']
+      const categories = scorecardMetrics.length > 0 
+        ? scorecardMetrics.map(m => m.name)
+        : ['Discovery', 'Objection Handling', 'Value Proposition', 'Closing Skills']
+
       const res = await fetch(`${API}/api/questions/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           categories,
+          scorecard_metrics: scorecardMetrics,
           context_text: formData.context_text,
           persona_name: formData.persona_name,
           persona_type: formData.contact_title,
@@ -202,12 +206,13 @@ export default function NewScenarioPage() {
       })
       if (res.ok) {
         const data = await res.json()
-        if (data.questions && Array.isArray(data.questions)) {
-          const mapped: EvalQuestion[] = data.questions.map((q: any, i: number) => ({
+        const questionsArray = Array.isArray(data) ? data : (data.questions || [])
+        if (questionsArray && Array.isArray(questionsArray)) {
+          const mapped: EvalQuestion[] = questionsArray.map((q: any, i: number) => ({
             id: `ai-${Date.now()}-${i}`,
             category: q.category || 'General',
-            text: q.text || q.question,
-            rating: 0
+            text: q.text || q.question || q.question_text || 'Probing question',
+            rating: q.rating || 0
           }))
           setQuestions(mapped)
         }
