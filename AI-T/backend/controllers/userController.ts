@@ -914,11 +914,11 @@ export const getTeamAnalytics = async (req: any, res: any) => {
 }
 
 export const assignTraining = async (req: any, res: any) => {
-  const { repIds, scenarioId, deadline, priority, avatarType } = req.body
+  const { repIds, scenarioId, deadline, priority, avatarType, trainingMode, notes } = req.body
   const managerId = req.user.id
 
   console.log("--- ASSIGN TRAINING DEBUG START ---");
-  console.log("Payload:", { repIds, scenarioId, deadline, priority, avatarType });
+  console.log("Payload:", { repIds, scenarioId, deadline, priority, avatarType, trainingMode, notes });
   console.log("Manager Context:", { managerId, org_id: req.user.org_id });
 
   try {
@@ -942,7 +942,8 @@ export const assignTraining = async (req: any, res: any) => {
       priority: priority || 'Medium',
       deadline: deadline,
       avatar_type: avatarType || 'female',
-
+      training_mode: trainingMode || 'Coach Mode',
+      notes: notes || ''
     }))
 
     console.log(`Attempting to insert ${assignments.length} assignments...`);

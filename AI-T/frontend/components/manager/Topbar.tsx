@@ -39,7 +39,7 @@ export default function Topbar() {
   }
 
   return (
-    <header className="h-16 bg-white border-b border-[#E2E8F0] flex items-center justify-between px-8 sticky top-0 z-40">
+    <header className="h-16 bg-white border-b border-[#E2E8F0] flex items-center justify-between px-8 sticky top-0 z-30">
       <div />
 
       <div className="flex items-center gap-4">
@@ -56,7 +56,7 @@ export default function Topbar() {
                 {userName ? userName.charAt(0).toUpperCase() : 'M'}
               </div>
             )}
-            <span className="text-base font-semibold text-[#1A2A3A] hidden md:block">{userName || 'Manager'}</span>
+            <span className="text-base font-semibold text-[#1A2A3A] hidden md:block">Lokesh (Manager)</span>
             <svg className="w-4 h-4 text-[#64748B]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
           </button>
 

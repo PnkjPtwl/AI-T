@@ -12,6 +12,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
   const { scenarioId } = params
   const assignmentId = searchParams.get('assignmentId')
   const sessionId = searchParams.get('sessionId')
+  const urlMode = searchParams.get('mode')
 
   const [scenario, setScenario] = useState<any>(null)
   const [session, setSession] = useState<any>(null)
@@ -49,10 +50,12 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
 
   const handleStartOrCreateSession = async () => {
     setStarting(true)
+    const trainingMode = urlMode || scenario?.training_mode || 'Coach Mode'
+    const modeParam = `&mode=${encodeURIComponent(trainingMode)}`
     try {
       if (sessionId) {
         // Resume existing active session
-        router.push(`/rep/train/${scenarioId}?sessionId=${sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}`)
+        router.push(`/rep/train/${scenarioId}?sessionId=${sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}${modeParam}`)
         return
       }
 
@@ -68,7 +71,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
 
       if (res.ok) {
         const data = await res.json()
-        const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}`
+        const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}${modeParam}`
         router.push(targetUrl)
       } else {
         alert('Failed to start session. Please try again.')

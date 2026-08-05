@@ -8,6 +8,7 @@ interface PersonaDetailsSidebarProps {
   persona: any
   onAssign?: (scenarioId: string) => void
   onEdit?: (scenarioId: string) => void
+  onDuplicate?: (scenarioId: string) => void
 }
 
 export default function PersonaDetailsSidebar({
@@ -15,7 +16,8 @@ export default function PersonaDetailsSidebar({
   onClose,
   persona,
   onAssign,
-  onEdit
+  onEdit,
+  onDuplicate
 }: PersonaDetailsSidebarProps) {
   if (!isOpen || !persona) return null
 
@@ -49,7 +51,16 @@ export default function PersonaDetailsSidebar({
     return ''
   }
 
-  // Build clean AI profile summary from persona fields - never use raw context_text
+  // Clean raw text if used (strip out questions, metadata tags, etc.)
+  const cleanContext = (persona.context_text || '')
+    .replace(/\[SCENARIO_METADATA:\s*\{[\s\S]*?\}\]/g, '')
+    .replace(/\[MANDATORY EVALUATION RUBRIC[\s\S]*?(?=\n\[|$)/g, '')
+    .replace(/-\s*\[(Opening|Closing|Discovery|Objection|Pitch|Technical|General)\][^\n]*/gi, '')
+    .replace(/Questions the Rep should aim to ask:[^\n]*/gi, '')
+    .replace(/\n{2,}/g, ' ')
+    .trim()
+
+  // Build clean AI profile summary from persona fields
   const buildProfileSummary = (): string => {
     const name = persona.persona_name || persona.contact_title || 'This persona'
     const role = persona.contact_title || ''
@@ -59,6 +70,14 @@ export default function PersonaDetailsSidebar({
 
     if (role && company) {
       parts.push(`${name} is a ${role} at ${company}${industry ? ` in the ${industry} industry` : ''}.`)
+    } else if (role) {
+      parts.push(`${name} is a ${role}.`)
+    }
+
+    if (persona.customer_background) {
+      parts.push(persona.customer_background)
+    } else if (cleanContext && cleanContext.length > 10 && !cleanContext.includes('Questions the Rep')) {
+      parts.push(cleanContext)
     }
 
     if (persona.communication_style && typeof persona.communication_style === 'string') {
@@ -66,7 +85,7 @@ export default function PersonaDetailsSidebar({
     }
 
     if (persona.objection_style && typeof persona.objection_style === 'string' && persona.objection_style.length < 200) {
-      parts.push(persona.objection_style)
+      parts.push(`Objection style: ${persona.objection_style}`)
     } else if (persona.personality_traits) {
       const traits = typeof persona.personality_traits === 'string'
         ? persona.personality_traits.split(',').slice(0, 3).map((t: string) => t.trim()).join(', ')
@@ -74,52 +93,108 @@ export default function PersonaDetailsSidebar({
       if (traits) parts.push(`Key traits: ${traits}.`)
     }
 
-    return parts.join(' ').substring(0, 400) || `${name}${role ? ` — ${role}` : ''}${company ? ` at ${company}` : ''}.`
+    return parts.join(' ').substring(0, 450) || `${name}${role ? ` — ${role}` : ''}${company ? ` at ${company}` : ''}.`
   }
 
-  const aiBehaviorProfile = persona.ai_behavior_profile || buildProfileSummary()
+  const aiBehaviorProfile = persona.ai_behavior_profile || persona.aiBehaviorProfile || persona.customer_background || buildProfileSummary()
 
   const communicationStyle = persona.communication_style ||
     'Direct and concise. Prefers written proposals, detailed specs, and demos over high-level pitches.'
 
+  // Derivation helper for Pain Points
+  const derivePainPoints = (): any[] => {
+    const direct = parseList(persona.pain_points || persona.expected_objections || persona.painPoints, [])
+    if (direct.length > 0) return direct
 
-  const painPoints = parseList(persona.pain_points, [
-    'Integration complexity',
-    'Long implementation timelines',
-    'Lack of developer-friendly APIs',
-    'Vendor lock-in risk'
-  ])
+    const derived: string[] = []
+    if (persona.objection_style && typeof persona.objection_style === 'string') {
+      const parts = persona.objection_style.split(/[\n,;.]/).map((s: string) => s.trim()).filter((s: string) => s.length > 5)
+      derived.push(...parts.slice(0, 3))
+    }
 
-  const businessGoals = parseList(persona.business_goals, [
-    'Reduce infrastructure overhead by 30%',
-    'Modernize legacy stack',
-    'Improve deployment velocity'
-  ])
+    if (cleanContext && derived.length < 3) {
+      const sentences = cleanContext.split(/(?<=[.!?])\s+/)
+      for (const sentence of sentences) {
+        if (/pain|challenge|issue|problem|slow|timeline|cost|risk|complexity|integration|legacy|difficulty|concern|manual|specification|compliance|quality/i.test(sentence)) {
+          const trimmed = sentence.trim().substring(0, 70)
+          if (trimmed && !derived.includes(trimmed)) derived.push(trimmed)
+        }
+      }
+    }
 
-  const decisionDrivers = parseList(persona.decision_drivers, [
-    'Technical fit',
-    'Integration capability',
-    'Security posture',
-    'Long-term roadmap'
-  ])
+    if (derived.length === 0 && persona.target_skills) {
+      const skills = parseList(persona.target_skills, [])
+      skills.forEach((sk: any) => {
+        const str = formatItemLabel(sk)
+        if (str) derived.push(`Evaluating ${str.toLowerCase()}`)
+      })
+    }
 
-  const targetSkills = parseList(persona.target_skills, [
-    'Technical Discovery',
-    'Objection Handling',
-    'Demo Delivery',
-    'Competitive Differentiation',
-    'Proof of Concept'
-  ])
+    return derived.slice(0, 4)
+  }
 
-  const scorecardMetrics = parseList(persona.scorecard_metrics, [
-    'Question Depth',
-    'Technical Accuracy',
-    'Objection Handling',
-    'Demo Quality'
-  ])
+  // Derivation helper for Business Goals
+  const deriveBusinessGoals = (): any[] => {
+    const direct = parseList(persona.business_goals || persona.priority_goals || persona.businessGoals, [])
+    if (direct.length > 0) return direct
+
+    const derived: string[] = []
+    if (persona.meeting_objective) {
+      derived.push(persona.meeting_objective.substring(0, 70))
+    }
+
+    if (cleanContext) {
+      const sentences = cleanContext.split(/(?<=[.!?])\s+/)
+      for (const sentence of sentences) {
+        if (/goal|aim|reduce|increase|improve|modernize|achieve|scale|optimize|transition|capability|quality|supplier|performance/i.test(sentence)) {
+          const trimmed = sentence.trim().substring(0, 70)
+          if (trimmed && !derived.includes(trimmed)) derived.push(trimmed)
+        }
+      }
+    }
+
+    if (derived.length === 0 && persona.personality_traits) {
+      const traits = parseList(persona.personality_traits, [])
+      traits.forEach((t: any) => {
+        const str = formatItemLabel(t)
+        if (str && str.length > 3) derived.push(`${str.trim()} evaluation & standards`)
+      })
+    }
+
+    return derived.slice(0, 4)
+  }
+
+  // Derivation helper for Decision Drivers
+  const deriveDecisionDrivers = (): any[] => {
+    const direct = parseList(persona.decision_drivers || persona.decisionDrivers, [])
+    if (direct.length > 0) return direct
+
+    const derived: string[] = []
+    const scorecard = parseList(persona.scorecard_metrics || persona.scorecard_json || persona.evalScorecard, [])
+    scorecard.forEach((m: any) => {
+      const label = formatItemLabel(m)
+      if (label && !derived.includes(label)) derived.push(label)
+    })
+
+    if (derived.length === 0 && persona.tags) {
+      const tags = parseList(persona.tags, [])
+      tags.forEach((t: any) => {
+        const label = formatItemLabel(t)
+        if (label) derived.push(label)
+      })
+    }
+
+    return derived.slice(0, 4)
+  }
+
+  const painPoints = derivePainPoints()
+  const businessGoals = deriveBusinessGoals()
+  const decisionDrivers = deriveDecisionDrivers()
+  const targetSkills = parseList(persona.target_skills || persona.skills_evaluated || persona.targetSkills, [])
+  const scorecardMetrics = parseList(persona.scorecard_metrics || persona.scorecard_json || persona.evalScorecard || persona.scorecard, [])
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 backdrop-blur-xs flex justify-end animate-fadeIn">
+    <div className="fixed inset-0 z-[100] overflow-hidden bg-black/40 backdrop-blur-xs flex justify-end animate-fadeIn">
       <div className="bg-white w-full max-w-[500px] h-full shadow-2xl flex flex-col justify-between border-l border-gray-200 animate-slideLeft">
         {/* Header */}
         <div className="p-6 border-b border-gray-100 flex items-start justify-between bg-gray-50/50">
@@ -177,6 +252,7 @@ export default function PersonaDetailsSidebar({
             <div className="space-y-2">
               <h3 className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">PAIN POINTS</h3>
               <ul className="space-y-1.5 text-[#334155]">
+                {painPoints.length === 0 && <span className="text-gray-400 italic">Not specified</span>}
                 {painPoints.map((item: any, idx: number) => (
                   <li key={idx} className="flex items-start gap-1.5">
                     <span className="text-red-500 font-[700]">●</span>
@@ -189,6 +265,7 @@ export default function PersonaDetailsSidebar({
             <div className="space-y-2">
               <h3 className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">BUSINESS GOALS</h3>
               <ul className="space-y-1.5 text-[#334155]">
+                {businessGoals.length === 0 && <span className="text-gray-400 italic">Not specified</span>}
                 {businessGoals.map((item: any, idx: number) => (
                   <li key={idx} className="flex items-start gap-1.5">
                     <span className="text-green-600 font-[700]">✓</span>
@@ -203,6 +280,7 @@ export default function PersonaDetailsSidebar({
           <div className="space-y-2 pt-2 border-t border-gray-100">
             <h3 className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">DECISION DRIVERS</h3>
             <div className="flex flex-wrap gap-1.5">
+              {decisionDrivers.length === 0 && <span className="text-gray-400 italic">Not specified</span>}
               {decisionDrivers.map((driver: any, idx: number) => (
                 <span key={idx} className="px-3 py-1 bg-gray-100 text-[#334155] text-[11px] font-[600] rounded-full">
                   {formatItemLabel(driver)}
@@ -215,6 +293,7 @@ export default function PersonaDetailsSidebar({
           <div className="space-y-2 pt-2 border-t border-gray-100">
             <h3 className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">TARGET SKILLS</h3>
             <div className="flex flex-wrap gap-1.5">
+              {targetSkills.length === 0 && <span className="text-gray-400 italic">Not specified</span>}
               {targetSkills.map((skill: any, idx: number) => (
                 <span key={idx} className="px-3 py-1 bg-purple-50 text-purple-700 text-[11px] font-[700] rounded-full">
                   {formatItemLabel(skill)}
@@ -227,11 +306,14 @@ export default function PersonaDetailsSidebar({
           <div className="space-y-2 pt-2 border-t border-gray-100">
             <div className="flex items-center justify-between">
               <h3 className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">EVALUATION SCORECARD</h3>
-              <span className="text-[10px] font-[700] text-purple-600 cursor-pointer hover:underline">
-                View all {scorecardMetrics.length} metrics →
-              </span>
+              {scorecardMetrics.length > 0 && (
+                <span className="text-[10px] font-[700] text-purple-600 cursor-pointer hover:underline">
+                  View all {scorecardMetrics.length} metrics →
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap gap-1.5">
+              {scorecardMetrics.length === 0 && <span className="text-gray-400 italic">Not specified</span>}
               {scorecardMetrics.map((m: any, idx: number) => {
                 const label = formatItemLabel(m)
                 const weight = typeof m === 'object' && m?.weight ? ` (${m.weight}%)` : ''
@@ -248,7 +330,7 @@ export default function PersonaDetailsSidebar({
         {/* Footer Action Buttons */}
         <div className="p-5 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
           <button
-            onClick={() => alert('Duplicating persona...')}
+            onClick={() => onDuplicate && onDuplicate(persona.id)}
             className="px-4 py-2 bg-white border border-gray-300 rounded-xl text-xs font-[700] text-[#334155] hover:bg-gray-100 transition-colors"
           >
             Duplicate

@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import PersonaDetailsSidebar from '@/components/manager/PersonaDetailsSidebar'
 import AssignTrainingWizard from '@/components/manager/AssignTrainingWizard'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 export default function ManagerScenariosPage() {
+  const router = useRouter()
   const [scenarios, setScenarios] = useState<any[]>([])
   const [reps, setReps] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -218,6 +220,8 @@ export default function ManagerScenariosPage() {
           setIsSidebarOpen(false)
           handleAssignClick(scenarioId)
         }}
+        onEdit={scenarioId => router.push(`/scenarios/new?edit=${scenarioId}`)}
+        onDuplicate={scenarioId => router.push(`/scenarios/new?duplicate=${scenarioId}`)}
       />
 
       {/* Assign Training 4-Step Wizard Modal */}

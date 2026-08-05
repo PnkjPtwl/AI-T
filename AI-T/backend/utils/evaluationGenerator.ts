@@ -79,8 +79,8 @@ export function generateEvaluationPrompt(
       const key = metricToScoreKey(m.name)
       return `"${key}": {
       "score": <number 0-100>,
-      "actual_answer": "<The EXACT quote from the transcript of what the rep actually said regarding this criteria. Do NOT summarize in the third person (e.g., do NOT say 'The rep did...'). Use their exact words in quotes. If they didn't demonstrate it, state 'Not demonstrated.'>",
-      "better_answer": "<The EXACT verbatim response the rep should have said in this specific context, written as a direct first-person quote (e.g. 'I suggest we...'). Do NOT write a description or generic critique.>"
+      "actual_answer": "<The EXACT quote from the transcript of what the human Sales Rep actually said regarding this criteria. MUST be a quote from the Sales Rep, NEVER from the AI Persona/Buyer. If the Sales Rep didn't demonstrate it, state 'Not demonstrated.'>",
+      "better_answer": "<The EXACT verbatim response the human Sales Rep SHOULD have said in this specific context, written as a direct first-person quote for the Sales Rep (e.g. 'I suggest we...'). Do NOT write a response for the AI Persona.>"
     }`
     }).join(',\n    ')
   } else {
@@ -103,8 +103,8 @@ export function generateEvaluationPrompt(
 
     scoreKeys = metricsToUse.map(m => `"${m.toLowerCase().replace(/[^a-z]/g, '_').replace(/__+/g, '_')}": {
       "score": <number 0-100>,
-      "actual_answer": "<The EXACT quote from the transcript of what the rep actually said regarding this criteria. Do NOT summarize in the third person (e.g., do NOT say 'The rep did...'). Use their exact words in quotes. If they didn't demonstrate it, state 'Not demonstrated.'>",
-      "better_answer": "<The EXACT verbatim response the rep should have said in this specific context, written as a direct first-person quote (e.g. 'I suggest we...'). Do NOT write a description or generic critique.>"
+      "actual_answer": "<The EXACT quote from the transcript of what the human Sales Rep actually said regarding this criteria. MUST be a quote from the Sales Rep, NEVER from the AI Persona/Buyer. If the Sales Rep didn't demonstrate it, state 'Not demonstrated.'>",
+      "better_answer": "<The EXACT verbatim response the human Sales Rep SHOULD have said in this specific context, written as a direct first-person quote for the Sales Rep (e.g. 'I suggest we...'). Do NOT write a response for the AI Persona.>"
     }`).join(',\n    ')
   }
 
@@ -148,6 +148,7 @@ ${voiceSection}
 1. EVIDENCE-BASED: You MUST ONLY award points for skills explicitly demonstrated in the transcript. 
 2. SHORT CONVERSATIONS: If the transcript is extremely short (e.g. the rep only spoke 1 or 2 lines), they have NOT demonstrated most skills. Any skill NOT explicitly demonstrated MUST receive a score of 0. Do not give "neutral" scores (like 50) for unobserved skills.
 3. NO HALLUCINATIONS: Do not invent objections, highlights, or feedback for things that did not actually happen in the transcript.
+4. EVALUATE ONLY THE SALES REP: All quotes in 'actual_answer' and all suggestions in 'better_answer' MUST evaluate the human Sales Rep's statements. NEVER quote, evaluate, or suggest alternative responses for the AI Persona / Buyer.
 
 --- INSTRUCTIONS ---
 Analyse the transcript deeply based on the rules above. Return ONLY a raw JSON object with no markdown, no backticks, no extra text.

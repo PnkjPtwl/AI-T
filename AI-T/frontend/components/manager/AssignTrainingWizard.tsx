@@ -25,7 +25,11 @@ export default function AssignTrainingWizard({
   const [trainingMode, setTrainingMode] = useState<'Exam Mode' | 'Coach Mode' | 'Learning Mode'>('Exam Mode')
   const [selectedScenarioId, setSelectedScenarioId] = useState(initialScenarioId || scenarios[0]?.id || '')
   const [selectedRepIds, setSelectedRepIds] = useState<string[]>([])
-  const [deadline, setDeadline] = useState('2026-07-25')
+  const [deadline, setDeadline] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    return d.toISOString().split('T')[0];
+  })
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High'>('High')
   const [notes, setNotes] = useState('')
   const [notifyImmediate, setNotifyImmediate] = useState(true)
@@ -103,7 +107,7 @@ export default function AssignTrainingWizard({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
       <div className="bg-white w-full max-w-[900px] rounded-[24px] shadow-2xl overflow-hidden border border-gray-100 my-6">
         {/* Header */}
         <div className="bg-[#1E1B4B] text-white px-8 py-6 flex items-center justify-between">
@@ -371,15 +375,16 @@ export default function AssignTrainingWizard({
                   </thead>
                   <tbody className="divide-y divide-gray-100 font-[500] text-[#334155]">
                     {(reps.length > 0 ? reps : [
-                      { id: 'rep-1', name: 'Pankaj Kumar', team_name: 'Enterprise', manager: 'Rajiv Mehta', assignments: 3, avg_score: '81%', status: 'Active' },
-                      { id: 'rep-2', name: 'Barani S.', team_name: 'Mid-Market', manager: 'Ananya Singh', assignments: 2, avg_score: '74%', status: 'Active' },
-                      { id: 'rep-3', name: 'Reddy V.', team_name: 'SMB', manager: 'Rajiv Mehta', assignments: 5, avg_score: '68%', status: 'Active' },
-                      { id: 'rep-4', name: 'Lokesh P.', team_name: 'Enterprise', manager: 'Ananya Singh', assignments: 1, avg_score: '89%', status: 'Active' },
-                      { id: 'rep-5', name: 'Divya Sharma', team_name: 'Mid-Market', manager: 'Rajiv Mehta', assignments: 4, avg_score: '72%', status: 'On Leave' },
-                      { id: 'rep-6', name: 'Arjun Nair', team_name: 'SMB', manager: 'Ananya Singh', assignments: 2, avg_score: '65%', status: 'Active' },
-                      { id: 'rep-7', name: 'Priya Menon', team_name: 'Enterprise', manager: 'Rajiv Mehta', assignments: 6, avg_score: '91%', status: 'Active' },
-                      { id: 'rep-8', name: 'Vikram Bose', team_name: 'Mid-Market', manager: 'Ananya Singh', assignments: 3, avg_score: '77%', status: 'Active' }
-                    ]).map((r: any) => {
+                      { id: 'rep-1', name: 'Pankaj Kumar', team_name: 'Enterprise', manager: 'Lokesh (Manager)', assignments: 3, avg_score: '81%', status: 'Active' },
+                      { id: 'rep-2', name: 'Barani S.', team_name: 'Mid-Market', manager: 'Lokesh (Manager)', assignments: 2, avg_score: '74%', status: 'Active' },
+                      { id: 'rep-3', name: 'Reddy V.', team_name: 'SMB', manager: 'Lokesh (Manager)', assignments: 5, avg_score: '68%', status: 'Active' },
+                      { id: 'rep-5', name: 'Divya Sharma', team_name: 'Mid-Market', manager: 'Lokesh (Manager)', assignments: 4, avg_score: '72%', status: 'On Leave' },
+                      { id: 'rep-6', name: 'Arjun Nair', team_name: 'SMB', manager: 'Lokesh (Manager)', assignments: 2, avg_score: '65%', status: 'Active' },
+                      { id: 'rep-7', name: 'Priya Menon', team_name: 'Enterprise', manager: 'Lokesh (Manager)', assignments: 6, avg_score: '91%', status: 'Active' },
+                      { id: 'rep-8', name: 'Vikram Bose', team_name: 'Mid-Market', manager: 'Lokesh (Manager)', assignments: 3, avg_score: '77%', status: 'Active' }
+                    ])
+                    .filter((r: any) => !r.name?.toLowerCase().includes('lokesh') && r.role !== 'manager')
+                    .map((r: any) => {
                       const isChecked = selectedRepIds.includes(r.id)
                       return (
                         <tr key={r.id} className="hover:bg-gray-50/80 transition-colors">
@@ -398,7 +403,7 @@ export default function AssignTrainingWizard({
                             <span>{r.name}</span>
                           </td>
                           <td className="p-4 text-[#64748B]">{r.team_name || 'Enterprise'}</td>
-                          <td className="p-4 text-[#64748B]">{r.manager || 'Rajiv Mehta'}</td>
+                          <td className="p-4 text-[#64748B]">Lokesh (Manager)</td>
                           <td className="p-4">{r.assignments || 3}</td>
                           <td className="p-4 font-[700] text-green-600">{r.avg_score || '81%'}</td>
                           <td className="p-4">

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
@@ -38,6 +38,12 @@ const AVATAR_PRESETS = [
 
 export default function NewScenarioPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editId = searchParams.get('edit')
+  const duplicateId = searchParams.get('duplicate')
+  const loadScenarioId = editId || duplicateId
+  const isEditMode = !!editId
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [step, setStep] = useState(1)
@@ -78,6 +84,41 @@ export default function NewScenarioPage() {
 
   const [selectedAccount, setSelectedAccount] = useState<string>('')
   const [kbAccounts, setKbAccounts] = useState<Array<{ id: string; name: string }>>([])
+
+  useEffect(() => {
+    if (loadScenarioId) {
+      const token = localStorage.getItem('token')
+      setLoading(true)
+      fetch(`${API}/api/scenarios/${loadScenarioId}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data) {
+            setFormData({
+              persona_name: duplicateId ? `${data.persona_name} (Copy)` : (data.persona_name || ''),
+              difficulty: data.difficulty || 'Advanced',
+              target_skills: data.target_skills || '',
+              objection_style: data.objection_style || '',
+              personality_traits: data.personality_traits || '',
+              context_text: data.context_text || '',
+              contact_title: data.contact_title || '',
+              contact_company: data.contact_company || '',
+            })
+            if (data.scorecard_metrics && Array.isArray(data.scorecard_metrics)) {
+              setScorecardMetrics(data.scorecard_metrics)
+              setScorecardGenerated(true)
+            } else if (data.scorecard_json) {
+              setScorecardMetrics(data.scorecard_json)
+              setScorecardGenerated(true)
+            }
+            if (data.account_name) {
+              setSelectedAccount(data.account_name)
+            }
+          }
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false))
+    }
+  }, [loadScenarioId, duplicateId])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -261,8 +302,11 @@ export default function NewScenarioPage() {
         confidence_score: q.rating > 0 ? (q.rating / 5) * 100 : null
       }))
 
-      const res = await fetch(`${API}/api/scenarios`, {
-        method: 'POST',
+      const url = isEditMode ? `${API}/api/scenarios/${editId}` : `${API}/api/scenarios`
+      const method = isEditMode ? 'PUT' : 'POST'
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           ...formData,
@@ -314,7 +358,7 @@ export default function NewScenarioPage() {
       </div>
 
       <div>
-        <h1 className="text-2xl font-[800] text-[#1E293B]">Create New Persona</h1>
+        <h1 className="text-2xl font-[800] text-[#1E293B]">{isEditMode ? 'Edit Persona' : 'Create New Persona'}</h1>
         <p className="text-xs text-[#64748B]">Design an AI persona for your team to practice against.</p>
       </div>
 
@@ -628,7 +672,7 @@ export default function NewScenarioPage() {
         ) : (
           <button type="button" onClick={handleSubmit} disabled={loading || !formData.persona_name}
             className="px-7 py-2.5 rounded-xl bg-green-600 text-white font-[700] shadow-md disabled:opacity-50">
-            {loading ? 'Publishing...' : '✓ Publish Persona'}
+            {loading ? 'Saving...' : (isEditMode ? '✓ Save Changes' : '✓ Publish Persona')}
           </button>
         )}
       </div>

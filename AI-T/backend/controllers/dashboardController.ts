@@ -15,6 +15,7 @@ export const getRepDashboard = async (req: any, res: any) => {
       .select(`
         id,
         scenario_id,
+        session_id,
         status,
         priority,
         deadline,
@@ -74,7 +75,11 @@ export const getRepDashboard = async (req: any, res: any) => {
     const avgScore = completedSessions.length > 0 ? Math.round(totalScores / completedSessions.length) : 0
 
     // Cumulative practice time in hours calculated realistically from active session turns & duration
-    const totalPracticeSec = (sessions || []).reduce((total, s) => {
+    const validPracticeSessions = (sessions || []).filter((s: any) => 
+      s.feedback_json && !s.feedback_json.is_note && !s.feedback_json.is_assignment
+    )
+    
+    const totalPracticeSec = validPracticeSessions.reduce((total: number, s: any) => {
       // Check if voice delivery aggregate exists
       const voiceDeliverySec = s.feedback_json?.voice_delivery?.totalDurationSec
       if (voiceDeliverySec && typeof voiceDeliverySec === 'number') {
@@ -173,7 +178,10 @@ export const getRepDashboard = async (req: any, res: any) => {
     const now = new Date()
     const transformedAssignments = (assignments || []).map(assign => {
       const sc: any = assign.scenario || {}
-      const assignSessions = (sessions || []).filter(s => s.scenario_id === assign.scenario_id)
+      // Match sessions specifically to this assignment via session_id (preferred) or scenario_id fallback
+      const assignSessions = (sessions || []).filter(s =>
+        assign.session_id ? s.id === assign.session_id : s.scenario_id === assign.scenario_id
+      )
       const assignCompleted = assignSessions.filter(s => s.completed_at !== null)
 
       let assignAvgScore = null
@@ -190,10 +198,13 @@ export const getRepDashboard = async (req: any, res: any) => {
       }
 
       const deadlineDate = assign.deadline ? new Date(assign.deadline) : null
-      let status = assign.status || 'Not Started'
+      // Normalize DB status: 'Pending' → 'Not Started'
+      const dbStatus = assign.status === 'Pending' ? 'Not Started' : (assign.status || 'Not Started')
+      let status = dbStatus
       if (status !== 'Completed' && deadlineDate && deadlineDate < now) {
         status = 'Overdue'
-      } else if (status !== 'Completed' && assignSessions.length > 0) {
+      } else if (status === 'Not Started' && assignSessions.some(s => s.completed_at === null)) {
+        // Only upgrade to In Progress if the assignment's own session is actively in progress
         status = 'In Progress'
       }
 
@@ -217,6 +228,7 @@ export const getRepDashboard = async (req: any, res: any) => {
         avatarUrl: sc.avatar_url || null,
         avatarConfig: sc.avatar_config || null,
         status,
+        trainingMode: assign.training_mode || 'Coach Mode',
         priority: assign.priority || 'Medium',
         difficulty: sc.difficulty || 'Medium',
         durationMins: sc.estimated_duration_mins || 20,
@@ -439,6 +451,8 @@ export const getManagerAnalytics = async (req: any, res: any) => {
     const repStatsMap: Record<string, { name: string; totalScore: number; count: number; assigned: number; completed: number }> = {}
 
     ;(reps || []).forEach(r => {
+      // Exclude manager role or users named Lokesh from Sales Rep cohorts
+      if (r.role === 'manager' || r.name?.toLowerCase().includes('lokesh')) return
       repStatsMap[r.id] = { name: r.name || 'Sales Rep', totalScore: 0, count: 0, assigned: 0, completed: 0 }
     })
 

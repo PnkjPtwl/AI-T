@@ -28,15 +28,24 @@ export const generateScorecardMetrics = async (req: any, res: any) => {
     const groqKey = await getSecret('GROQ_API_KEY')
     const groq = new Groq({ apiKey: groqKey })
 
-    // Fetch Knowledge Base chunks from RAG ONLY if a specific account_name is provided
+    // Infer account_name if not provided directly
+    let targetAccount = account_name
+    if (!targetAccount) {
+      const combinedStr = `${contact_company || ''} ${context_text || ''}`.toLowerCase()
+      if (combinedStr.includes('phoenix')) {
+        targetAccount = 'phoenix_automotive'
+      }
+    }
+
+    // Fetch Knowledge Base chunks from RAG if an account is provided or inferred
     let kbContextStr = ''
-    if (account_name) {
+    if (targetAccount) {
       try {
-        const searchTarget = `${account_name} ${contact_company || ''} ${context_text || ''} business goals pain points call history`.trim()
-        const kbChunks = await searchKnowledgeBase(searchTarget, account_name, 5)
+        const searchTarget = `${targetAccount} ${contact_company || ''} ${context_text || ''} business goals pain points call history brake system`.trim()
+        const kbChunks = await searchKnowledgeBase(searchTarget, targetAccount, 5)
         if (kbChunks && kbChunks.length > 0) {
-          kbContextStr = formatRagContext(kbChunks, account_name)
-          console.log(`[ScorecardRAG] Retrived ${kbChunks.length} KB chunks for scorecard generation for ${account_name}.`)
+          kbContextStr = formatRagContext(kbChunks, targetAccount)
+          console.log(`[ScorecardRAG] Retrieved ${kbChunks.length} KB chunks for scorecard generation for ${targetAccount}.`)
         }
       } catch (ragErr) {
         console.warn('[ScorecardRAG] KB retrieval skipped/failed:', ragErr)
@@ -403,10 +412,13 @@ export const getScenario = async (req: any, res: any) => {
     ? `${contact_title} - ${contact_company}`
     : contact_title || contact_company || data.persona_name || 'Unnamed Persona'
 
-  // Clean context_text from metadata tags for display
+  // Clean context_text from metadata tags and question dumps for display
   const clean_context = (data.context_text || '')
     .replace(/\n*\[SCENARIO_METADATA:\s*{[\s\S]*?}\]/g, '')
     .replace(/\n*\[MANDATORY EVALUATION RUBRIC[\s\S]*?(?=\n\[|$)/g, '')
+    .replace(/-\s*\[(Opening|Closing|Discovery|Objection|Pitch|Technical|General)\][^\n]*/gi, '')
+    .replace(/Questions the Rep should aim to ask:[^\n]*/gi, '')
+    .replace(/\n{2,}/g, '\n')
     .trim()
 
   const hydratedData = {
@@ -644,6 +656,12 @@ export const getScenarioById = async (req: any, res: any) => {
     const personaName = scenario.contact_title || scenario.persona_name || 'Sarah Chen'
     const company = scenario.contact_company || 'Acme Technologies'
     const roleTitle = scenario.contact_title || 'VP of Engineering'
+    const cleanContextText = (scenario.context_text || '')
+      .replace(/\n*\[SCENARIO_METADATA:\s*{[\s\S]*?}\]/g, '')
+      .replace(/\n*\[MANDATORY EVALUATION RUBRIC[\s\S]*?(?=\n\[|$)/g, '')
+      .replace(/-\s*\[(Opening|Closing|Discovery|Objection|Pitch|Technical|General)\][^\n]*/gi, '')
+      .replace(/Questions the Rep should aim to ask:[^\n]*/gi, '')
+      .trim()
 
     res.json({
       ...scenario,
@@ -651,39 +669,39 @@ export const getScenarioById = async (req: any, res: any) => {
       personaName,
       company,
       roleTitle,
-      experienceYears: scenario.experience_years || 14,
-      industry: scenario.industry || 'Enterprise SaaS',
-      buyingStyle: scenario.buying_style || 'Committee-based',
-      communicationStyle: scenario.communication_style || 'Email-first, formal',
+      experienceYears: scenario.experience_years || null,
+      industry: scenario.industry || 'Automotive & Industrial',
+      buyingStyle: scenario.buying_style || 'Technical & Value-driven',
+      communicationStyle: scenario.communication_style || 'Direct and concise. Prefers written proposals, detailed specs, and product demos.',
       personalityTraits: scenario.personality_traits && Array.isArray(scenario.personality_traits) 
         ? scenario.personality_traits 
-        : ['Analytical', 'Detail-oriented', 'Risk-averse', 'Data-driven'],
+        : (typeof scenario.personality_traits === 'string' && scenario.personality_traits ? scenario.personality_traits.split(',').map((s: string) => s.trim()) : []),
       priorityGoals: scenario.priority_goals && scenario.priority_goals.length > 0 
         ? scenario.priority_goals 
-        : ['Reduce deployment failures by 40%', 'Scale CI/CD to 100+ engineers', 'Daily deployment cadence'],
-      customerBackground: scenario.customer_background || `${company} is a fast-growing B2B SaaS company with 2,400 employees and a recently closed $120M Series C. The engineering org has scaled rapidly creating significant deployment and tooling challenges.`,
+        : (scenario.business_goals || []),
+      customerBackground: scenario.customer_background || cleanContextText || `${company} is evaluating supplier capabilities, performance specifications, and implementation requirements.`,
       businessGoals: scenario.business_goals && scenario.business_goals.length > 0
         ? scenario.business_goals
-        : ['Achieve daily deployment frequency', 'Reduce incidents by 60%', 'Scale engineering team to 100+', 'Improve developer velocity 3x'],
+        : [],
       painPoints: scenario.pain_points && scenario.pain_points.length > 0
         ? scenario.pain_points
-        : ['Manual deployments causing release delays', 'No observability across microservices', 'No standardized testing framework', 'Siloed teams with conflicting tooling'],
+        : [],
       expectedObjections: scenario.expected_objections && scenario.expected_objections.length > 0
         ? scenario.expected_objections
-        : ['Budget constraints — current fiscal year locked', 'Vendor trust deficit from prior disappointment', 'Internal IT team capability concerns'],
-      meetingObjective: scenario.meeting_objective || 'Qualify the opportunity, establish technical fit, and secure executive sponsorship for a 30-day proof of concept engagement worth $180K ARR.',
+        : [],
+      meetingObjective: scenario.meeting_objective || `Qualify the opportunity with ${company} and establish technical & operational fit.`,
       buyingSignals: scenario.buying_signals && scenario.buying_signals.length > 0
         ? scenario.buying_signals
-        : ['Active RFP in progress', 'Budget approved for Q3 2026', '3 competing vendors evaluated', 'Decision timeline: 6 weeks'],
+        : [],
       skillsEvaluated: scenario.skills_evaluated && scenario.skills_evaluated.length > 0
         ? scenario.skills_evaluated
-        : ['Technical Discovery', 'Pain Point Identification', 'ROI Articulation', 'Objection Handling', 'Competitive Positioning'],
-      aiConfidencePct: 89,
-      tags: scenario.tags && scenario.tags.length > 0 ? scenario.tags : ['High Priority', 'Enterprise SaaS'],
+        : (scenario.target_skills ? (typeof scenario.target_skills === 'string' ? scenario.target_skills.split(',').map((s: string) => s.trim()) : scenario.target_skills) : []),
+      aiConfidencePct: scenario.ai_confidence_pct || 90,
+      tags: scenario.tags && scenario.tags.length > 0 ? scenario.tags : [scenario.difficulty || 'Advanced', 'Technical Buyer'],
       difficulty: scenario.difficulty || 'Advanced',
-      estimatedDurationMins: scenario.estimated_duration_mins || 25,
+      estimatedDurationMins: scenario.estimated_duration_mins || 20,
       conversationStages: scenario.conversation_stages || [
-        "Opening", "Discovery", "Pitch & Presentation", "Objection Handling", "Closing", "Product knowledge"
+        "Opening", "Discovery", "Pitch & Presentation", "Objection Handling", "Closing"
       ]
     })
   } catch (err: any) {
@@ -713,30 +731,38 @@ export const getManagerScenarios = async (req: any, res: any) => {
 
     const transformed = (scenarios || []).map(sc => {
       const usageCount = (assignments || []).filter(a => a.scenario_id === sc.id).length
+      const cleanCtx = (sc.context_text || '')
+        .replace(/\n*\[SCENARIO_METADATA:\s*{[\s\S]*?}\]/g, '')
+        .replace(/-\s*\[(Opening|Closing|Discovery|Objection|Pitch|Technical|General)\][^\n]*/gi, '')
+        .replace(/Questions the Rep should aim to ask:[^\n]*/gi, '')
+        .trim()
+
+      const pName = sc.persona_name || sc.contact_title || 'Training Persona'
+      const rTitle = sc.contact_title || 'Decision Maker'
+      const comp = sc.contact_company || 'Enterprise Account'
+
+      const dynamicSummary = sc.ai_behavior_profile || sc.customer_background ||
+        (cleanCtx.length > 10 ? cleanCtx.substring(0, 300) : `${pName} is a ${rTitle} at ${comp} evaluating supplier capabilities and technical specifications.`)
+
       return {
         ...sc,
         id: sc.id,
-        personaName: sc.contact_title || sc.persona_name,
-        company: sc.contact_company || 'Acme Technologies',
-        title: sc.contact_title || 'VP of Engineering',
+        personaName: pName,
+        company: comp,
+        title: rTitle,
         difficulty: sc.difficulty || 'Advanced',
-        industry: sc.industry || 'SaaS',
-        tags: sc.tags && sc.tags.length > 0 ? sc.tags : ['Advanced', 'SaaS', 'Technical Buyer'],
-        usageCount: usageCount || 42,
-        metricsCount: sc.scorecard_metrics?.length || sc.scorecard_json?.length || 7,
-        lastUpdatedText: sc.updated_at ? '2 days ago' : 'Recently',
-        aiBehaviorProfile: sc.ai_behavior_profile || 'Data-driven, skeptical of vendor claims. Demands technical depth and proof of concepts before moving forward. Challenges assumptions and pushes back on ROI promises.',
-        communicationStyle: sc.communication_style || 'Direct and concise. Prefers written proposals, detailed specs, and demos over high-level pitches.',
-        painPoints: sc.pain_points && sc.pain_points.length > 0 ? sc.pain_points : ['Integration complexity', 'Long implementation timelines', 'Lack of developer-friendly APIs', 'Vendor lock-in risk'],
-        businessGoals: sc.business_goals && sc.business_goals.length > 0 ? sc.business_goals : ['Reduce infrastructure overhead by 30%', 'Modernize legacy stack', 'Improve deployment velocity'],
-        decisionDrivers: sc.decision_drivers && sc.decision_drivers.length > 0 ? sc.decision_drivers : ['Technical fit', 'Integration capability', 'Security posture', 'Long-term roadmap'],
-        targetSkills: sc.skills_evaluated && sc.skills_evaluated.length > 0 ? sc.skills_evaluated : ['Technical Discovery', 'Objection Handling', 'Demo Delivery', 'Competitive Differentiation', 'Proof of Concept'],
-        evalScorecard: sc.scorecard_metrics || [
-          { name: 'Question Depth', weight: 20 },
-          { name: 'Technical Accuracy', weight: 20 },
-          { name: 'Objection Handling', weight: 20 },
-          { name: 'Demo Quality', weight: 20 }
-        ]
+        industry: sc.industry || 'General',
+        tags: sc.tags && sc.tags.length > 0 ? sc.tags : [sc.difficulty || 'Advanced', 'Technical Buyer'],
+        usageCount: usageCount || 0,
+        metricsCount: sc.scorecard_metrics?.length || sc.scorecard_json?.length || 0,
+        lastUpdatedText: sc.updated_at ? 'Recently updated' : 'Created recently',
+        aiBehaviorProfile: dynamicSummary,
+        communicationStyle: sc.communication_style || 'Direct and concise. Prefers written proposals, detailed specs, and product demos.',
+        painPoints: sc.pain_points || [],
+        businessGoals: sc.business_goals || [],
+        decisionDrivers: sc.decision_drivers || [],
+        targetSkills: sc.skills_evaluated || (sc.target_skills ? (typeof sc.target_skills === 'string' ? sc.target_skills.split(',').map((s: string) => s.trim()) : sc.target_skills) : []),
+        evalScorecard: sc.scorecard_metrics || sc.scorecard_json || []
       }
     })
 

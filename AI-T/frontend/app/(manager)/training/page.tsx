@@ -157,7 +157,7 @@ export default function ManagerTrainingPage() {
                     difficulty: 'Advanced',
                     assigned_on: 'Jul 1, 2026',
                     due_date: 'Jul 16, 2026',
-                    assigned_by_name: 'Rajiv Mehta',
+                    assigned_by_name: 'Lokesh (Manager)',
                     industry: 'SaaS',
                     score_pct: 74
                   },
@@ -173,7 +173,7 @@ export default function ManagerTrainingPage() {
                     difficulty: 'Expert',
                     assigned_on: 'Jul 2, 2026',
                     due_date: 'Jul 15, 2026',
-                    assigned_by_name: 'Ananya Singh',
+                    assigned_by_name: 'Lokesh (Manager)',
                     industry: 'Banking',
                     score_pct: null
                   },
@@ -189,7 +189,7 @@ export default function ManagerTrainingPage() {
                     difficulty: 'Intermediate',
                     assigned_on: 'Jul 1, 2026',
                     due_date: 'Jul 10, 2026',
-                    assigned_by_name: 'Rajiv Mehta',
+                    assigned_by_name: 'Lokesh (Manager)',
                     industry: 'Healthcare',
                     score_pct: 88
                   }

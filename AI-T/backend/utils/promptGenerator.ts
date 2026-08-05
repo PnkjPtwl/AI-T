@@ -15,108 +15,56 @@ const objectionsPath = getDataPath('objections.json');
 export function generateSystemInstruction(scenario: any): string {
   let basePrompt = "";
 
+  // Extract explicit role/company details to prevent buyer/seller role confusion
+  const pName = scenario.persona_name || scenario.contact_title || 'Sarah Thompson'
+  const cTitle = scenario.contact_title || scenario.persona_type || 'Decision Maker / Buyer'
+  const cCompany = scenario.contact_company || 'Phoenix Automotive'
+  const sCompany = 'Relanto'
+
+  // Clean context text
+  const cleanCtx = (scenario.context_text || '')
+    .replace(/\n*\[SCENARIO_METADATA:\s*{[\s\S]*?}\]/g, '')
+    .replace(/-\s*\[(Opening|Closing|Discovery|Objection|Pitch|Technical|General)\][^\n]*/gi, '')
+    .replace(/Questions the Rep should aim to ask:[^\n]*/gi, '')
+    .trim()
+
   // 1. Direct Override (Highest Priority)
   if (scenario.custom_prompt && scenario.custom_prompt.trim() !== '') {
     basePrompt = scenario.custom_prompt;
   } else {
-    // 2. Parse soft-schema metadata from context_text
-    let metadata: any = {};
-    const jsonMatch = scenario.context_text?.match(/\[SCENARIO_METADATA:\s*({.*?})\]/s);
-    if (jsonMatch) {
-      try {
-        metadata = JSON.parse(jsonMatch[1]);
-      } catch (e) {
-        console.error("Failed to parse SCENARIO_METADATA", e);
-      }
-    }
+    // 2. Clear Role & Relationship Assignment
+    basePrompt = `You are acting as the buyer persona in a sales practice roleplay simulation.
 
-    // 3. Check if we have rich AI-extracted metadata
-    if (metadata.personality_traits && metadata.objection_style) {
-      basePrompt = `You are acting as the buyer persona in a sales simulation.
-Name: ${scenario.persona_name}
-Role: ${scenario.persona_type}
+--- YOUR IDENTITY (BUYER / CUSTOMER) ---
+Your Name: ${pName}
+Your Title/Role: ${cTitle}
+Your Company: ${cCompany}
 
---- BEHAVIORAL PROFILE ---
+--- INTERACTION CONTEXT & RELATIONSHIP WITH SELLER ---
+The human Sales Rep speaking with you represents ${sCompany}.
+ESTABLISHED RELATIONSHIP: Your company (${cCompany}) HAS ALREADY BEEN IN ACTIVE DISCUSSIONS WITH ${sCompany}! You have completed prior discovery sessions, technical workshops, and email exchanges with ${sCompany} regarding manufacturing quality, braking systems, and your upcoming Electric SUV program.
+DO NOT claim this is your first interaction with ${sCompany}. You know ${sCompany} and have ongoing meeting history with them. Use the Knowledge Base context provided below to accurately reference past calls and deal history.
+
+--- PERSONA DETAILS & BEHAVIOR ---
+Context & Background:
+${scenario.customer_background || cleanCtx || `${cCompany} is evaluating supplier capabilities, performance specifications, and implementation requirements.`}
+
 Personality Traits:
-${metadata.personality_traits}
+${typeof scenario.personality_traits === 'string' ? scenario.personality_traits : Array.isArray(scenario.personality_traits) ? scenario.personality_traits.join(', ') : 'Analytical, data-driven, thorough'}
 
-Communication Style:
-${metadata.communication_style || 'Standard professional.'}
-
-Objections & Hesitations:
-${metadata.objection_style || 'General hesitation based on value.'}
-
-Decision Drivers:
-${metadata.decision_drivers || 'ROI and cost-effectiveness.'}
-
-INSTRUCTIONS: Maintain this behavior consistently, challenge vague responses, and stay in character.`;
-    } else if (scenario.persona_name && scenario.context_text) {
-      // 4. Use DB fields directly for custom/dynamic personas
-      basePrompt = `You are acting as a specific buyer persona in a sales coaching simulation.
---- PERSONA DETAILS ---
-Name: ${scenario.persona_name}
-Role: ${scenario.persona_type || 'Customer'}
-
---- SCENARIO DETAILS ---
-Context: ${scenario.context_text}
+Objection Style & Hesitations:
+${scenario.objection_style || 'Challenges pricing, implementation timeline, and ROI capabilities'}
 
 --- DIFFICULTY BEHAVIOR ---
-Difficulty Level: ${scenario.difficulty?.toUpperCase() || 'UNKNOWN'}
-You should adjust your resistance and objections based on this difficulty level.`;
-    } else {
-      // 5. Fallback to hardcoded JSON configurations (Original Logic for extremely legacy data)
-      const personas = JSON.parse(fs.readFileSync(personasPath, 'utf8'));
-      const scenarios = JSON.parse(fs.readFileSync(scenariosPath, 'utf8'));
-      const objections = JSON.parse(fs.readFileSync(objectionsPath, 'utf8'));
-
-      const personaConfig = personas.find((p: any) => p.persona_name === scenario.persona_name) || personas[0];
-      
-      const match = scenario.context_text?.match(/\[SCENARIO:\s*(.*?)\]/);
-      const extractedScenarioName = match ? match[1] : scenario.persona_type;
-      const scenarioConfig = scenarios.find((s: any) => s.scenario_name === extractedScenarioName) || scenarios[0];
-
-      const relevantObjections = scenarioConfig.likely_objections.map((objKey: string) => {
-        return objections[objKey] ? `${objKey}: ${objections[objKey].ai_behavior} (e.g. "${objections[objKey].examples[0]}")` : '';
-      }).filter(Boolean).join('\n');
-
-      let difficultyModifier = '';
-      if (scenario.difficulty === 'beginner') {
-        difficultyModifier = 'You are cooperative, open to discussion, and relatively easy to convince. Do not be overly aggressive.';
-      } else if (scenario.difficulty === 'intermediate') {
-        difficultyModifier = 'You are slightly resistant. You will ask objections and expect good answers before yielding.';
-      } else {
-        difficultyModifier = 'You are highly skeptical, aggressive with objections, and very difficult to convince. Push back hard on vague answers.';
-      }
-
-      basePrompt = `You are acting as a specific buyer persona in a sales coaching simulation.
---- PERSONA DETAILS ---
-Name/Role: ${personaConfig.persona_name} (${personaConfig.persona_type})
-Personality: ${personaConfig.personality_description}
-Emotional State: ${personaConfig.emotional_state}
-Communication Style: ${personaConfig.communication_style}
-Response Behavior: ${personaConfig.response_behavior}
-Escalation Behavior: ${personaConfig.escalation_behavior}
-
---- SCENARIO DETAILS ---
-Scenario: ${scenarioConfig.scenario_name}
-Context: ${scenarioConfig.business_context}
-Your Goal: ${scenarioConfig.customer_goal}
-
---- OBJECTIONS TO USE ---
-Based on the scenario, you should actively try to weave in these objections and behaviors:
-${relevantObjections}
-
---- DIFFICULTY BEHAVIOR ---
-Difficulty Level: ${scenario.difficulty?.toUpperCase() || 'UNKNOWN'}
-${difficultyModifier}`;
-    }
+Difficulty Level: ${scenario.difficulty?.toUpperCase() || 'ADVANCED'}
+Adjust your resistance and objections based on this difficulty level.`;
   }
 
-  // ALWAYS append these strict rules regardless of where the prompt came from
+  // ALWAYS append strict rules
   return `${basePrompt}
 
 --- STRICT CONVERSATIONAL RULES (MUST FOLLOW) ---
-1. You are acting as a real person in a live, spoken conversation. DO NOT break character. DO NOT act like an AI assistant. NEVER change your name, role, or company from the persona details provided.
+1. You are acting as a real person in a live, spoken conversation. DO NOT break character. DO NOT act like an AI assistant. You are ${pName} at ${cCompany}. The sales rep is from ${sCompany}.
 2. CRITICAL: Limit your responses to 1-3 sentences MAXIMUM. NEVER output long paragraphs or over-explain.
 3. Be highly conversational, natural, and human-like.
 4. Respond ONLY to the latest user input. Do not repeat previous points unless explicitly asked.

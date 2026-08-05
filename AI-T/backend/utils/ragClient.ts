@@ -74,7 +74,10 @@ export function formatRagContext(chunks: RagChunk[], accountName?: string | null
     .map((c, i) => `[Source ${i + 1}: ${c.folder}/${c.filename}]\n${c.content.trim()}`)
     .join('\n\n')
 
-  return `\n\n--- ACCOUNT KNOWLEDGE BASE CONTEXT (${accountLabel}) ---\nThe following is factual information retrieved from the account's knowledge base. Use it to ground your responses realistically. Do not reveal that you are reading from a document — speak naturally as the persona would.\n\n${contextLines}\n--- END CONTEXT ---`
+  return `\n\n--- ACCOUNT KNOWLEDGE BASE & DEAL HISTORY WITH RELANTO (${accountLabel}) ---\n` +
+    `The following is factual information retrieved from the account's knowledge base regarding ${accountLabel} and its past call/email history with Relanto.\n` +
+    `CRITICAL PERSONA INSTRUCTION: You are ${accountLabel}. You HAVE interacted with Relanto before (e.g. initial discovery calls, technical workshops, and email exchanges). Use the retrieved facts below to accurately acknowledge past meetings, technical specs, and deal discussions with Relanto.\n\n` +
+    `${contextLines}\n--- END CONTEXT ---`
 }
 
 /**

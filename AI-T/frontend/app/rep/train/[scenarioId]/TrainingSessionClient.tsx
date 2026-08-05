@@ -53,7 +53,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
   const [currentStage, setCurrentStage] = useState('Opening')
   const [progressPct, setProgressPct] = useState(15)
   const [inlineCoachNote, setInlineCoachNote] = useState<string | null>(
-    '💡 Tip: Open with an engaging question to uncover the prospect\'s key challenges.'
+    null // Set dynamically after mode is resolved; cleared for Exam Mode
   )
 
   // Tone distribution percentages (dynamic based on live sentiment)
@@ -95,6 +95,17 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
   const trainingMode = searchParams.get('mode') || scenario?.training_mode || 'Coach Mode'
   const isExamMode = trainingMode === 'Exam Mode'
   const isLearningMode = trainingMode === 'Learning Mode'
+
+  // Clear all live coaching state when in Exam Mode
+  useEffect(() => {
+    if (isExamMode) {
+      setInlineCoachNote(null)
+      setCoachingInsights([])
+      setSuggestedFollowUps([])
+    } else if (!isExamMode && inlineCoachNote === null) {
+      setInlineCoachNote('💡 Tip: Open with an engaging question to uncover the prospect\'s key challenges.')
+    }
+  }, [isExamMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -584,12 +595,12 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
           await playTTS(aiRespText)
         }
 
-        if (data.inline_coach_note) setInlineCoachNote(data.inline_coach_note)
+        if (data.inline_coach_note && !isExamMode) setInlineCoachNote(data.inline_coach_note)
         if (data.current_stage) setCurrentStage(data.current_stage)
         if (data.progress_percentage) setProgressPct(data.progress_percentage)
 
-        // Process Coach Tip trigger from live-turn
-        if (data.coachTip && data.coachTip.shouldPopup) {
+        // Process Coach Tip trigger from live-turn (only in non-Exam modes)
+        if (!isExamMode && data.coachTip && data.coachTip.shouldPopup) {
           const newInsight: CoachingInsight = {
             id: `insight-${Date.now()}`,
             severity: data.coachTip.severity || 'warning',
@@ -600,7 +611,8 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
           setCoachingInsights(prev => [newInsight, ...prev.slice(0, 4)])
         }
 
-        // 2. Process Live Sentiment & Sentiment Analytics
+        // 2. Process Live Sentiment & Sentiment Analytics (skip in Exam Mode)
+        if (!isExamMode) {
         try {
           const sentRes = await fetch(`${API}/api/sessions/live-sentiment`, {
             method: 'POST',
@@ -654,6 +666,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
         } catch (sentErr) {
           console.warn('[LiveSentiment] call failed (non-fatal):', sentErr)
         }
+        } // end !isExamMode
       }
     } catch (err) {
       console.error('Failed to send live message', err)
@@ -828,7 +841,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
                 )
               })}
             </div>
-            {inlineCoachNote && (
+            {!isExamMode && inlineCoachNote && (
               <div className="mt-2 p-2 bg-purple-50 text-purple-900 text-[10px] font-[600] rounded-lg border border-purple-100 shadow-sm leading-snug">
                 🚀 <span className="font-[800]">Next Step:</span> {inlineCoachNote}
               </div>

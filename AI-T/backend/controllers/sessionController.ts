@@ -228,10 +228,17 @@ export const sendMessage = async (req: any, res: any) => {
     messagesPayload.push({ role: 'user', content: message })
 
     // ── RAG: Fetch KB context for this account (fail-safe — never blocks session) ──
-    const accountName = scenario?.account_name || null
+    let accountName = scenario?.account_name || null
+    if (!accountName) {
+      const combinedAccountStr = `${scenario?.contact_company || ''} ${scenario?.persona_name || ''} ${scenario?.context_text || ''}`.toLowerCase()
+      if (combinedAccountStr.includes('phoenix')) {
+        accountName = 'phoenix_automotive'
+      }
+    }
     if (accountName) {
       try {
-        const ragChunks = await searchKnowledgeBase(message, accountName, 5)
+        const searchTarget = `${message} Relanto ${accountName} deal history call transcript previous interactions`.trim()
+        const ragChunks = await searchKnowledgeBase(searchTarget, accountName, 6)
         const ragContext = formatRagContext(ragChunks, accountName)
         if (ragContext) {
           // Inject as a system message BEFORE the user's turn so it grounds the persona reply
@@ -424,18 +431,18 @@ export const endSession = async (req: any, res: any) => {
         const jsonText = jsonMatch ? jsonMatch[0] : '{}';
         feedback = JSON.parse(jsonText);
 
-        // Ensure overall_score, strengths, and improvements are non-zero/non-empty for non-empty sessions
+        // Ensure overall_score, strengths, and improvements are non-empty for non-empty sessions
         if (feedback && feedback.scores) {
           const scoreVals: number[] = Object.values(feedback.scores)
             .map((v: any) => typeof v === 'number' ? v : v?.score)
-            .filter((s: any) => typeof s === 'number' && !isNaN(s) && s > 0)
+            .filter((s: any) => typeof s === 'number' && !isNaN(s))
           
           if (scoreVals.length > 0) {
             const avgScore = Math.round(scoreVals.reduce((a, b) => a + b, 0) / scoreVals.length)
-            if (!feedback.overall_score || feedback.overall_score === 0) {
+            if (feedback.overall_score === undefined || feedback.overall_score === null) {
               feedback.overall_score = avgScore
             }
-          } else if (!feedback.overall_score || feedback.overall_score === 0) {
+          } else if (feedback.overall_score === undefined || feedback.overall_score === null) {
             const turnCount = userMsgs.length
             feedback.overall_score = Math.min(88, 68 + (turnCount * 3))
           }

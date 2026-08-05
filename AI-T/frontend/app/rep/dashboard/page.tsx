@@ -350,7 +350,7 @@ export default function RepDashboard() {
             return (
               <div
                 key={assign.id}
-                onClick={() => router.push(`/rep/train/${assign.scenarioId}/briefing?${assign.id ? `assignmentId=${assign.id}` : ''}`)}
+                onClick={() => router.push(`/rep/train/${assign.scenarioId}/briefing?${assign.id ? `assignmentId=${assign.id}&` : ''}mode=${encodeURIComponent(assign.trainingMode || 'Coach Mode')}`)}
                 className="bg-white rounded-[20px] border border-gray-200/80 p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between space-y-5 group"
               >
                 <div className="space-y-4">

@@ -297,14 +297,19 @@ export default function TeamAnalyticsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-[600] text-[#334155]">
-                {cohortComparison.map((ch: any, idx: number) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="p-3 font-[800] text-[#1E293B]">{ch.cohort}</td>
-                    <td className="p-3 font-[700] text-purple-700">{ch.avgScore}</td>
-                    <td className="p-3 text-green-600">{ch.completionRate}</td>
-                    <td className="p-3 font-[800] text-green-600">{ch.trend}</td>
-                  </tr>
-                ))}
+                {(analytics?.cohortComparison || cohortComparison)
+                  .filter((ch: any) => {
+                    const name = (ch.cohort || ch.name || '').toLowerCase()
+                    return !name.includes('lokesh') && !name.includes('manager')
+                  })
+                  .map((ch: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="p-3 font-[800] text-[#1E293B]">{ch.cohort}</td>
+                      <td className="p-3 font-[700] text-purple-700">{ch.avgScore}</td>
+                      <td className="p-3 text-green-600">{ch.completionRate}</td>
+                      <td className="p-3 font-[800] text-green-600">{ch.trend}</td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>

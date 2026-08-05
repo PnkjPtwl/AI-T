@@ -33,7 +33,7 @@ export default function AssignmentDetailsSidebar({
   
   const assignedOn = assignment.created_at ? new Date(assignment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (assignment.assigned_on || 'N/A')
   const dueDate = assignment.deadline ? new Date(assignment.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (assignment.due_date || 'N/A')
-  const assignedBy = assignment.assigned_by_name || 'Manager'
+  const assignedBy = 'Lokesh (Manager)'
   const industry = assignment.industry || 'Tech'
 
   const scorePct = assignment.score ? Math.round(assignment.score) : (assignment.score_pct || null)
@@ -76,7 +76,7 @@ export default function AssignmentDetailsSidebar({
   const recentActivity = Array.isArray(assignment.recent_activity) ? assignment.recent_activity : generatedActivity
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 backdrop-blur-xs flex justify-end animate-fadeIn">
+    <div className="fixed inset-0 z-[100] overflow-hidden bg-black/40 backdrop-blur-xs flex justify-end animate-fadeIn">
       <div className="bg-white w-full max-w-[480px] h-full shadow-2xl flex flex-col justify-between border-l border-gray-200 animate-slideLeft">
         {/* Header */}
         <div className="p-6 border-b border-gray-100 bg-gray-50/50">

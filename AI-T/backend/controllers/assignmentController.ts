@@ -77,8 +77,8 @@ export const getManagerAssignments = async (req: any, res: any) => {
         deadline,
         training_mode,
         created_at,
-        rep:users!training_assignments_rep_id_fkey(id, name, email, team_name),
-        assigner:users!training_assignments_assigned_by_fkey(id, name),
+        rep:users!rep_id(id, name, email, team_name),
+        assigner:users!assigned_by(id, name),
         scenario:training_scenarios(id, persona_name, contact_title, contact_company, difficulty, industry, tags)
       `)
       .order('created_at', { ascending: false })
@@ -142,8 +142,8 @@ export const getAssignmentDetails = async (req: any, res: any) => {
       .from('training_assignments')
       .select(`
         *,
-        rep:users!training_assignments_rep_id_fkey(id, name, email, team_name),
-        assigner:users!training_assignments_assigned_by_fkey(id, name),
+        rep:users!rep_id(id, name, email, team_name),
+        assigner:users!assigned_by(id, name),
         scenario:training_scenarios(*)
       `)
       .eq('id', id)

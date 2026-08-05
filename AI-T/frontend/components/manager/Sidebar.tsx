@@ -17,7 +17,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`sticky top-0 h-screen bg-white border-r border-gray-100 transition-all duration-300 z-50 flex flex-col flex-shrink-0 ${collapsed ? 'w-[64px]' : 'w-[230px]'}`}
+      className={`sticky top-0 h-screen bg-white border-r border-gray-100 transition-all duration-300 z-30 flex flex-col flex-shrink-0 ${collapsed ? 'w-[64px]' : 'w-[230px]'}`}
     >
       {/* Brand */}
       <div className={`flex items-center gap-3 px-5 py-5 border-b border-gray-100 ${collapsed ? 'justify-center' : 'justify-between'}`}>
@@ -28,7 +28,7 @@ export default function Sidebar() {
             </div>
             <div>
               <span className="text-base font-[800] text-[#1E293B] tracking-tight">R-SalesCoach</span>
-              <span className="block text-[9px] font-[700] text-purple-600 uppercase tracking-widest leading-none mt-0.5">Manager</span>
+              <span className="block text-[9px] font-[700] text-purple-600 uppercase tracking-widest leading-none mt-0.5">Lokesh (Manager)</span>
             </div>
           </div>
         )}

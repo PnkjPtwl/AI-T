@@ -66,7 +66,8 @@ Return ONLY raw JSON with this format:
     })
 
     const text = completion.choices[0].message.content || '{}'
-    const jsonText = text.replace(/`json|`/g, "").trim()
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonText = jsonMatch ? jsonMatch[0] : '{}';
     const data = JSON.parse(jsonText)
     const aiQuestions = data.questions || []
 
