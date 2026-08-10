@@ -12,7 +12,13 @@ const personasPath = getDataPath('personas.json');
 const scenariosPath = getDataPath('scenarios.json');
 const objectionsPath = getDataPath('objections.json');
 
-export function generateSystemInstruction(scenario: any): string {
+/**
+ * Generates the system instruction for the AI persona.
+ * @param scenario - The training scenario object from the database.
+ * @param hasRagContext - Set to TRUE only when RAG/Knowledge Base context is actually being injected.
+ *                        This controls whether the prompt implies a pre-existing relationship with the seller.
+ */
+export function generateSystemInstruction(scenario: any, hasRagContext: boolean = false): string {
   let basePrompt = "";
 
   // Extract explicit role/company details to prevent buyer/seller role confusion
@@ -32,7 +38,18 @@ export function generateSystemInstruction(scenario: any): string {
   if (scenario.custom_prompt && scenario.custom_prompt.trim() !== '') {
     basePrompt = scenario.custom_prompt;
   } else {
-    // 2. Clear Role & Relationship Assignment
+    // 2. Build interaction context based on whether RAG knowledge base is active
+    const interactionContext = hasRagContext
+      ? `--- INTERACTION CONTEXT & RELATIONSHIP WITH SELLER ---
+The human Sales Rep speaking with you represents ${sCompany}.
+ESTABLISHED RELATIONSHIP: Your company (${cCompany}) has already been in active discussions with ${sCompany}. You have completed prior discovery sessions and email exchanges with ${sCompany} regarding your current initiatives and pain points.
+DO NOT claim this is your first interaction with ${sCompany}. You know ${sCompany} and have ongoing meeting history with them. Use the knowledge base context provided to accurately reference past calls and history.`
+      : `--- INTERACTION CONTEXT ---
+The human Sales Rep speaking with you represents ${sCompany}.
+FIRST SCHEDULED MEETING: This is your first proper sit-down meeting with this sales rep. You agreed to this meeting after a brief introductory exchange (a short email or a quick 5-minute intro call) where you heard that ${sCompany} may have a relevant solution for a challenge your team is facing.
+You have a general awareness of ${sCompany} but no deep knowledge of their product. You came into this meeting with an open but discerning mind — you have real problems to solve and you are willing to explore, but you need the rep to earn your trust and demonstrate value.
+DO NOT reference any detailed past calls, proposals, or in-depth discussions with ${sCompany}. This is a fresh first meeting.`
+
     basePrompt = `You are acting as the buyer persona in a sales practice roleplay simulation.
 
 --- YOUR IDENTITY (BUYER / CUSTOMER) ---
@@ -40,10 +57,7 @@ Your Name: ${pName}
 Your Title/Role: ${cTitle}
 Your Company: ${cCompany}
 
---- INTERACTION CONTEXT & RELATIONSHIP WITH SELLER ---
-The human Sales Rep speaking with you represents ${sCompany}.
-ESTABLISHED RELATIONSHIP: Your company (${cCompany}) HAS ALREADY BEEN IN ACTIVE DISCUSSIONS WITH ${sCompany}! You have completed prior discovery sessions, technical workshops, and email exchanges with ${sCompany} regarding manufacturing quality, braking systems, and your upcoming Electric SUV program.
-DO NOT claim this is your first interaction with ${sCompany}. You know ${sCompany} and have ongoing meeting history with them. Use the Knowledge Base context provided below to accurately reference past calls and deal history.
+${interactionContext}
 
 --- PERSONA DETAILS & BEHAVIOR ---
 Context & Background:

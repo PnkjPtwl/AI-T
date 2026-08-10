@@ -420,7 +420,7 @@ export default function RepDashboard() {
                 <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-[#64748B]">
                   <span>{assign.lastAttemptText}</span>
                   <span className="text-purple-600 font-[700] group-hover:translate-x-1 transition-transform">
-                    Start →
+                    {assign.status === 'Completed' ? 'Retake →' : assign.status === 'In Progress' ? 'Resume →' : 'Start →'}
                   </span>
                 </div>
               </div>

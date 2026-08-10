@@ -164,6 +164,45 @@ export default function PerformancePage() {
         )}
       </div>
 
+      {/* Skill Breakdown */}
+      {analytics?.radarData?.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-gray-900 mb-5">Skill Breakdown</h2>
+          <div className="space-y-3">
+            {[...(analytics.radarData as any[])].sort((a: any, b: any) => b.A - a.A).map((skill: any, idx: number) => (
+              <div key={idx} className="flex items-center gap-4">
+                <span className="text-xs font-semibold text-gray-600 w-44 shrink-0 truncate">{skill.subject}</span>
+                <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${skill.A >= 80 ? 'bg-green-500' : skill.A >= 60 ? 'bg-amber-400' : 'bg-red-400'}`}
+                    style={{ width: `${skill.A}%` }}
+                  />
+                </div>
+                <span className={`text-xs font-bold w-10 text-right ${scoreColor(skill.A)}`}>{skill.A}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* AI Insights Cards */}
+      {analytics?.strongestSkill && analytics.strongestSkill !== 'N/A' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-green-50 border border-green-200 rounded-xl p-5">
+            <p className="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">🏆 Strongest Skill</p>
+            <p className="text-sm font-bold text-gray-900">{analytics.strongestSkill}</p>
+            <p className="text-xs text-gray-600 mt-1">Keep leveraging this strength in complex sales scenarios.</p>
+          </div>
+          {analytics?.weakestSkill && analytics.weakestSkill !== 'N/A' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-2">📈 Growth Area</p>
+              <p className="text-sm font-bold text-gray-900">{analytics.weakestSkill}</p>
+              <p className="text-xs text-gray-600 mt-1">Focus your next practice sessions on improving this skill.</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Persona Breakdown */}
       {analytics?.personaPerformanceData?.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">

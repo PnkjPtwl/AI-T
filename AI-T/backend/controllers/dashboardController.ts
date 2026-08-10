@@ -262,93 +262,6 @@ export const getRepDashboard = async (req: any, res: any) => {
   }
 }
 
-/**
- * GET /api/reps/me/stats
- * Long-term skill progression & analytics for Sales Rep
- */
-export const getRepStats = async (req: any, res: any) => {
-  const repId = req.user.id
-
-  try {
-    const { data: sessions, error } = await supabase
-      .from('training_sessions')
-      .select('id, feedback_json, created_at, completed_at')
-      .eq('rep_id', repId)
-      .not('completed_at', 'is', null)
-      .order('created_at', { ascending: true })
-
-    if (error) throw error
-
-    const totalSessions = sessions?.length || 47
-    const avgScore = sessions && sessions.length > 0 
-      ? Math.round(sessions.reduce((acc, s) => acc + (s.feedback_json?.overall_score || 0), 0) / sessions.length)
-      : 81
-
-    // Score trend time-series
-    const scoreTrend = [
-      { period: 'Nov W1', score: 68, benchmark: 70 },
-      { period: 'Nov W3', score: 72, benchmark: 71 },
-      { period: 'Nov W5', score: 70, benchmark: 71 },
-      { period: 'Dec W1', score: 75, benchmark: 72 },
-      { period: 'Dec W2', score: 79, benchmark: 73 },
-      { period: 'Dec W3', score: 78, benchmark: 74 },
-      { period: 'Dec W4', score: 81, benchmark: 75 },
-      { period: 'Jan W1', score: 80, benchmark: 75 },
-      { period: 'Jan W2', score: 85, benchmark: 76 }
-    ]
-
-    // Skill distribution radar
-    const skillDistribution = [
-      { skill: 'Discovery', score: 85 },
-      { skill: 'Objections', score: 68 },
-      { skill: 'Closing', score: 60 },
-      { skill: 'Empathy', score: 90 },
-      { skill: 'Biz Value', score: 75 },
-      { skill: 'Listening', score: 82 }
-    ]
-
-    // Monthly volume bar chart
-    const sessionsByMonth = [
-      { month: 'Aug', count: 3 },
-      { month: 'Sep', count: 5 },
-      { month: 'Oct', count: 9 },
-      { month: 'Nov', count: 12 },
-      { month: 'Dec', count: 10 },
-      { month: 'Jan', count: 11 }
-    ]
-
-    res.json({
-      summary: {
-        totalSessions,
-        totalSessionsDelta: '+8 this month',
-        avgScore,
-        avgScoreDelta: '+6 pts from start',
-        improvementPct: 12,
-        improvementSubtext: 'vs 3 months ago'
-      },
-      scoreTrend,
-      skillDistribution,
-      sessionsByMonth,
-      aiInsights: {
-        weakestSkill: {
-          title: 'Weakest Skill',
-          skillName: 'Closing Techniques (60/100)',
-          tip: 'Drill deal urgency language and next-step commitment prompts. Try the "Closing Sprint" micro-module.',
-          confidence: '95% confidence'
-        },
-        strongestSkill: {
-          title: 'Strongest Skill',
-          skillName: 'Empathy (90/100)',
-          tip: 'Exceptional emotional intelligence. Leverage this to influence complex buying committees and build multi-threaded deals.',
-          confidence: '98% confidence'
-        }
-      }
-    })
-  } catch (err: any) {
-    console.error('Error fetching rep stats:', err)
-    res.status(500).json({ error: 'Failed to fetch stats', message: err.message })
-  }
-}
 
 /**
  * GET /api/manager/analytics
@@ -385,7 +298,10 @@ export const getManagerAnalytics = async (req: any, res: any) => {
     if (sessError) throw sessError
 
     const allSessions = sessions || []
-    const completedSessions = allSessions.filter(s => s.completed_at !== null || s.status === 'Completed')
+    const completedSessions = allSessions.filter(s => 
+      (s.completed_at !== null || s.status === 'Completed') && 
+      !s.feedback_json?.is_note
+    )
     
     const assignedCount = (assignments || []).length
     const startedCount = (assignments || []).filter(a => a.status === 'In Progress' || a.status === 'In Review' || a.status === 'Completed').length
@@ -398,28 +314,28 @@ export const getManagerAnalytics = async (req: any, res: any) => {
 
     const scoresList = completedSessions
       .map(s => s.feedback_json?.overall_score)
-      .filter((val): val is number => typeof val === 'number' && !isNaN(val))
+      .filter((val): val is number => typeof val === 'number' && !isNaN(val) && val > 0)
 
     const totalScoreSum = scoresList.reduce((acc, s) => acc + s, 0)
     const rawAvg = scoresList.length > 0 ? totalScoreSum / scoresList.length : 0
-    const teamAvgScore = rawAvg > 10 ? Number((rawAvg / 10).toFixed(1)) : Number(rawAvg.toFixed(1))
+    const teamAvgScore = Math.round(rawAvg)
 
-    // Calculate score distribution (50-59, 60-69, 70-79, 80-89, 90-99, 100)
+    // Calculate score distribution
     const ranges = [
+      { range: '<50', count: 0 },
       { range: '50-59', count: 0 },
       { range: '60-69', count: 0 },
       { range: '70-79', count: 0 },
       { range: '80-89', count: 0 },
-      { range: '90-99', count: 0 },
-      { range: '100', count: 0 }
+      { range: '90-100', count: 0 }
     ]
 
     scoresList.forEach(sc => {
-      if (sc === 100) ranges[5].count++
-      else if (sc >= 90) ranges[4].count++
-      else if (sc >= 80) ranges[3].count++
-      else if (sc >= 70) ranges[2].count++
-      else if (sc >= 60) ranges[1].count++
+      if (sc >= 90) ranges[5].count++
+      else if (sc >= 80) ranges[4].count++
+      else if (sc >= 70) ranges[3].count++
+      else if (sc >= 60) ranges[2].count++
+      else if (sc >= 50) ranges[1].count++
       else ranges[0].count++
     })
 
@@ -438,32 +354,36 @@ export const getManagerAnalytics = async (req: any, res: any) => {
       const weekIdx = 12 - diffWeeks
       if (weekIdx >= 1 && weekIdx <= 12) {
         const wKey = `W${weekIdx}`
-        const sc = s.feedback_json?.overall_score || 0
-        const normalized = sc > 10 ? sc / 10 : sc
-        weeksMap[wKey].total += normalized
-        weeksMap[wKey].count++
+        const sc = s.feedback_json?.overall_score
+        if (typeof sc === 'number' && !isNaN(sc) && sc > 0) {
+          weeksMap[wKey].total += sc
+          weeksMap[wKey].count++
+        }
       }
     })
 
     const performanceOverTime = Object.entries(weeksMap).map(([week, val]) => {
-      const avg = val.count > 0 ? Number((val.total / val.count).toFixed(1)) : 0
+      const avg = val.count > 0 ? Math.round(val.total / val.count) : 0
       return { week, score: avg }
     })
 
     // Cohort Comparison grouped by active reps
-    const repStatsMap: Record<string, { name: string; totalScore: number; count: number; assigned: number; completed: number }> = {}
+    const repStatsMap: Record<string, { name: string; totalScore: number; count: number; assigned: number; completed: number; sessions: any[] }> = {}
 
     ;(reps || []).forEach(r => {
       // Exclude manager role or users named Lokesh from Sales Rep cohorts
       if (r.role === 'manager' || r.name?.toLowerCase().includes('lokesh')) return
-      repStatsMap[r.id] = { name: r.name || 'Sales Rep', totalScore: 0, count: 0, assigned: 0, completed: 0 }
+      repStatsMap[r.id] = { name: r.name || 'Sales Rep', totalScore: 0, count: 0, assigned: 0, completed: 0, sessions: [] }
     })
 
     completedSessions.forEach(s => {
       if (repStatsMap[s.rep_id]) {
-        const sc = s.feedback_json?.overall_score || 0
-        repStatsMap[s.rep_id].totalScore += sc
-        repStatsMap[s.rep_id].count++
+        const sc = s.feedback_json?.overall_score
+        if (typeof sc === 'number' && !isNaN(sc) && sc > 0) {
+          repStatsMap[s.rep_id].totalScore += sc
+          repStatsMap[s.rep_id].count++
+          repStatsMap[s.rep_id].sessions.push(s)
+        }
       }
     })
 
@@ -477,12 +397,22 @@ export const getManagerAnalytics = async (req: any, res: any) => {
     const cohortComparison = Object.values(repStatsMap).map(r => {
       const avg = r.count > 0 ? (r.totalScore / r.count) : 0
       const rate = r.assigned > 0 ? Math.round((r.completed / r.assigned) * 100) : (r.count > 0 ? 100 : 0)
-      const formattedAvg = avg > 10 ? Number((avg / 10).toFixed(1)) : Number(avg.toFixed(1))
+      const formattedAvg = Math.round(avg)
+
+      let trendStr = '-'
+      if (r.sessions.length > 1) {
+        const sorted = [...r.sessions].sort((a, b) => new Date(a.completed_at || a.created_at).getTime() - new Date(b.completed_at || b.created_at).getTime())
+        const firstScore = sorted[0].feedback_json?.overall_score || 0
+        const lastScore = sorted[sorted.length - 1].feedback_json?.overall_score || 0
+        const diff = Math.round(lastScore - firstScore)
+        trendStr = diff > 0 ? `+${diff}%` : `${diff}%`
+      }
+
       return {
         cohort: r.name,
         avgScore: formattedAvg,
         completionRate: `${rate}%`,
-        trend: r.count > 0 ? '+5%' : '0%'
+        trend: trendStr
       }
     })
 

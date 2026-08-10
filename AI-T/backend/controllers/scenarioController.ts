@@ -482,7 +482,7 @@ export const updateScenario = async (req: any, res: any) => {
     const updatePayload: any = {
       persona_name: updates.persona_name || existing.persona_name,
       persona_type: updates.contact_title || existing.contact_title || existing.persona_type,
-      difficulty: updates.difficulty || existing.difficulty,
+      difficulty: updates.difficulty ? updates.difficulty.toLowerCase() : existing.difficulty,
       context_text: baseContext,
       custom_prompt: updates.custom_prompt !== undefined ? updates.custom_prompt : existing.custom_prompt,
       personality_traits: updates.personality_traits !== undefined ? updates.personality_traits : existing.personality_traits,

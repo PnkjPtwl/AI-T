@@ -8,7 +8,12 @@ interface AssignTrainingWizardProps {
   scenarios: any[]
   reps: any[]
   onSuccess: () => void
-  initialScenarioId?: string
+  initialData?: {
+    scenarioId?: string
+    repId?: string
+    mode?: string
+    priority?: string
+  }
 }
 
 export default function AssignTrainingWizard({
@@ -17,13 +22,13 @@ export default function AssignTrainingWizard({
   scenarios = [],
   reps = [],
   onSuccess,
-  initialScenarioId
+  initialData
 }: AssignTrainingWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
 
   // Form State
   const [trainingMode, setTrainingMode] = useState<'Exam Mode' | 'Coach Mode' | 'Learning Mode'>('Exam Mode')
-  const [selectedScenarioId, setSelectedScenarioId] = useState(initialScenarioId || scenarios[0]?.id || '')
+  const [selectedScenarioId, setSelectedScenarioId] = useState(scenarios[0]?.id || '')
   const [selectedRepIds, setSelectedRepIds] = useState<string[]>([])
   const [deadline, setDeadline] = useState(() => {
     const d = new Date();
@@ -39,13 +44,21 @@ export default function AssignTrainingWizard({
 
   useEffect(() => {
     if (isOpen) {
-      if (initialScenarioId) {
-        setSelectedScenarioId(initialScenarioId)
-      } else if (scenarios && scenarios.length > 0) {
-        setSelectedScenarioId(scenarios[0].id)
-      }
+      if (initialData?.scenarioId) setSelectedScenarioId(initialData.scenarioId)
+      else if (scenarios && scenarios.length > 0) setSelectedScenarioId(scenarios[0].id)
+      
+      if (initialData?.repId) setSelectedRepIds([initialData.repId])
+      else setSelectedRepIds([])
+
+      if (initialData?.mode) setTrainingMode(initialData.mode as any)
+      else setTrainingMode('Exam Mode')
+
+      if (initialData?.priority) setPriority(initialData.priority as any)
+      else setPriority('High')
+      
+      setStep(1)
     }
-  }, [isOpen, initialScenarioId, scenarios])
+  }, [isOpen, initialData, scenarios])
 
   if (!isOpen) return null
 
@@ -57,6 +70,12 @@ export default function AssignTrainingWizard({
     difficulty: 'Advanced',
     estimated_duration_mins: 30,
     skills: ['Discovery', 'Qualification', 'Active Listening', 'Objection Handling']
+  }
+
+  const getSkillsList = (scenario: any) => {
+    const raw = scenario?.target_skills || scenario?.targetSkills || scenario?.skills_evaluated || scenario?.skills || ['Discovery', 'Qualification', 'Active Listening', 'Objection Handling']
+    if (typeof raw === 'string') return raw.split(',').map((s: string) => s.trim()).filter(Boolean)
+    return Array.isArray(raw) ? raw : []
   }
 
   const selectedRepsList = reps.filter(r => selectedRepIds.includes(r.id))
@@ -319,25 +338,13 @@ export default function AssignTrainingWizard({
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 pt-2">
-                  <button
-                    disabled
-                    className="py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-[600] text-gray-400"
-                  >
-                    Beginner
-                  </button>
-                  <button
-                    disabled
-                    className="py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-[600] text-gray-400"
-                  >
-                    Intermediate
-                  </button>
-                  <button
-                    disabled
-                    className="py-2.5 rounded-xl bg-[#1E1B4B] text-white text-xs font-[700]"
-                  >
-                    {selectedScenario?.difficulty || 'Advanced'}
-                  </button>
+                <div className="space-y-1.5 pt-2">
+                  <label className="text-xs font-[700] text-[#1E293B]">Scenario Difficulty</label>
+                  <div>
+                    <span className="inline-flex items-center px-3 py-1.5 bg-[#1E1B4B]/5 text-[#1E1B4B] text-xs font-[700] rounded-lg border border-[#1E1B4B]/10">
+                      {selectedScenario?.difficulty || 'Advanced'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Scenario Details Preview Card */}
@@ -345,7 +352,7 @@ export default function AssignTrainingWizard({
                   <p className="text-[10px] font-[800] text-[#64748B] uppercase">SCENARIO DETAILS</p>
                   <p className="text-xs font-[700] text-[#1E293B]">⏱️ {selectedScenario?.estimated_duration_mins || 30} mins</p>
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {['Discovery', 'Qualification', 'Active Listening', 'Objection Handling'].map((skill, idx) => (
+                    {getSkillsList(selectedScenario).map((skill: string, idx: number) => (
                       <span key={idx} className="px-2.5 py-1 bg-white border border-gray-200 text-[#475569] text-[10px] font-[600] rounded-md">
                         {skill}
                       </span>
@@ -392,15 +399,17 @@ export default function AssignTrainingWizard({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 font-[500] text-[#334155]">
-                    {(reps.length > 0 ? reps : [
-                      { id: 'rep-1', name: 'Pankaj Kumar', team_name: 'Enterprise', manager: 'Lokesh (Manager)', assignments: 3, avg_score: '81%', status: 'Active' },
-                      { id: 'rep-2', name: 'Barani S.', team_name: 'Mid-Market', manager: 'Lokesh (Manager)', assignments: 2, avg_score: '74%', status: 'Active' },
-                      { id: 'rep-3', name: 'Reddy V.', team_name: 'SMB', manager: 'Lokesh (Manager)', assignments: 5, avg_score: '68%', status: 'Active' },
-                      { id: 'rep-5', name: 'Divya Sharma', team_name: 'Mid-Market', manager: 'Lokesh (Manager)', assignments: 4, avg_score: '72%', status: 'On Leave' },
-                      { id: 'rep-6', name: 'Arjun Nair', team_name: 'SMB', manager: 'Lokesh (Manager)', assignments: 2, avg_score: '65%', status: 'Active' },
-                      { id: 'rep-7', name: 'Priya Menon', team_name: 'Enterprise', manager: 'Lokesh (Manager)', assignments: 6, avg_score: '91%', status: 'Active' },
-                      { id: 'rep-8', name: 'Vikram Bose', team_name: 'Mid-Market', manager: 'Lokesh (Manager)', assignments: 3, avg_score: '77%', status: 'Active' }
-                    ])
+                    {reps.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-12 text-center text-[#64748B]">
+                          <div className="flex flex-col items-center gap-3">
+                            <span className="text-4xl">👥</span>
+                            <p className="font-[700] text-sm text-[#1E293B]">No representatives found</p>
+                            <p className="text-xs">Add sales reps to your organization to assign training.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : reps
                     .filter((r: any) => !r.name?.toLowerCase().includes('lokesh') && r.role !== 'manager')
                     .map((r: any) => {
                       const isChecked = selectedRepIds.includes(r.id)
@@ -422,10 +431,10 @@ export default function AssignTrainingWizard({
                           </td>
                           <td className="p-4 text-[#64748B]">{r.team_name || 'Enterprise'}</td>
                           <td className="p-4 text-[#64748B]">Lokesh (Manager)</td>
-                          <td className="p-4">{r.assignments || 3}</td>
-                          <td className="p-4 font-[700] text-green-600">{r.avg_score || '81%'}</td>
+                          <td className="p-4">{r.session_count || 0}</td>
+                          <td className="p-4 font-[700] text-green-600">{r.overall_score !== undefined && r.overall_score !== null ? `${r.overall_score}%` : 'N/A'}</td>
                           <td className="p-4">
-                            <span className={`px-2.5 py-0.5 text-[10px] font-[700] rounded-full ${r.status === 'On Leave' ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
+                            <span className={`px-2.5 py-0.5 text-[10px] font-[700] rounded-full ${['Needs Coaching', 'High Risk'].includes(r.status) ? 'bg-red-50 text-red-700' : r.status === 'On Leave' ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
                               ● {r.status || 'Active'}
                             </span>
                           </td>
@@ -588,7 +597,7 @@ export default function AssignTrainingWizard({
                 <div className="pt-3 border-t border-purple-900/50 space-y-2">
                   <p className="text-[10px] font-[800] text-purple-300 uppercase">Skills Covered</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {['Discovery', 'Qualification', 'Active Listening', 'Objection Handling'].map((skill, idx) => (
+                    {getSkillsList(selectedScenario).map((skill: string, idx: number) => (
                       <span key={idx} className="px-2.5 py-1 bg-red-500/20 text-red-200 text-[10px] font-[700] rounded-full border border-red-400/30">
                         {skill}
                       </span>

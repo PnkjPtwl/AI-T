@@ -95,7 +95,7 @@ export default function NewScenarioPage() {
           if (data) {
             setFormData({
               persona_name: duplicateId ? `${data.persona_name} (Copy)` : (data.persona_name || ''),
-              difficulty: data.difficulty || 'Advanced',
+              difficulty: data.difficulty ? (data.difficulty.charAt(0).toUpperCase() + data.difficulty.slice(1).toLowerCase()) : 'Advanced',
               target_skills: data.target_skills || '',
               objection_style: data.objection_style || '',
               personality_traits: data.personality_traits || '',
@@ -417,7 +417,10 @@ export default function NewScenarioPage() {
                 <label className="font-[700] text-[#1E293B]">Difficulty*</label>
                 <select value={formData.difficulty} onChange={e => setFormData({ ...formData, difficulty: e.target.value })}
                   className="w-full h-11 bg-gray-50 border border-gray-200 rounded-xl px-3.5 text-xs text-[#1E293B] focus:outline-none">
-                  <option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option>
+                  <option value="Beginner">Beginner</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Advanced">Advanced</option>
+                  <option value="Expert">Expert</option>
                 </select>
               </div>
             </div>

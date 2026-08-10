@@ -57,21 +57,20 @@ export const getReps = async (req: any, res: any) => {
       const trend = recentAvg > olderAvg ? 'up' : recentAvg < olderAvg ? 'down' : 'stable'
 
       // Skills calculation — dynamically extract score keys from feedback
-      const skillTotals: any = {}
+      const skillStats: any = {}
       repSessions.forEach(s => {
         const scores = s.feedback_json?.scores || {}
         Object.keys(scores).forEach(k => {
           const val = scores[k]
           const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0)
-          skillTotals[k] = (skillTotals[k] || 0) + numVal
+          if (!skillStats[k]) skillStats[k] = { sum: 0, count: 0 }
+          skillStats[k].sum += numVal
+          skillStats[k].count += 1
         })
       })
-      const skillAvgs = Object.keys(skillTotals).map(k => ({ name: k.replace(/_/g, ' ').toUpperCase(), avg: skillTotals[k] / count }))
+      const skillAvgs = Object.keys(skillStats).map(k => ({ name: k.replace(/_/g, ' ').toUpperCase(), avg: Math.round(skillStats[k].sum / skillStats[k].count) }))
       if (skillAvgs.length === 0) skillAvgs.push({ name: 'N/A', avg: 0 })
-      const strongest = [...skillAvgs].sort((a, b) => b.avg - a.avg)[0].name
-      const weakest = [...skillAvgs].sort((a, b) => a.avg - b.avg)[0].name
-
-      // Re-sort correctly
+      
       const sortedSkills = [...skillAvgs].sort((a, b) => a.avg - b.avg)
       const finalWeakest = sortedSkills[0].name
       const finalStrongest = sortedSkills[sortedSkills.length - 1].name
@@ -189,20 +188,25 @@ export const getRepSessions = async (req: any, res: any) => {
   })).reverse().slice(-10)
 
   // 2. Skill Radar — dynamically extract score keys from actual feedback
-  const skills: Record<string, number> = {}
+  const skillStats: Record<string, { sum: number, count: number }> = {}
   practiceSessions.forEach((s: any) => {
     const scores = s.feedback_json?.scores || {}
     Object.keys(scores).forEach(k => {
       const val = scores[k];
       const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0);
-      skills[k] = (skills[k] || 0) + numVal;
+      if (!skillStats[k]) skillStats[k] = { sum: 0, count: 0 };
+      skillStats[k].sum += numVal;
+      skillStats[k].count += 1;
     })
   })
-  const radarData = Object.keys(skills).map(k => ({
-    subject: k.replace(/_/g, ' ').toUpperCase(),
-    A: practiceSessions.length ? Math.round(skills[k] / practiceSessions.length) : 0,
-    fullMark: 100
-  }))
+  const radarData = Object.keys(skillStats)
+    .sort((a, b) => skillStats[b].count - skillStats[a].count)
+    .slice(0, 6)
+    .map(k => ({
+      subject: k.replace(/_/g, ' ').toUpperCase(),
+      A: Math.round(skillStats[k].sum / skillStats[k].count),
+      fullMark: 100
+    }))
 
   // 3. Persona Success Rates (Enriched)
   const personaMap: any = {}
@@ -219,7 +223,7 @@ export const getRepSessions = async (req: any, res: any) => {
         name,
         totalScore: 0,
         count: 0,
-        skillTotals: {} as Record<string, number>
+        skillStats: {} as Record<string, { sum: number, count: number }>
       }
     }
 
@@ -229,15 +233,17 @@ export const getRepSessions = async (req: any, res: any) => {
     Object.keys(scores).forEach(skill => {
       const val = scores[skill];
       const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0);
-      personaMap[type].skillTotals[skill] = (personaMap[type].skillTotals[skill] || 0) + numVal;
+      if (!personaMap[type].skillStats[skill]) personaMap[type].skillStats[skill] = { sum: 0, count: 0 };
+      personaMap[type].skillStats[skill].sum += numVal;
+      personaMap[type].skillStats[skill].count += 1;
     })
   })
 
   const personaPerformanceData = Object.values(personaMap).map((v: any) => {
     const avgScore = Math.round(v.totalScore / v.count)
-    const skillsList = Object.entries(v.skillTotals).map(([name, total]) => ({
+    const skillsList = Object.entries(v.skillStats).map(([name, stats]: any) => ({
       name: name.replace(/_/g, ' ').toUpperCase(),
-      avg: Math.round((total as number) / v.count)
+      avg: Math.round(stats.sum / stats.count)
     })).sort((a, b) => b.avg - a.avg)
 
     return {
@@ -307,20 +313,25 @@ export const getMyAnalytics = async (req: any, res: any) => {
     })).reverse().slice(-10)
 
     // 2. Skill Radar — dynamically extract score keys from actual feedback
-    const skills: Record<string, number> = {}
+    const skillStats: Record<string, { sum: number, count: number }> = {}
     practiceSessions.forEach((s: any) => {
       const scores = s.feedback_json?.scores || {}
       Object.keys(scores).forEach(k => {
         const val = scores[k];
         const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0);
-        skills[k] = (skills[k] || 0) + numVal;
+        if (!skillStats[k]) skillStats[k] = { sum: 0, count: 0 };
+        skillStats[k].sum += numVal;
+        skillStats[k].count += 1;
       })
     })
-    const radarData = Object.keys(skills).map(k => ({
-      subject: k.replace(/_/g, ' ').toUpperCase(),
-      A: practiceSessions.length ? Math.round(skills[k] / practiceSessions.length) : 0,
-      fullMark: 100
-    }))
+    const radarData = Object.keys(skillStats)
+      .sort((a, b) => skillStats[b].count - skillStats[a].count)
+      .slice(0, 6)
+      .map(k => ({
+        subject: k.replace(/_/g, ' ').toUpperCase(),
+        A: Math.round(skillStats[k].sum / skillStats[k].count),
+        fullMark: 100
+      }))
 
     // 3. Persona Success Rates (Enriched)
     const personaMap: any = {}
@@ -337,7 +348,7 @@ export const getMyAnalytics = async (req: any, res: any) => {
           name,
           totalScore: 0,
           count: 0,
-          skillTotals: {} as Record<string, number>
+          skillStats: {} as Record<string, { sum: number, count: number }>
         }
       }
 
@@ -347,15 +358,17 @@ export const getMyAnalytics = async (req: any, res: any) => {
       Object.keys(scores).forEach(skill => {
         const val = scores[skill];
         const numVal = typeof val === 'object' ? (val.score || 0) : (val || 0);
-        personaMap[type].skillTotals[skill] = (personaMap[type].skillTotals[skill] || 0) + numVal;
+        if (!personaMap[type].skillStats[skill]) personaMap[type].skillStats[skill] = { sum: 0, count: 0 };
+        personaMap[type].skillStats[skill].sum += numVal;
+        personaMap[type].skillStats[skill].count += 1;
       })
     })
 
     const personaPerformanceData = Object.values(personaMap).map((v: any) => {
       const avgScore = Math.round(v.totalScore / v.count)
-      const skills = Object.entries(v.skillTotals).map(([name, total]) => ({
+      const skills = Object.entries(v.skillStats).map(([name, stats]: any) => ({
         name: name.replace(/_/g, ' ').toUpperCase(),
-        avg: Math.round((total as number) / v.count)
+        avg: Math.round(stats.sum / stats.count)
       })).sort((a, b) => b.avg - a.avg)
 
       return {
@@ -1197,6 +1210,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
         id: a.id,
         rep_id: a.rep_id,
         scenario_id: a.scenario_id,
+        session_id: a.session_id,
         status,
         priority: a.priority || 'Medium',
         deadline: a.deadline,

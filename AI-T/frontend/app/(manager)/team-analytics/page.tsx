@@ -32,12 +32,12 @@ export default function TeamAnalyticsPage() {
     if (!analytics) return
     const headers = ['Metric/Cohort', 'Value/Score', 'Details']
     const rows = [
-      ['Team Average Score', analytics.summary?.teamAvgScore || 0, 'Out of 10'],
+      ['Team Average Score', analytics.summary?.teamAvgScore || 0, 'Out of 100'],
       ['Completion Rate', `${analytics.summary?.completionRatePct || 0}%`, 'Percentage'],
       ['Total Completed Sessions', analytics.summary?.totalSessionsCount || 0, 'Sessions'],
       ['Active Reps', analytics.summary?.activeRepsCount || 0, 'Reps'],
       [],
-      ['Cohort Name', 'Avg Score (Out of 10)', 'Completion Rate'],
+      ['Cohort Name', 'Avg Score (Out of 100)', 'Completion Rate'],
       ...(analytics.cohortComparison || []).map((ch: any) => [
         `"${ch.cohort}"`,
         ch.avgScore,
@@ -70,7 +70,7 @@ export default function TeamAnalyticsPage() {
 
   // Fallbacks calculated from DB session analytics
   const summary = analytics?.summary || {
-    teamAvgScore: 8.4,
+    teamAvgScore: 84,
     completionRatePct: 87,
     totalSessionsCount: 142,
     activeRepsCount: 168,
@@ -78,18 +78,18 @@ export default function TeamAnalyticsPage() {
   }
 
   const performanceOverTime = analytics?.performanceOverTime || [
-    { week: 'W1', score: 6.8 },
-    { week: 'W2', score: 7.0 },
-    { week: 'W3', score: 7.1 },
-    { week: 'W4', score: 7.2 },
-    { week: 'W5', score: 7.4 },
-    { week: 'W6', score: 7.5 },
-    { week: 'W7', score: 7.7 },
-    { week: 'W8', score: 7.8 },
-    { week: 'W9', score: 8.0 },
-    { week: 'W10', score: 8.2 },
-    { week: 'W11', score: 8.4 },
-    { week: 'W12', score: 8.5 }
+    { week: 'W1', score: 68 },
+    { week: 'W2', score: 70 },
+    { week: 'W3', score: 71 },
+    { week: 'W4', score: 72 },
+    { week: 'W5', score: 74 },
+    { week: 'W6', score: 75 },
+    { week: 'W7', score: 77 },
+    { week: 'W8', score: 78 },
+    { week: 'W9', score: 80 },
+    { week: 'W10', score: 82 },
+    { week: 'W11', score: 84 },
+    { week: 'W12', score: 85 }
   ]
 
   const completionFunnel = analytics?.completionFunnel || [
@@ -100,19 +100,19 @@ export default function TeamAnalyticsPage() {
   ]
 
   const scoreDistribution = analytics?.scoreDistribution || [
-    { range: '50-59', count: 4 },
-    { range: '60-69', count: 12 },
-    { range: '70-79', count: 24 },
-    { range: '80-89', count: 36 },
-    { range: '90-99', count: 18 },
-    { range: '100', count: 6 }
+    { range: '<50', count: 4 },
+    { range: '50-59', count: 12 },
+    { range: '60-69', count: 24 },
+    { range: '70-79', count: 36 },
+    { range: '80-89', count: 18 },
+    { range: '90-100', count: 6 }
   ]
 
   const cohortComparison = analytics?.cohortComparison || [
-    { cohort: 'NAMER Enterprise', avgScore: 8.7, completionRate: '94%', trend: '+6%' },
-    { cohort: 'EMEA Regional', avgScore: 8.1, completionRate: '88%', trend: '+11%' },
-    { cohort: 'Mid-Market', avgScore: 7.9, completionRate: '82%', trend: '+4%' },
-    { cohort: 'Enterprise SMB', avgScore: 8.3, completionRate: '89%', trend: '+8%' }
+    { cohort: 'NAMER Enterprise', avgScore: 87, completionRate: '94%', trend: '+6%' },
+    { cohort: 'EMEA Regional', avgScore: 81, completionRate: '88%', trend: '+11%' },
+    { cohort: 'Mid-Market', avgScore: 79, completionRate: '82%', trend: '+4%' },
+    { cohort: 'Enterprise SMB', avgScore: 83, completionRate: '89%', trend: '+8%' }
   ]
 
   return (
@@ -146,7 +146,7 @@ export default function TeamAnalyticsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
           <p className="text-[10px] font-[800] text-[#64748B] uppercase">TEAM AVG SCORE</p>
-          <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{summary.teamAvgScore}</h3>
+          <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{summary.teamAvgScore}%</h3>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
@@ -182,12 +182,12 @@ export default function TeamAnalyticsPage() {
           <div className="h-60 flex items-end justify-between px-2 pb-2 border-b border-l border-gray-200 gap-2 pt-6">
             {performanceOverTime.map((pt: any, idx: number) => {
               const scoreVal = Number(pt.score) || 0
-              const heightPct = scoreVal > 0 ? Math.min(Math.max((scoreVal / 10) * 100, 12), 100) : 0
+              const heightPct = scoreVal > 0 ? Math.min(Math.max(scoreVal, 12), 100) : 0
 
               return (
                 <div key={idx} className="flex flex-col items-center justify-end h-full flex-1 group">
                   <div className="text-[10px] font-[800] text-purple-700 mb-1">
-                    {scoreVal > 0 ? scoreVal : '-'}
+                    {scoreVal > 0 ? `${scoreVal}%` : '-'}
                   </div>
                   
                   {/* Explicit Flex Track for Bar */}
@@ -305,9 +305,11 @@ export default function TeamAnalyticsPage() {
                   .map((ch: any, idx: number) => (
                     <tr key={idx} className="hover:bg-gray-50">
                       <td className="p-3 font-[800] text-[#1E293B]">{ch.cohort}</td>
-                      <td className="p-3 font-[700] text-purple-700">{ch.avgScore}</td>
+                      <td className="p-3 font-[700] text-purple-700">{ch.avgScore}%</td>
                       <td className="p-3 text-green-600">{ch.completionRate}</td>
-                      <td className="p-3 font-[800] text-green-600">{ch.trend}</td>
+                      <td className={`p-3 font-[800] ${ch.trend.startsWith('+') ? 'text-green-600' : ch.trend.startsWith('-') && ch.trend !== '-' ? 'text-red-500' : 'text-gray-400'}`}>
+                        {ch.trend}
+                      </td>
                     </tr>
                   ))}
               </tbody>

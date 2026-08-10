@@ -235,15 +235,24 @@ export default function AssignmentDetailsSidebar({
           >
             Reassign
           </button>
-          <button
-            onClick={() => {
-              onClose()
-              if (onMarkComplete) onMarkComplete(assignment.id)
-            }}
-            className="px-5 py-2 rounded-xl bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] shadow-md transition-colors"
-          >
-            Mark Complete
-          </button>
+          {status.toUpperCase() === 'COMPLETED' && assignment.session_id ? (
+            <a
+              href={`/training/review/${assignment.session_id}`}
+              className="px-5 py-2 rounded-xl bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] shadow-md transition-colors text-center"
+            >
+              View Scorecard
+            </a>
+          ) : (
+            <button
+              onClick={() => {
+                onClose()
+                if (onMarkComplete) onMarkComplete(assignment.id)
+              }}
+              className="px-5 py-2 rounded-xl bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] shadow-md transition-colors"
+            >
+              Mark Complete
+            </button>
+          )}
         </div>
       </div>
     </div>

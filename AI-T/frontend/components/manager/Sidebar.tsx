@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 const NAV_ITEMS = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
@@ -14,6 +16,19 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const [userName, setUserName] = useState('')
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      fetch(`${API}/api/users/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(user => setUserName(user.name))
+      .catch(() => {})
+    }
+  }, [])
 
   return (
     <aside
@@ -28,7 +43,7 @@ export default function Sidebar() {
             </div>
             <div>
               <span className="text-base font-[800] text-[#1E293B] tracking-tight">R-SalesCoach</span>
-              <span className="block text-[9px] font-[700] text-purple-600 uppercase tracking-widest leading-none mt-0.5">Lokesh (Manager)</span>
+              <span className="block text-[9px] font-[700] text-purple-600 uppercase tracking-widest leading-none mt-0.5">{userName ? `${userName} (Manager)` : 'Manager View'}</span>
             </div>
           </div>
         )}

@@ -14,6 +14,7 @@ export default function ManagerTrainingPage() {
 
   // Modals & Sidebars
   const [isWizardOpen, setIsWizardOpen] = useState(false)
+  const [wizardInitialData, setWizardInitialData] = useState<any>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [selectedAssignment, setSelectedAssignment] = useState<any>(null)
 
@@ -163,59 +164,17 @@ export default function ManagerTrainingPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 font-[500] text-[#334155]">
-            {(filteredAssignments.length > 0
-              ? filteredAssignments
-              : [
-                  {
-                    id: 'assign-1',
-                    rep_name: 'Pankaj Kumar',
-                    rep_role: 'Sales Executive',
-                    persona_name: 'Sarah Chen',
-                    company: 'Acme Technologies',
-                    scenario_title: 'Technical Discovery',
-                    status: 'In Progress',
-                    priority: 'High',
-                    difficulty: 'Advanced',
-                    assigned_on: 'Jul 1, 2026',
-                    due_date: 'Jul 16, 2026',
-                    assigned_by_name: 'Lokesh (Manager)',
-                    industry: 'SaaS',
-                    score_pct: 74
-                  },
-                  {
-                    id: 'assign-2',
-                    rep_name: 'Barani S.',
-                    rep_role: 'Account Executive',
-                    persona_name: 'Marcus Johnson',
-                    company: 'TechVentures Inc.',
-                    scenario_title: 'Financial Negotiation',
-                    status: 'Overdue',
-                    priority: 'High',
-                    difficulty: 'Expert',
-                    assigned_on: 'Jul 2, 2026',
-                    due_date: 'Jul 15, 2026',
-                    assigned_by_name: 'Lokesh (Manager)',
-                    industry: 'Banking',
-                    score_pct: null
-                  },
-                  {
-                    id: 'assign-3',
-                    rep_name: 'Reddy V.',
-                    rep_role: 'Sales Rep',
-                    persona_name: 'Elena Rodriguez',
-                    company: 'GrowthForce',
-                    scenario_title: 'ROI Presentation',
-                    status: 'Completed',
-                    priority: 'Low',
-                    difficulty: 'Intermediate',
-                    assigned_on: 'Jul 1, 2026',
-                    due_date: 'Jul 10, 2026',
-                    assigned_by_name: 'Lokesh (Manager)',
-                    industry: 'Healthcare',
-                    score_pct: 88
-                  }
-                ]
-            ).map((assign: any) => {
+            {filteredAssignments.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="p-12 text-center text-[#64748B]">
+                  <div className="flex flex-col items-center gap-3">
+                    <span className="text-4xl">📋</span>
+                    <p className="font-[700] text-sm text-[#1E293B]">No assignments found</p>
+                    <p className="text-xs">Create a new assignment using the &quot;Assign Training&quot; button above.</p>
+                  </div>
+                </td>
+              </tr>
+            ) : filteredAssignments.map((assign: any) => {
               let badge = (
                 <span className="px-2.5 py-1 bg-amber-50 text-amber-700 text-[10px] font-[800] rounded-full border border-amber-100 uppercase">
                   ● {assign.status || 'In Progress'}
@@ -294,15 +253,31 @@ export default function ManagerTrainingPage() {
         onClose={() => setIsSidebarOpen(false)}
         assignment={selectedAssignment}
         onMarkComplete={() => fetchData()}
+        onReassign={(id) => {
+          if (selectedAssignment) {
+            setWizardInitialData({
+              scenarioId: selectedAssignment.scenario_id,
+              repId: selectedAssignment.rep_id,
+              mode: selectedAssignment.mode,
+              priority: selectedAssignment.priority
+            })
+          }
+          setIsSidebarOpen(false)
+          setIsWizardOpen(true)
+        }}
       />
 
       {/* Assign Training 4-Step Wizard Modal */}
       <AssignTrainingWizard
         isOpen={isWizardOpen}
-        onClose={() => setIsWizardOpen(false)}
+        onClose={() => {
+          setIsWizardOpen(false)
+          setWizardInitialData(null)
+        }}
         scenarios={scenarios}
         reps={reps}
         onSuccess={() => fetchData()}
+        initialData={wizardInitialData}
       />
     </div>
   )

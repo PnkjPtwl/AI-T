@@ -219,7 +219,6 @@ export const sendMessage = async (req: any, res: any) => {
 
     // Extract scenario name from context_text
     const match = scenario.context_text?.match(/\[SCENARIO:\s*(.*?)\]/)
-    const systemInstruction = generateSystemInstruction(scenario)
 
     const history = session.messages_json || []
 
@@ -234,7 +233,8 @@ export const sendMessage = async (req: any, res: any) => {
 
     const userTurns = normalizedHistory.filter((m: any) => m.role === 'user').length + 1
     const messagesPayload: any[] = [
-      { role: 'system', content: systemInstruction },
+      // systemInstruction placeholder — filled after RAG check below
+      { role: 'system', content: '__SYSTEM_INSTRUCTION_PLACEHOLDER__' },
       ...normalizedHistory
     ]
 
@@ -248,6 +248,7 @@ export const sendMessage = async (req: any, res: any) => {
 
     // ── RAG: Fetch KB context for this account (fail-safe — never blocks session) ──
     let accountName = scenario?.account_name || null
+    let hasRagContext = false
     if (!accountName) {
       const combinedAccountStr = `${scenario?.contact_company || ''} ${scenario?.persona_name || ''} ${scenario?.context_text || ''}`.toLowerCase()
       if (combinedAccountStr.includes('phoenix')) {
@@ -260,6 +261,7 @@ export const sendMessage = async (req: any, res: any) => {
         const ragChunks = await searchKnowledgeBase(searchTarget, accountName, 6)
         const ragContext = formatRagContext(ragChunks, accountName)
         if (ragContext) {
+          hasRagContext = true
           // Inject as a system message BEFORE the user's turn so it grounds the persona reply
           messagesPayload.splice(1, 0, { role: 'system', content: ragContext })
           console.log(`[RAG] Injected ${ragChunks.length} KB chunks for account: ${accountName}`)
@@ -268,6 +270,10 @@ export const sendMessage = async (req: any, res: any) => {
         console.warn('[RAG] Context fetch failed (non-fatal), continuing without KB context:', ragErr)
       }
     }
+
+    // Build the system instruction AFTER RAG check so we know if RAG context is present
+    const systemInstruction = generateSystemInstruction(scenario, hasRagContext)
+    messagesPayload[0] = { role: 'system', content: systemInstruction }
 
     const groqApiKey = await getSecret('GROQ_API_KEY')
     const groq = new Groq({ apiKey: groqApiKey || '' })
@@ -305,7 +311,7 @@ export const sendMessage = async (req: any, res: any) => {
 
 
 export const endSession = async (req: any, res: any) => {
-  const { sessionId } = req.body
+  const { sessionId, currentMessages } = req.body
   if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
 
   try {
@@ -318,7 +324,14 @@ export const endSession = async (req: any, res: any) => {
 
     if (!session) throw new Error('Session not found')
 
-    const messages = session.messages_json || []
+    let messages = session.messages_json || []
+    
+    // Sync with frontend messages if they are more complete (resolves race condition)
+    if (currentMessages && Array.isArray(currentMessages) && currentMessages.length > messages.length) {
+      messages = currentMessages
+      await safeUpdateTrainingSession(sessionId, { messages_json: messages })
+    }
+
     const userMsgs = messages.filter((m: any) => m.role === 'user' || m.role === 'human' || m.role === 'rep')
     const assistantMsgs = messages.filter((m: any) => m.role === 'assistant' || m.role === 'model' || m.role === 'persona' || m.role === 'bot')
 
@@ -767,7 +780,7 @@ RULES FOR SUGGESTED FOLLOW-UPS (CRITICAL):
       customer_sentiment: 50,
       rep_tone_type: 'good',
       coaching_hint: 'Keep going — stay curious and listen actively.',
-      suggested_followups: ["What are your primary goals for this quarter?", "How does your current process handle these challenges?", "Are there specific metrics you are looking to improve?"],
+      suggested_followups: [],
       tone_distribution: { alert: 10, hesitant: 20, warm: 50, wise: 20 }
     })
   }
@@ -797,7 +810,6 @@ export const processLiveTurn = async (req: any, res: any) => {
     if (sessionErr || !session) throw new Error('Session not found')
 
     const scenario = session.training_scenarios
-    const systemInstruction = generateSystemInstruction(scenario)
 
     // 1. Compile Metrics Payload
     const wordCount = transcript.trim().split(/\s+/).length
@@ -820,24 +832,31 @@ export const processLiveTurn = async (req: any, res: any) => {
       content: m.content || (m.parts && m.parts[0]?.text) || ''
     }))
 
-    const messagesPayload = [
-      { role: 'system', content: systemInstruction + ' KEEP YOUR RESPONSE UNDER 40 WORDS.' },
+    // RAG check must happen BEFORE building system instruction so we know if context exists
+    const accountName = scenario?.account_name || null
+    let hasRagContext = false
+    const messagesPayload: any[] = [
+      { role: 'system', content: '__SYSTEM_INSTRUCTION_PLACEHOLDER__' },
       ...normalizedHistory,
       { role: 'user', content: transcript }
     ]
 
-    const accountName = scenario?.account_name || null
     if (accountName) {
       try {
         const ragChunks = await searchKnowledgeBase(transcript, accountName, 5)
         const ragContext = formatRagContext(ragChunks, accountName)
         if (ragContext) {
+          hasRagContext = true
           messagesPayload.splice(messagesPayload.length - 1, 0, { role: 'system', content: ragContext })
         }
       } catch (e) {
         console.warn('RAG error', e)
       }
     }
+
+    // Build system instruction AFTER RAG check so context flag is accurate
+    const systemInstruction = generateSystemInstruction(scenario, hasRagContext)
+    messagesPayload[0] = { role: 'system', content: systemInstruction + ' KEEP YOUR RESPONSE UNDER 40 WORDS.' }
 
     // Prompt A: AI Response
     let aiResponse = ''
@@ -850,12 +869,14 @@ export const processLiveTurn = async (req: any, res: any) => {
       })
       aiResponse = chatCompletion.choices[0]?.message?.content || ''
     } catch (groqErr) {
-      console.error('[processLiveTurn] Groq AI completion failed, using intelligent fallback:', groqErr)
-      aiResponse = "That's an interesting perspective. Could you elaborate on how your team manages that process currently?"
+      console.error('[processLiveTurn] Groq AI completion failed, using context-aware fallback:', groqErr)
+      const words = transcript.trim().split(/\s+/).slice(0, 6).join(' ')
+      aiResponse = `Could you tell me more about "${words}..."? I want to make sure I understand your perspective correctly.`
     }
 
     if (!aiResponse) {
-      aiResponse = "I understand your point. Could you walk me through how that affects your daily operations?"
+      const lastWords = transcript.trim().split(/\s+/).slice(-4).join(' ')
+      aiResponse = `I see — and regarding "${lastWords}", could you help me understand the impact on your current workflow?`
     }
 
     // Return immediately after Prompt A (Conversation)

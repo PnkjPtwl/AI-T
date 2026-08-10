@@ -56,41 +56,32 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     null // Set dynamically after mode is resolved; cleared for Exam Mode
   )
 
-  // Tone distribution percentages (dynamic based on live sentiment)
+  // Tone distribution percentages (starts empty until real sentiment data arrives)
   const [toneDistribution, setToneDistribution] = useState({
-    alert: 12,
-    hesitant: 25,
-    warm: 72,
-    wise: 40
+    alert: 0,
+    hesitant: 0,
+    warm: 0,
+    wise: 0
   })
 
   // Live metrics state
   const [metrics, setMetrics] = useState<LiveMetricsState>({
-    wpm: 130,
-    fillerRatio: 2.1,
-    talkListenRatio: 45,
+    wpm: 0,
+    fillerRatio: 0,
+    talkListenRatio: 0,
     userTalkTimeMs: 0,
     aiTalkTimeMs: 0,
     questionCount: 0
   })
 
   // Real-time insights array for AI Coach sidebar
-  const [coachingInsights, setCoachingInsights] = useState<CoachingInsight[]>([
-    {
-      id: 'init-1',
-      severity: 'info',
-      title: 'Active Listening',
-      text: 'Listen carefully for subtle pain points regarding deployment or scaling.',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
-  ])
+  const [coachingInsights, setCoachingInsights] = useState<CoachingInsight[]>([])
 
   // Suggested follow-ups state
-  const [suggestedFollowUps, setSuggestedFollowUps] = useState<string[]>([
-    "What's your current deployment failure rate?",
-    "How is your team managing rollback procedures?",
-    "What key metrics define success for your engineering team this quarter?"
-  ])
+  const [suggestedFollowUps, setSuggestedFollowUps] = useState<string[]>([])
+
+  // Whether the first message has been sent (gates metric display)
+  const [isSessionStarted, setIsSessionStarted] = useState(false)
 
   const rawMode = searchParams.get('mode') || scenario?.training_mode || 'Coach Mode'
   const isExamMode = rawMode.toLowerCase().includes('exam')
@@ -117,6 +108,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
   const audioContextRef = useRef<AudioContext | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const animFrameRef = useRef<number | null>(null)
+  const isUnmountedRef = useRef(false)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -124,7 +116,9 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
 
   // Clean up audio & speech resources on unmount
   useEffect(() => {
+    isUnmountedRef.current = false
     return () => {
+      isUnmountedRef.current = true
       micActiveRef.current = false
       if (recognitionRef.current) {
         try { recognitionRef.current.stop() } catch (e) {}
@@ -304,25 +298,41 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     }
   }
 
+  const isStartingMicRef = useRef(false)
+  const isSendingRef = useRef(false)
+
   const startListening = async (isAutoRestart = false) => {
     if (typeof window === 'undefined') return
 
-    // 1. Request Browser Mic Permission explicitly
-    let stream: MediaStream | null = null
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        mediaStreamRef.current = stream
-        if (!isAutoRestart) {
+    // 1. Request Browser Mic Permission (skip if auto-restart — we already have the stream)
+    if (!isAutoRestart) {
+      let stream: MediaStream | null = null
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          // Stop existing stream before requesting new one
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(t => t.stop())
+            mediaStreamRef.current = null
+          }
+          
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          
+          // If user navigated away while waiting for permission, abort
+          if (isUnmountedRef.current) {
+            stream.getTracks().forEach(t => t.stop())
+            return
+          }
+
+          mediaStreamRef.current = stream
           initAudioVisualizer(stream)
         }
+      } catch (err: any) {
+        console.warn('Microphone permission denied:', err)
+        alert('Microphone access is blocked. Please allow microphone permissions in your browser address bar.')
+        setMicActive(false)
+        micActiveRef.current = false
+        return
       }
-    } catch (err: any) {
-      console.warn('Microphone permission denied:', err)
-      alert('Microphone access is blocked. Please allow microphone permissions in your browser address bar.')
-      setMicActive(false)
-      micActiveRef.current = false
-      return
     }
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -333,8 +343,10 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       return
     }
 
+    // Stop any existing recognition cleanly before creating a new one
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop() } catch (e) {}
+      try { recognitionRef.current.abort() } catch (e) {}
+      recognitionRef.current = null
     }
 
     const recognition = new SpeechRecognition()
@@ -395,12 +407,19 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     }
 
     recognition.onend = () => {
-      // Auto-restart speech recognition if micActiveRef is still true
+      // Do NOT auto-restart if we're in the middle of sending a message
+      // (handleSendMessage's finally block will handle the restart)
+      if (isSendingRef.current) return
+
+      // Auto-restart speech recognition if mic should still be active
       if (micActiveRef.current) {
         try {
           recognition.start()
         } catch (e) {
+          // Engine crashed — reset UI cleanly so user can click again
           setSttStatus(null)
+          setMicActive(false)
+          micActiveRef.current = false
         }
       } else {
         setSttStatus(null)
@@ -413,13 +432,18 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       recognitionRef.current = recognition
     } catch (err: any) {
       console.error('Failed to start speech recognition:', err)
+      setMicActive(false)
+      micActiveRef.current = false
     }
   }
 
   const stopListening = () => {
     micActiveRef.current = false
+    isSendingRef.current = false
+    isStartingMicRef.current = false
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop() } catch (e) {}
+      try { recognitionRef.current.abort() } catch (e) {}
+      recognitionRef.current = null
     }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach(t => t.stop())
@@ -438,11 +462,17 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     setSttStatus(null)
   }
 
-  const toggleMic = () => {
+  const toggleMic = async () => {
     if (micActive) {
       stopListening()
     } else {
-      startListening()
+      if (isStartingMicRef.current) return
+      isStartingMicRef.current = true
+      try {
+        await startListening()
+      } finally {
+        isStartingMicRef.current = false
+      }
     }
   }
 
@@ -495,11 +525,14 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     const rawDurationMs = speechStartTimeRef.current ? Math.max(1500, speechEndTime - speechStartTimeRef.current) : 3500
     speechStartTimeRef.current = null
 
-    // Temporarily pause mic active ref while processing message
-    if (micActive && recognitionRef.current) {
+    // Tell the onend handler NOT to auto-restart — we'll do it ourselves in the finally block
+    const wasMicActive = micActiveRef.current
+    if (wasMicActive && recognitionRef.current) {
+      isSendingRef.current = true
       try {
-        recognitionRef.current.stop()
+        recognitionRef.current.abort()
       } catch (e) {}
+      recognitionRef.current = null
     }
 
     const userMsg: ChatMessage = { role: 'user', content: messageText.trim() }
@@ -584,6 +617,9 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
           const aiMsg: ChatMessage = { role: 'assistant', content: aiRespText }
           setMessages(prev => [...prev, aiMsg])
           
+          // Mark session as started — gates metric panels switching from placeholder to live data
+          setIsSessionStarted(true)
+
           // Estimate AI talk duration for talk/listen ratio
           const aiWords = aiRespText.split(/\s+/).length
           const estAiDurationMs = Math.max(2000, (aiWords / 150) * 60000)
@@ -672,14 +708,23 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     } catch (err) {
       console.error('Failed to send live message', err)
     } finally {
-      if (micActiveRef.current) {
-        startListening(true)
+      isSendingRef.current = false
+      // Restart mic listening if it was active before sending
+      if (wasMicActive && micActiveRef.current) {
+        await startListening(true)
       }
     }
   }
 
   const handleEndAndReview = async () => {
+    stopListening()
     setIsEnding(true)
+    
+    let finalMessages = [...messages]
+    if (textInput.trim()) {
+      finalMessages.push({ role: 'user', content: textInput.trim() })
+    }
+    
     const currentSessionId = activeSessionId || paramSessionId
     try {
       const token = localStorage.getItem('token')
@@ -687,7 +732,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
         await fetch(`${API}/api/sessions/end`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ sessionId: currentSessionId })
+          body: JSON.stringify({ sessionId: currentSessionId, currentMessages: finalMessages })
         })
       }
     } catch (err) {
@@ -698,6 +743,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
   }
 
   const handlePauseAndExit = async () => {
+    stopListening()
     const currentSessionId = activeSessionId || paramSessionId
     try {
       const token = localStorage.getItem('token')
@@ -803,6 +849,12 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
               <span>🎙️ Voice Delivery Metrics</span>
               <span className="text-[9px] text-purple-600 font-[700]">LIVE</span>
             </p>
+            {!isSessionStarted ? (
+              <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-4 text-center">
+                <p className="text-[11px] text-[#94A3B8] font-[600]">🎙️ Start speaking to see live metrics</p>
+              </div>
+            ) : (
+            <>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               <div className="bg-purple-50/60 border border-purple-100 p-2 rounded-xl text-center">
                 <p className="text-[9px] font-[700] text-purple-600 uppercase">Pace (WPM)</p>
@@ -825,6 +877,8 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
                 <div className="h-full bg-blue-400 flex-1"></div>
               </div>
             </div>
+            </>
+            )}
           </div>
 
           <div className="space-y-2 pt-3 border-t border-gray-100">
@@ -873,6 +927,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
               )}
             </div>
 
+            {isSessionStarted ? (
             <div className="grid grid-cols-4 gap-2">
               <div className="bg-blue-50/60 border border-blue-100 p-2 rounded-lg text-center">
                 <p className="text-[10px] font-[600] text-blue-600">Alert</p>
@@ -891,6 +946,11 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
                 <p className="text-sm font-[800] text-[#1E293B]">{toneDistribution.wise}%</p>
               </div>
             </div>
+            ) : (
+            <div className="flex items-center justify-center h-10 text-[11px] text-[#94A3B8] font-[600]">
+              <span className="mr-2">💬</span> Tone analysis will appear after your first message
+            </div>
+            )}
           </div>
 
           {/* Transcript Chat Stream */}
@@ -1020,7 +1080,13 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
             <div className="space-y-3">
               <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">REAL-TIME COACHING INSIGHTS</p>
               <div className="space-y-2 text-xs">
-                {coachingInsights.map(insight => (
+                {coachingInsights.length === 0 ? (
+                  <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-5 text-center">
+                    <p className="text-2xl mb-2">🤖</p>
+                    <p className="text-[11px] font-[700] text-[#1E293B]">Waiting for conversation...</p>
+                    <p className="text-[10px] text-[#94A3B8] mt-1">AI coaching tips will appear here as you speak.</p>
+                  </div>
+                ) : coachingInsights.map(insight => (
                   <div
                     key={insight.id}
                     className={`p-3 rounded-xl space-y-1 border shadow-sm ${
