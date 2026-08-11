@@ -17,6 +17,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
   const [scenario, setScenario] = useState<any>(null)
   const [session, setSession] = useState<any>(null)
   const [assignmentMode, setAssignmentMode] = useState<string | null>(null)
+  const [attemptsLimitReached, setAttemptsLimitReached] = useState(false)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
 
@@ -47,6 +48,9 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
               const assignData = await assignRes.json()
               if (assignData.training_mode) {
                 setAssignmentMode(assignData.training_mode)
+              }
+              if (assignData.is_limit_reached || assignData.isLimitReached) {
+                setAttemptsLimitReached(true)
               }
             }
           } catch (e) {}
@@ -89,7 +93,11 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
         const targetUrl = `/rep/train/${scenarioId}?sessionId=${data.sessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}${modeParam}`
         router.push(targetUrl)
       } else {
-        alert('Failed to start session. Please try again.')
+        const errData = await res.json().catch(() => ({}))
+        if (res.status === 403) {
+          setAttemptsLimitReached(true)
+        }
+        alert(errData.error || 'Failed to start session. Please try again.')
         setStarting(false)
       }
     } catch (err) {
@@ -463,13 +471,15 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
           </button>
           <button
             onClick={handleStartOrCreateSession}
-            disabled={starting}
-            className="px-7 py-2.5 rounded-xl bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] shadow-md transition-colors flex items-center gap-2 disabled:opacity-50"
+            disabled={starting || (!sessionId && attemptsLimitReached)}
+            className="px-7 py-2.5 rounded-xl bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] shadow-md transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {starting ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (!sessionId && attemptsLimitReached) ? (
+              <span>🚫 Attempts Limit Reached</span>
             ) : (
-              <span>{isResuming ? '▷ Resume Training Session' : '▷ Start Training Session'}</span>
+              <span>{sessionId ? '▷ Resume Training Session' : '▷ Start Training Session'}</span>
             )}
           </button>
         </div>

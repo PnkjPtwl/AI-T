@@ -1,4 +1,5 @@
 import { supabase } from '../db/supabase'
+import { getModeLimit, normalizeModeDisplay } from '../utils/modeHelper'
 
 /**
  * POST /api/manager/assignments
@@ -143,8 +144,13 @@ export const getManagerAssignments = async (req: any, res: any) => {
         bestScore = Math.max(...completedSess.map(s => s.feedback_json?.overall_score || 0))
       }
 
+      const modeDisplay = normalizeModeDisplay(assign.training_mode || scenario.training_mode)
+      const maxAttempts = getModeLimit(assign.training_mode || scenario.training_mode)
+
       return {
         id: assign.id,
+        rep_id: assign.rep_id,
+        scenario_id: assign.scenario_id,
         repName: rep.name || 'Pankaj Kumar',
         repRole: rep.role || 'Sales Executive',
         teamName: rep.team_name || 'Enterprise',
@@ -154,12 +160,14 @@ export const getManagerAssignments = async (req: any, res: any) => {
         difficulty: scenario.difficulty || 'Advanced',
         priority: assign.priority || 'High',
         status: assign.status || 'In Progress',
-        trainingMode: assign.training_mode || scenario.training_mode || 'Coach Mode',
+        trainingMode: modeDisplay,
         assignedOn: assign.created_at ? new Date(assign.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Jul 1, 2026',
         dueDate: assign.deadline ? new Date(assign.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Jul 16, 2026',
         assignedBy: 'Manager',
         score: bestScore,
         attemptsCount: repSessions.length,
+        maxAttempts,
+        isLimitReached: repSessions.length >= maxAttempts,
         liveProgressPct: latestSess && !latestSess.completed_at ? (latestSess.progress_percentage || 74) : null
       }
     })
@@ -226,11 +234,17 @@ export const getAssignmentDetails = async (req: any, res: any) => {
       }
     ]
 
+    const modeDisplay = normalizeModeDisplay(assign.training_mode || assign.scenario?.training_mode)
+    const maxAttempts = getModeLimit(assign.training_mode || assign.scenario?.training_mode)
+
     res.json({
       assignmentId: assign.id,
       repName: assign.rep?.name || 'Pankaj Kumar',
       repRole: 'Sales Executive',
       status: assign.status || 'In Progress',
+      trainingMode: modeDisplay,
+      maxAttempts,
+      isLimitReached: repSessions.length >= maxAttempts,
       personaName: assign.scenario?.contact_title || 'Sarah Chen',
       company: assign.scenario?.contact_company || 'Acme Technologies',
       scenarioTitle: assign.scenario?.persona_name || 'Technical Discovery',
@@ -242,7 +256,9 @@ export const getAssignmentDetails = async (req: any, res: any) => {
       industry: assign.scenario?.industry || 'SaaS',
       progress: {
         percentage: 74,
-        attemptsCount: Math.max(2, repSessions.length),
+        attemptsCount: repSessions.length,
+        maxAttempts,
+        isLimitReached: repSessions.length >= maxAttempts,
         minutesPracticed,
         bestScore
       },

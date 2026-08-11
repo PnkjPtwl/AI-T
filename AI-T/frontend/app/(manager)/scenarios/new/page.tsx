@@ -83,7 +83,9 @@ export default function NewScenarioPage() {
   })
 
   const [selectedAccount, setSelectedAccount] = useState<string>('')
-  const [kbAccounts, setKbAccounts] = useState<Array<{ id: string; name: string }>>([])
+  const [kbAccounts, setKbAccounts] = useState<Array<{ id: string; name: string }>>([
+    { id: 'phoenix_automotive', name: 'Phoenix Automotive (Live HubSpot CRM + Gmail RAG)' }
+  ])
 
   useEffect(() => {
     if (loadScenarioId) {
@@ -125,7 +127,11 @@ export default function NewScenarioPage() {
     if (!token) return
     fetch(`${API}/api/scenarios/kb-accounts`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => (r.ok ? r.json() : null))
-      .then(data => { if (data?.accounts?.length) setKbAccounts(data.accounts) })
+      .then(data => {
+        if (data?.accounts?.length) {
+          setKbAccounts(data.accounts)
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -340,14 +346,27 @@ export default function NewScenarioPage() {
   const handleAccountSelect = (accId: string) => {
     setSelectedAccount(accId)
     if (accId) {
-      const acc = kbAccounts.find(a => a.id === accId) || { name: accId }
-      const accName = acc.name
-      setFormData(prev => ({
-        ...prev,
-        persona_name: prev.persona_name || accName,
-        contact_company: prev.contact_company || accName,
-        context_text: prev.context_text || `Sales roleplay session with ${accName} regarding their business needs and goals.`
-      }))
+      if (accId === 'phoenix_automotive' || accId.includes('phoenix')) {
+        setFormData(prev => ({
+          ...prev,
+          persona_name: prev.persona_name || 'Sarah Thompson',
+          contact_title: prev.contact_title || 'Project Manager',
+          contact_company: 'Phoenix Automotive',
+          context_text: prev.context_text || 'Evaluating Relanto AI SalesCoach for Brake System Line 4 expansion & quality inspection. Requires ISO 26262 safety compliance, real-time sensor telemetry latency under 45ms, and under 14-month ROI.',
+          target_skills: prev.target_skills || 'Needs Discovery, Value Proposition, Technical Audit Handling, ROI Justification',
+          personality_traits: prev.personality_traits || 'Analytical, Detail-oriented, Skeptical, Safety & Compliance focused',
+          objection_style: prev.objection_style || 'Demands proof of sub-14 month ROI and ISO 26262 compliance before signing software contract.'
+        }))
+      } else {
+        const acc = kbAccounts.find(a => a.id === accId) || { name: accId }
+        const accName = acc.name
+        setFormData(prev => ({
+          ...prev,
+          persona_name: prev.persona_name || accName,
+          contact_company: prev.contact_company || accName,
+          context_text: prev.context_text || `Sales roleplay session with ${accName} regarding their business needs and goals.`
+        }))
+      }
     }
   }
 
@@ -394,16 +413,31 @@ export default function NewScenarioPage() {
       {/* ── STEP 1: BASICS ──────────────────────────────────────────────────────── */}
       {step === 1 && (
         <div className="bg-white rounded-2xl border border-gray-200/80 p-8 space-y-6 shadow-sm">
-          {kbAccounts.length > 0 && (
-            <div className="bg-purple-50/40 border border-purple-200/60 rounded-2xl p-4 space-y-2">
-              <span className="font-[800] text-purple-900 text-xs flex items-center gap-1.5">✨ Auto-fill from Knowledge Base</span>
-              <select value={selectedAccount} onChange={e => handleAccountSelect(e.target.value)}
-                className="w-full h-10 bg-white border border-purple-200 rounded-xl px-3 text-xs text-[#1E293B] focus:outline-none">
-                <option value="">Select account (optional)</option>
-                {kbAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
+          <div className="bg-gradient-to-r from-purple-50/80 to-indigo-50/80 border border-purple-200 rounded-2xl p-5 space-y-2.5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-[800] text-purple-950 text-xs flex items-center gap-2">
+                ✨ Account Knowledge Base / RAG Source
+              </span>
+              <span className="text-[10px] font-[700] text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full border border-purple-200">
+                Live CRM & Gmail
+              </span>
             </div>
-          )}
+            <select
+              value={selectedAccount}
+              onChange={e => handleAccountSelect(e.target.value)}
+              className="w-full h-11 bg-white border border-purple-300 rounded-xl px-3.5 text-xs text-[#1E293B] font-[600] focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+            >
+              <option value="">New Custom Persona (No RAG Knowledge Base)</option>
+              {kbAccounts.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-purple-700 font-[500]">
+              Selecting an account grounds persona responses, evaluation metrics, and suggested follow-ups in live HubSpot CRM records & Gmail email threads.
+            </p>
+          </div>
 
           <div className="space-y-4 pt-2">
             <h3 className="font-[800] text-[#1E293B] uppercase text-[10px] tracking-wider">PERSONA DETAILS</h3>

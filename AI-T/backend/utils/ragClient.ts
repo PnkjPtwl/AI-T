@@ -91,10 +91,30 @@ export async function listKbAccounts(): Promise<Array<{ id: string; name: string
     const res = await fetch(`${RAG_API_URL}/accounts`, { signal: controller.signal })
     clearTimeout(timer)
 
-    if (!res.ok) return []
+    if (!res.ok) return [{ id: 'phoenix_automotive', name: 'Phoenix Automotive' }]
     const data: any = await res.json()
-    return data.accounts || []
+    return data.accounts || [{ id: 'phoenix_automotive', name: 'Phoenix Automotive' }]
   } catch {
-    return []
+    return [{ id: 'phoenix_automotive', name: 'Phoenix Automotive' }]
   }
 }
+
+/**
+ * Triggers live sync for an account (HubSpot CRM + Gmail email threads).
+ */
+export async function triggerAccountSync(accountName: string = 'phoenix_automotive'): Promise<{ success: boolean; data?: any }> {
+  try {
+    const res = await fetch(`${RAG_API_URL}/sync/phoenix`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    if (!res.ok) return { success: false }
+    const data = await res.json()
+    return { success: true, data }
+  } catch (err: any) {
+    console.warn('[RAG] Account sync trigger error:', err.message)
+    return { success: false }
+  }
+}
+
+

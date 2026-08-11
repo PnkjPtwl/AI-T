@@ -354,8 +354,14 @@ export default function RepDashboard() {
             return (
               <div
                 key={assign.id}
-                onClick={() => router.push(`/rep/train/${assign.scenarioId}/briefing?${assign.id ? `assignmentId=${assign.id}&` : ''}mode=${encodeURIComponent(assign.trainingMode || 'Coach Mode')}`)}
-                className="bg-white rounded-[20px] border border-gray-200/80 p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between space-y-5 group"
+                onClick={() => {
+                  if (assign.isLimitReached && assign.status !== 'In Progress') {
+                    alert(`Maximum attempt limit (${assign.maxAttempts}) reached for ${assign.trainingMode || 'Exam Mode'}. You cannot take this session again.`)
+                    return
+                  }
+                  router.push(`/rep/train/${assign.scenarioId}/briefing?${assign.id ? `assignmentId=${assign.id}&` : ''}mode=${encodeURIComponent(assign.trainingMode || 'Coach Mode')}`)
+                }}
+                className={`bg-white rounded-[20px] border border-gray-200/80 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-5 group ${assign.isLimitReached && assign.status !== 'In Progress' ? 'opacity-85 cursor-not-allowed' : 'cursor-pointer'}`}
               >
                 <div className="space-y-4">
                   {/* Top Avatar & Status Header */}
@@ -420,7 +426,15 @@ export default function RepDashboard() {
                 <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-[#64748B]">
                   <span>{assign.lastAttemptText}</span>
                   <span className="text-purple-600 font-[700] group-hover:translate-x-1 transition-transform">
-                    {assign.status === 'Completed' ? 'Retake →' : assign.status === 'In Progress' ? 'Resume →' : 'Start →'}
+                    {assign.isLimitReached && assign.status !== 'In Progress' ? (
+                      <span className="text-gray-400 font-[600]">Limit Reached ({assign.attemptsCount ?? 1}/{assign.maxAttempts ?? 1})</span>
+                    ) : assign.status === 'Completed' ? (
+                      `Retake (${assign.attemptsCount ?? 0}/${assign.maxAttempts ?? 5}) →`
+                    ) : assign.status === 'In Progress' ? (
+                      'Resume →'
+                    ) : (
+                      `Start (${assign.attemptsCount ?? 0}/${assign.maxAttempts ?? 5}) →`
+                    )}
                   </span>
                 </div>
               </div>

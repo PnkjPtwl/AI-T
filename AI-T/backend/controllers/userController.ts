@@ -1,4 +1,5 @@
 import { supabase } from '../db/supabase'
+import { getModeLimit } from '../utils/modeHelper'
 
 export const getMe = async (req: any, res: any) => {
   // req.user is attached by the authenticate middleware
@@ -1101,6 +1102,11 @@ export const getMyAssignments = async (req: any, res: any) => {
       }
     }
 
+    const { data: repSessionsData } = await supabase
+      .from('training_sessions')
+      .select('id, assignment_id, rep_id, scenario_id')
+      .eq('rep_id', repId);
+
     const now = new Date();
     const assignments = assignmentsList.map((a: any) => {
       const deadlineDate = a.deadline ? new Date(a.deadline) : null;
@@ -1116,10 +1122,22 @@ export const getMyAssignments = async (req: any, res: any) => {
       const personaName = scenario.persona_name || scenario.contact_title || 'Prospect';
       const company = scenario.contact_company || 'Company';
 
+      const matchedSessions = (repSessionsData || []).filter((s: any) =>
+        s.assignment_id === a.id || (s.rep_id === a.rep_id && s.scenario_id === a.scenario_id)
+      );
+      const attemptsCount = matchedSessions.length;
+      const maxAttempts = getModeLimit(a.training_mode);
+
       return {
         ...a,
         status,
         score,
+        attempts_count: attemptsCount,
+        attemptsCount,
+        max_attempts: maxAttempts,
+        maxAttempts,
+        is_limit_reached: attemptsCount >= maxAttempts,
+        isLimitReached: attemptsCount >= maxAttempts,
         training_mode: normalizeModeForDisplay(a.training_mode),
         assigned_by: 'Manager',
         persona_name: personaName,
@@ -1189,6 +1207,10 @@ export const getTeamAssignments = async (req: any, res: any) => {
       }
     }
 
+    const { data: teamSessionsData } = await supabase
+      .from('training_sessions')
+      .select('id, assignment_id, rep_id, scenario_id');
+
     const now = new Date();
     const transformed = assignmentsList.map((a: any) => {
       const rep = repMap[a.rep_id] || {};
@@ -1206,6 +1228,12 @@ export const getTeamAssignments = async (req: any, res: any) => {
       const company = scenario.contact_company || 'Company';
       const scenarioName = scenario.persona_name || scenario.contact_title || 'Training Scenario';
 
+      const matchedSessions = (teamSessionsData || []).filter((s: any) =>
+        s.assignment_id === a.id || (s.rep_id === a.rep_id && s.scenario_id === a.scenario_id)
+      );
+      const attemptsCount = matchedSessions.length;
+      const maxAttempts = getModeLimit(a.training_mode);
+
       return {
         id: a.id,
         rep_id: a.rep_id,
@@ -1217,6 +1245,12 @@ export const getTeamAssignments = async (req: any, res: any) => {
         created_at: a.created_at,
         training_mode: normalizeModeForDisplay(a.training_mode),
         score,
+        attempts_count: attemptsCount,
+        attemptsCount,
+        max_attempts: maxAttempts,
+        maxAttempts,
+        is_limit_reached: attemptsCount >= maxAttempts,
+        isLimitReached: attemptsCount >= maxAttempts,
         rep_name: rep.name || 'Sales Rep',
         rep_role: rep.role || 'Sales Representative',
         persona_name: personaName,

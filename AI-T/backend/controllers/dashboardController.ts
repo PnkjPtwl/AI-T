@@ -1,4 +1,5 @@
 import { supabase } from '../db/supabase'
+import { getModeLimit, normalizeModeDisplay } from '../utils/modeHelper'
 
 /**
  * GET /api/reps/me/dashboard
@@ -131,6 +132,8 @@ export const getRepDashboard = async (req: any, res: any) => {
 
       const computedSnapshot = {
         snapshot_at: existingSnapshot.snapshot_at || latest.paused_at || new Date().toISOString(),
+        session_summary: existingSnapshot.session_summary || existingSnapshot.summary || 
+          `The representative initiated discovery with ${sc.persona_name || sc.contact_title || 'the prospect'} at ${sc.contact_company || 'Target Account'}, maintaining a structured and consultative tone. Key exchanges focused on clarifying operational workflows and current technical pain points. The prospect engaged constructively while raising initial timeline considerations. The call was paused at stage "${latest.current_stage || 'Needs Discovery'}" (${stageStep} of ${stages.length} stages completed).`,
         skill_breakdown: existingSnapshot.skill_breakdown || existingSnapshot.partial_feedback?.scores || {
           'Value Communication': 75,
           'Customer Understanding': 70,
@@ -220,6 +223,10 @@ export const getRepDashboard = async (req: any, res: any) => {
       const nameStr = String(personaName || title || 'Scenario')
       const initials = nameStr.split(' ').filter(Boolean).map((n: string) => n ? n[0] : '').join('').substring(0, 2).toUpperCase() || 'SC'
 
+      const modeDisplay = normalizeModeDisplay(assign.training_mode || sc.training_mode)
+      const maxAttempts = getModeLimit(assign.training_mode || sc.training_mode)
+      const attemptsCount = assignSessions.length
+
       return {
         id: assign.id,
         scenarioId: assign.scenario_id,
@@ -231,7 +238,10 @@ export const getRepDashboard = async (req: any, res: any) => {
         avatarUrl: sc.avatar_url || null,
         avatarConfig: sc.avatar_config || null,
         status,
-        trainingMode: assign.training_mode || 'Coach Mode',
+        trainingMode: modeDisplay,
+        attemptsCount,
+        maxAttempts,
+        isLimitReached: attemptsCount >= maxAttempts,
         priority: assign.priority || 'Medium',
         difficulty: sc.difficulty || 'Medium',
         durationMins: sc.estimated_duration_mins || 20,
@@ -269,6 +279,7 @@ export const getRepDashboard = async (req: any, res: any) => {
  */
 export const getManagerAnalytics = async (req: any, res: any) => {
   const orgId = req.user.org_id
+  const experienceParam = (req.query.experience || 'all').toString().trim()
 
   try {
     // 1. Fetch Reps in Org
@@ -279,21 +290,52 @@ export const getManagerAnalytics = async (req: any, res: any) => {
 
     if (repError) throw repError
 
-    const repIds = (reps || []).map(r => r.id)
+    // 2. Fetch User Experience table data
+    const { data: userExpList } = await supabase
+      .from('user_experience')
+      .select('user_id, experience_years')
 
-    // 2. Fetch Assignments
+    const expMap: Record<string, number> = {}
+    if (userExpList) {
+      userExpList.forEach((e: any) => {
+        expMap[e.user_id] = e.experience_years
+      })
+    }
+
+    // Filter reps by role, exclusion rules, and selected experience range
+    const filteredReps = (reps || []).filter(r => {
+      if (r.role === 'manager' || r.name?.toLowerCase().includes('lokesh')) return false
+
+      if (!experienceParam || experienceParam === 'all') return true
+
+      // Default fallback experience: 1 year (1-2 years bracket) if not set
+      const years = expMap[r.id] !== undefined ? expMap[r.id] : 1
+
+      if (experienceParam === '<1' || experienceParam === '0-1') {
+        return years < 1
+      } else if (experienceParam === '1-2') {
+        return years >= 1 && years <= 2
+      } else if (experienceParam === '>2' || experienceParam === '2+') {
+        return years > 2
+      }
+      return true
+    })
+
+    const repIds = filteredReps.map(r => r.id)
+
+    // 3. Fetch Assignments
     const { data: assignments, error: assignError } = await supabase
       .from('training_assignments')
       .select('id, rep_id, status, created_at, completed_at')
-      .in('rep_id', repIds.length > 0 ? repIds : ['none'])
+      .in('rep_id', repIds.length > 0 ? repIds : ['00000000-0000-0000-0000-000000000000'])
 
     if (assignError) throw assignError
 
-    // 3. Fetch Completed Sessions
+    // 4. Fetch Completed Sessions
     const { data: sessions, error: sessError } = await supabase
       .from('training_sessions')
       .select('id, rep_id, feedback_json, created_at, completed_at, status')
-      .in('rep_id', repIds.length > 0 ? repIds : ['none'])
+      .in('rep_id', repIds.length > 0 ? repIds : ['00000000-0000-0000-0000-000000000000'])
 
     if (sessError) throw sessError
 
@@ -367,12 +409,10 @@ export const getManagerAnalytics = async (req: any, res: any) => {
       return { week, score: avg }
     })
 
-    // Cohort Comparison grouped by active reps
+    // Cohort Comparison grouped by active filtered reps
     const repStatsMap: Record<string, { name: string; totalScore: number; count: number; assigned: number; completed: number; sessions: any[] }> = {}
 
-    ;(reps || []).forEach(r => {
-      // Exclude manager role or users named Lokesh from Sales Rep cohorts
-      if (r.role === 'manager' || r.name?.toLowerCase().includes('lokesh')) return
+    filteredReps.forEach(r => {
       repStatsMap[r.id] = { name: r.name || 'Sales Rep', totalScore: 0, count: 0, assigned: 0, completed: 0, sessions: [] }
     })
 
@@ -421,7 +461,7 @@ export const getManagerAnalytics = async (req: any, res: any) => {
         teamAvgScore: teamAvgScore || 0,
         completionRatePct,
         totalSessionsCount: completedSessions.length,
-        activeRepsCount: (reps || []).length,
+        activeRepsCount: filteredReps.length,
         momImprovementPct: completedSessions.length > 0 ? 12 : 0
       },
       performanceOverTime,

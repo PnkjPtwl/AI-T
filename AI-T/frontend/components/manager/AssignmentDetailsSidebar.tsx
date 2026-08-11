@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { useRouter } from 'next/navigation'
 
 interface AssignmentDetailsSidebarProps {
   isOpen: boolean
@@ -19,6 +20,8 @@ export default function AssignmentDetailsSidebar({
   onReassign,
   onMarkComplete
 }: AssignmentDetailsSidebarProps) {
+  const router = useRouter()
+
   if (!isOpen || !assignment) return null
 
   // Defaults matching Figma media__1785585971677.png
@@ -36,10 +39,13 @@ export default function AssignmentDetailsSidebar({
   const assignedBy = 'Lokesh (Manager)'
   const industry = assignment.industry || 'Tech'
 
-  const scorePct = assignment.score ? Math.round(assignment.score) : (assignment.score_pct || null)
-  const attemptsCount = assignment.attempts_count || (scorePct ? 1 : 0)
-  const timePracticedMins = assignment.time_practiced_mins || (scorePct ? 12 : 0)
-  const bestScore = assignment.score ? Math.round(assignment.score) : (assignment.best_score || null)
+  const scorePct = assignment.score ? Math.round(assignment.score) : (assignment.score_pct || assignment.progress?.bestScore || null)
+  const attemptsCount = assignment.attempts_count ?? assignment.attemptsCount ?? assignment.progress?.attemptsCount ?? (scorePct ? 1 : 0)
+  const trainingMode = assignment.training_mode || assignment.trainingMode || 'Coach Mode'
+  const modeLower = trainingMode.toLowerCase()
+  const maxAttempts = assignment.max_attempts || assignment.maxAttempts || assignment.progress?.maxAttempts || (modeLower.includes('exam') ? 1 : modeLower.includes('learning') ? 3 : 5)
+  const timePracticedMins = assignment.time_practiced_mins || assignment.progress?.minutesPracticed || (scorePct ? 12 : 0)
+  const bestScore = assignment.score ? Math.round(assignment.score) : (assignment.best_score || assignment.progress?.bestScore || null)
 
   // Helper to parse strings or arrays safely
   const parseList = (val: any, fallback: string[]): string[] => {
@@ -94,12 +100,20 @@ export default function AssignmentDetailsSidebar({
           </div>
 
           <div className="mt-4 flex items-center justify-between bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-xs">
-            <div className="flex items-center gap-3">
+            <div 
+              className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 p-1.5 -m-1.5 rounded-xl transition-colors"
+              onClick={() => {
+                if (assignment.rep_id) {
+                  router.push(`/reps/${assignment.rep_id}`)
+                  onClose()
+                }
+              }}
+            >
               <div className="w-10 h-10 rounded-full bg-[#1E1B4B] text-white font-[800] flex items-center justify-center text-xs">
-                PK
+                {repName.substring(0, 2).toUpperCase()}
               </div>
               <div>
-                <h3 className="font-[800] text-[#1E293B] text-xs">{repName}</h3>
+                <h3 className="font-[800] text-[#1E293B] text-xs hover:text-blue-600 transition-colors">{repName}</h3>
                 <p className="text-[10px] text-[#64748B]">{repRole}</p>
               </div>
             </div>
@@ -165,8 +179,10 @@ export default function AssignmentDetailsSidebar({
               </div>
 
               <div>
-                <p className="text-base font-[800] text-[#1E293B]">{attemptsCount}</p>
-                <p className="text-[10px] font-[600] text-[#64748B]">Attempts</p>
+                <p className="text-base font-[800] text-[#1E293B]">
+                  {attemptsCount} <span className="text-xs font-[600] text-[#64748B]">/ {maxAttempts}</span>
+                </p>
+                <p className="text-[10px] font-[600] text-[#64748B]">Attempts ({trainingMode})</p>
               </div>
 
               <div>

@@ -112,3 +112,58 @@ HubSpot
             "object_id": deal_data.get("id", "")
         }
         return Document(page_content=md.strip(), metadata=metadata)
+
+    @staticmethod
+    def map_note(note_data: dict, company_name: str) -> Document:
+        props = note_data.get("properties", {})
+        body = props.get("hs_note_body", "No note content")
+        timestamp = props.get("hs_timestamp", "")
+        md = f"""# CRM Account Note — {company_name}
+
+Timestamp
+{timestamp}
+
+Note Content
+{body}
+
+CRM Source
+HubSpot
+"""
+        metadata = {
+            "source": "hubspot",
+            "company": company_name.lower(),
+            "document_type": "crm_note",
+            "crm_object": "note",
+            "object_id": note_data.get("id", "")
+        }
+        return Document(page_content=md.strip(), metadata=metadata)
+
+    @staticmethod
+    def map_call(call_data: dict, company_name: str) -> Document:
+        props = call_data.get("properties", {})
+        title = props.get("hs_call_title", "Call Log")
+        body = props.get("hs_call_body", "No call notes available")
+        duration = props.get("hs_call_duration", "")
+        md = f"""# CRM Sales Call Log — {company_name}
+
+Call Title
+{title}
+
+Duration (seconds)
+{duration}
+
+Call Summary & Key Takeaways
+{body}
+
+CRM Source
+HubSpot
+"""
+        metadata = {
+            "source": "hubspot",
+            "company": company_name.lower(),
+            "document_type": "crm_call",
+            "crm_object": "call",
+            "object_id": call_data.get("id", "")
+        }
+        return Document(page_content=md.strip(), metadata=metadata)
+

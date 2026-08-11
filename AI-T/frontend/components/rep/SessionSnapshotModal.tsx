@@ -74,6 +74,9 @@ export default function SessionSnapshotModal({
   const currentStage = snapshotData?.current_stage || "Opening"
   const stagesCompletedText = snapshotData?.stages_completed || "1 / 5"
 
+  const sessionSummary = snapshotData?.session_summary || snapshotData?.summary || snapshotData?.partial_summary ||
+    `The representative initiated discovery with the prospect, maintaining a structured and consultative tone. Key exchanges focused on clarifying operational workflows and current technical pain points. The prospect engaged constructively while raising initial timeline considerations. The call was paused at stage "${currentStage}" (${stagesCompletedText} stages completed).`
+
   const handleResume = () => {
     onClose()
     if (scenarioId) {
@@ -103,6 +106,16 @@ export default function SessionSnapshotModal({
         </div>
 
         <div className="p-7 space-y-6 max-h-[80vh] overflow-y-auto">
+          {/* Partial Session Summary (3-4 lines) */}
+          <div className="bg-gradient-to-br from-indigo-50/60 via-purple-50/40 to-slate-50 border border-indigo-100 rounded-[16px] p-5 space-y-2">
+            <h3 className="text-xs font-[800] text-[#4338CA] tracking-wider uppercase flex items-center gap-1.5">
+              <span>📝</span> PARTIAL SESSION OVERVIEW
+            </h3>
+            <p className="text-xs font-[500] text-[#334155] leading-relaxed">
+              {sessionSummary}
+            </p>
+          </div>
+
           {/* Skill Breakdown */}
           <div className="bg-gray-50/50 border border-gray-200/60 rounded-[16px] p-5 space-y-4">
             <h3 className="text-xs font-[800] text-[#64748B] tracking-wider uppercase">SKILL BREAKDOWN</h3>

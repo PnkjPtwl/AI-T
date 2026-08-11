@@ -182,6 +182,13 @@ export default function TrainingCenter() {
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                           Report
                         </button>
+                      ) : (a.is_limit_reached || a.isLimitReached) ? (
+                        <button
+                          disabled
+                          className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-gray-200 text-gray-500 text-sm font-semibold rounded-lg cursor-not-allowed opacity-75"
+                        >
+                          Limit Reached ({a.attempts_count ?? 1}/{a.max_attempts ?? 1})
+                        </button>
                       ) : (
                         <button
                           onClick={() => router.push(`/rep/train/${scenario.id}/briefing?assignmentId=${a.id}`)}

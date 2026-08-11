@@ -7,13 +7,15 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 export default function TeamAnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [analytics, setAnalytics] = useState<any>(null)
+  const [selectedExperience, setSelectedExperience] = useState<string>('all')
 
   useEffect(() => {
     const fetchAnalytics = async () => {
+      setLoading(true)
       try {
         const token = localStorage.getItem('token')
         if (!token) return
-        const res = await fetch(`${API}/api/manager/analytics`, {
+        const res = await fetch(`${API}/api/manager/analytics?experience=${encodeURIComponent(selectedExperience)}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
         if (res.ok) {
@@ -26,7 +28,7 @@ export default function TeamAnalyticsPage() {
       }
     }
     fetchAnalytics()
-  }, [])
+  }, [selectedExperience])
 
   const handleExportCSV = () => {
     if (!analytics) return
@@ -60,7 +62,7 @@ export default function TeamAnalyticsPage() {
     window.print()
   }
 
-  if (loading) {
+  if (loading && !analytics) {
     return (
       <div className="h-[70vh] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#1E1B4B]"></div>
@@ -126,7 +128,24 @@ export default function TeamAnalyticsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 print:hidden">
+        <div className="flex items-center gap-3 print:hidden">
+          {/* Experience Filter Selector */}
+          <div className="flex items-center gap-2 bg-white border border-gray-200/90 rounded-xl px-3 py-2 shadow-xs hover:border-indigo-300 transition-colors">
+            <span className="text-[11px] font-[700] text-[#64748B] flex items-center gap-1">
+              <span>🎯</span> Experience:
+            </span>
+            <select
+              value={selectedExperience}
+              onChange={(e) => setSelectedExperience(e.target.value)}
+              className="bg-transparent font-[800] text-[#1E293B] text-xs focus:outline-none cursor-pointer"
+            >
+              <option value="all">All Experience</option>
+              <option value="<1">&lt; 1 Year</option>
+              <option value="1-2">1 - 2 Years</option>
+              <option value=">2">&gt; 2 Years</option>
+            </select>
+          </div>
+
           <button 
             onClick={handleExportPDF}
             className="px-4 py-2 bg-white border border-gray-200 rounded-xl font-[700] text-[#334155] shadow-xs hover:bg-gray-50 flex items-center gap-1.5 cursor-pointer"
@@ -142,8 +161,8 @@ export default function TeamAnalyticsPage() {
         </div>
       </div>
 
-      {/* Top 5 KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      {/* Top 4 KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
           <p className="text-[10px] font-[800] text-[#64748B] uppercase">TEAM AVG SCORE</p>
           <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{summary.teamAvgScore}%</h3>
@@ -162,11 +181,6 @@ export default function TeamAnalyticsPage() {
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
           <p className="text-[10px] font-[800] text-[#64748B] uppercase">ACTIVE REPS</p>
           <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{summary.activeRepsCount}</h3>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <p className="text-[10px] font-[800] text-[#64748B] uppercase">MOM IMPROVEMENT</p>
-          <h3 className="text-3xl font-[800] text-green-600 mt-2">+{summary.momImprovementPct}%</h3>
         </div>
       </div>
 

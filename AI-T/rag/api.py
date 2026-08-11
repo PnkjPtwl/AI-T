@@ -159,6 +159,47 @@ async def list_accounts():
         }
 
 
+from rag.tracker.sync_agent import get_phoenix_sync_agent
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Initializing Phoenix Automotive Background Sync Agent...")
+    agent = get_phoenix_sync_agent()
+    # Run initial sync and start background polling worker (every 10 mins)
+    agent.start_background_tracker(interval_seconds=600)
+
+
+@app.post("/sync/phoenix")
+async def sync_phoenix():
+    """
+    Triggers an immediate live sync for Phoenix Automotive.
+    Captures new/updated CRM records from HubSpot and email threads from Gmail,
+    embeds them, and updates the Supabase Vector Store.
+    """
+    try:
+        agent = get_phoenix_sync_agent()
+        status = agent.sync_now()
+        return {"success": True, "message": "Phoenix Automotive sync completed", "data": status}
+    except Exception as e:
+        logger.exception("Failed to sync Phoenix Automotive")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/sync/status")
+async def sync_status():
+    """
+    Returns the live sync status, document count, and last sync timestamp for Phoenix Automotive.
+    """
+    agent = get_phoenix_sync_agent()
+    return agent.get_status()
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_loaded": _retriever is not None}
+    agent = get_phoenix_sync_agent()
+    return {
+        "status": "ok",
+        "model_loaded": _retriever is not None,
+        "sync_agent": agent.get_status()
+    }
+

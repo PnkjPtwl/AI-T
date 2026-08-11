@@ -5,6 +5,7 @@ import { generateEvaluationPrompt, getScorecardScoreKeys, generateConversationAn
 import { getSecret } from '../lib/secrets'
 import { searchKnowledgeBase, formatRagContext } from '../utils/ragClient'
 import { calculateFillerRatio, calculateWPM, calculateTalkListenRatio, calculateQuestionCount, evaluateTriggers, LiveMetrics, CoachTrigger } from '../utils/mechanicsCalculator'
+import { getModeLimit, normalizeModeDisplay } from '../utils/modeHelper'
 
 const safeUpdateTrainingSession = async (sessionId: string, sessionUpdates: any) => {
   const { error } = await supabase
@@ -156,6 +157,35 @@ export const startPractice = async (req: any, res: any) => {
       console.log(`[AssignmentLifecycle] Existing session ${existingSessionId} was not found (likely deleted). Creating new session.`);
       existingSessionId = null;
     }
+  }
+
+  // Check strict attempt limits before creating a new session
+  const modeLimit = getModeLimit(assignmentTrainingMode);
+  let existingAttemptsCount = 0;
+  if (targetAssignmentId) {
+    const { count } = await supabase
+      .from('training_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('assignment_id', targetAssignmentId);
+    existingAttemptsCount = count || 0;
+  } else {
+    const { count } = await supabase
+      .from('training_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('rep_id', repId)
+      .eq('scenario_id', scenarioId);
+    existingAttemptsCount = count || 0;
+  }
+
+  if (existingAttemptsCount >= modeLimit) {
+    const displayMode = normalizeModeDisplay(assignmentTrainingMode);
+    console.log(`[AssignmentLifecycle] Attempt limit reached (${existingAttemptsCount}/${modeLimit}) for ${displayMode}`);
+    return res.status(403).json({
+      error: `Maximum attempt limit (${modeLimit}) reached for ${displayMode}. You cannot start a new attempt.`,
+      attemptsCount: existingAttemptsCount,
+      maxAttempts: modeLimit,
+      trainingMode: displayMode
+    });
   }
 
   const insertPayload: any = {
@@ -736,12 +766,48 @@ export const liveSentiment = async (req: any, res: any) => {
     const groqApiKey = await getSecret('GROQ_API_KEY')
     const groq = new Groq({ apiKey: groqApiKey || '' })
 
+    // Check if session belongs to a RAG persona / account
+    let accountName: string | null = null
+    let kbContextStr = ''
+
+    if (sessionId) {
+      try {
+        const { data: session } = await supabase
+          .from('training_sessions')
+          .select('*, training_scenarios(*)')
+          .eq('id', sessionId)
+          .maybeSingle()
+
+        const scenario = session?.training_scenarios
+        accountName = scenario?.account_name || null
+
+        if (!accountName && scenario) {
+          const combined = `${scenario.contact_company || ''} ${scenario.persona_name || ''} ${scenario.context_text || ''}`.toLowerCase()
+          if (combined.includes('phoenix')) {
+            accountName = 'phoenix_automotive'
+          }
+        }
+
+        // ONLY for RAG Personas with a designated account_name, check RAG Knowledge Base
+        if (accountName) {
+          const searchTarget = `${customerReply || ''} ${repMessage || ''} ${accountName} deal history specs requirements pain points`.trim()
+          const ragChunks = await searchKnowledgeBase(searchTarget, accountName, 4)
+          if (ragChunks && ragChunks.length > 0) {
+            kbContextStr = formatRagContext(ragChunks, accountName)
+            console.log(`[SuggestedFollowupsRAG] Retrieved ${ragChunks.length} KB chunks for RAG persona account: ${accountName}`)
+          }
+        }
+      } catch (ragErr) {
+        console.warn('[SuggestedFollowupsRAG] RAG check failed (fallback to LLM):', ragErr)
+      }
+    }
+
     const prompt = `You are a real-time sales coaching AI assisting a Sales Rep in a live practice call with a Customer (Prospect). Analyse this single exchange and return ONLY a JSON object (no markdown).
 
 Sales Rep said: "${(repMessage || '').substring(0, 400)}"
 
 Customer replied: "${(customerReply || '').substring(0, 400)}"
-
+${kbContextStr ? `\nKNOWLEDGE BASE RETRIEVED CONTEXT (RAG PERSONA):\n${kbContextStr}\n` : ''}
 Return exactly this JSON:
 {
   "customer_sentiment": <0-100, where 0=very negative, 50=neutral, 100=very positive>,
@@ -755,6 +821,7 @@ Note: tone_distribution values must sum to 100 exactly.
 RULES FOR SUGGESTED FOLLOW-UPS (CRITICAL):
 - "suggested_followups" MUST BE 3 distinct, ready-to-send questions or statements written EXCLUSIVELY from the perspective of the Sales Rep (the user).
 - Each suggested follow-up MUST directly address the Customer's specific concern, objection, or question in their latest reply ("${(customerReply || '').substring(0, 100)}").
+${kbContextStr ? `- FOR THIS RAG PERSONA: Incorporate specific factual details, technical specs, past meeting history, or metrics from the Knowledge Base Context above into the suggested follow-ups.` : `- Provide contextually relevant, high-impact follow-up questions for the rep.`}
 - The Sales Rep will click these suggestions to send them as their next message in the chat. NEVER generate questions from the customer's perspective.
 - rep_tone_type is "good" if the rep's message was empathetic, clear, and purposeful; "warn" if it was vague, too long, too pushy, or missed the customer's concern.
 - coaching_hint must be specific to what just happened — not generic advice.`
@@ -765,7 +832,7 @@ RULES FOR SUGGESTED FOLLOW-UPS (CRITICAL):
         { role: 'system', content: 'Return only raw JSON with no markdown or backticks.' },
         { role: 'user', content: prompt }
       ],
-      max_tokens: 200,
+      max_tokens: 300,
       temperature: 0.4,
       response_format: { type: 'json_object' }
     })
@@ -833,7 +900,13 @@ export const processLiveTurn = async (req: any, res: any) => {
     }))
 
     // RAG check must happen BEFORE building system instruction so we know if context exists
-    const accountName = scenario?.account_name || null
+    let accountName = scenario?.account_name || null
+    if (!accountName && scenario) {
+      const combined = `${scenario.contact_company || ''} ${scenario.persona_name || ''} ${scenario.context_text || ''}`.toLowerCase()
+      if (combined.includes('phoenix')) {
+        accountName = 'phoenix_automotive'
+      }
+    }
     let hasRagContext = false
     const messagesPayload: any[] = [
       { role: 'system', content: '__SYSTEM_INSTRUCTION_PLACEHOLDER__' },

@@ -1147,21 +1147,25 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
               >
                 Resume Session
               </button>
-              <button
-                onClick={() => {
-                  setIsPaused(false)
-                  setMessages([])
-                }}
-                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-[#334155] font-[700] rounded-xl text-xs transition-colors"
-              >
-                Retry Session (Start Over)
-              </button>
-              <button
-                onClick={handlePauseAndExit}
-                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-[#334155] font-[700] rounded-xl text-xs transition-colors"
-              >
-                Continue Later
-              </button>
+              {!isExamMode && (
+                <>
+                  <button
+                    onClick={() => {
+                      setIsPaused(false)
+                      setMessages([])
+                    }}
+                    className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-[#334155] font-[700] rounded-xl text-xs transition-colors"
+                  >
+                    Retry Session (Start Over)
+                  </button>
+                  <button
+                    onClick={handlePauseAndExit}
+                    className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-[#334155] font-[700] rounded-xl text-xs transition-colors"
+                  >
+                    Continue Later
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AssignTrainingWizard from '@/components/manager/AssignTrainingWizard'
 import AssignmentDetailsSidebar from '@/components/manager/AssignmentDetailsSidebar'
+import ReassignModal from '@/components/manager/ReassignModal'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
@@ -17,10 +18,13 @@ export default function ManagerTrainingPage() {
   const [wizardInitialData, setWizardInitialData] = useState<any>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [selectedAssignment, setSelectedAssignment] = useState<any>(null)
+  const [isReassignOpen, setIsReassignOpen] = useState(false)
+  const [selectedReassignAssignment, setSelectedReassignAssignment] = useState<any>(null)
 
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [modeFilter, setModeFilter] = useState('All')
+  const [sortBy, setSortBy] = useState<'default' | 'score-desc' | 'score-asc'>('default')
 
   const fetchData = async () => {
     try {
@@ -65,8 +69,18 @@ export default function ManagerTrainingPage() {
     if (modeFilter !== 'All') {
       result = result.filter(a => (a.training_mode || a.trainingMode || 'Coach Mode').toLowerCase() === modeFilter.toLowerCase())
     }
+
+    if (sortBy === 'score-desc') {
+      result.sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+    } else if (sortBy === 'score-asc') {
+      result.sort((a, b) => {
+        if (a.score === null || a.score === undefined) return 1
+        if (b.score === null || b.score === undefined) return -1
+        return a.score - b.score
+      })
+    }
     return result
-  }, [assignments, searchTerm, statusFilter, modeFilter])
+  }, [assignments, searchTerm, statusFilter, modeFilter, sortBy])
 
   const handleRowClick = (assign: any) => {
     setSelectedAssignment(assign)
@@ -115,6 +129,19 @@ export default function ManagerTrainingPage() {
         </div>
 
         <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-[700] text-[#64748B]">Sort:</span>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as any)}
+              className="h-9 bg-gray-50 border border-gray-200 rounded-xl px-3 text-xs font-[700] text-[#1E293B] focus:outline-none"
+            >
+              <option value="default">Default (Latest)</option>
+              <option value="score-desc">Score: High to Low</option>
+              <option value="score-asc">Score: Low to High</option>
+            </select>
+          </div>
+
           <div className="flex items-center gap-2">
             <span className="text-xs font-[700] text-[#64748B]">Mode:</span>
             <select
@@ -233,12 +260,23 @@ export default function ManagerTrainingPage() {
                   <td className="p-4">{badge}</td>
 
                   <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
-                    <button
-                      onClick={() => handleRowClick(assign)}
-                      className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#334155] font-[700] text-xs rounded-xl transition-colors"
-                    >
-                      Details →
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedReassignAssignment(assign)
+                          setIsReassignOpen(true)
+                        }}
+                        className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-[700] text-xs rounded-xl transition-colors"
+                      >
+                        Reassign
+                      </button>
+                      <button
+                        onClick={() => handleRowClick(assign)}
+                        className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#334155] font-[700] text-xs rounded-xl transition-colors"
+                      >
+                        Details →
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )
@@ -278,6 +316,17 @@ export default function ManagerTrainingPage() {
         reps={reps}
         onSuccess={() => fetchData()}
         initialData={wizardInitialData}
+      />
+
+      {/* Reassign Modal */}
+      <ReassignModal
+        isOpen={isReassignOpen}
+        onClose={() => {
+          setIsReassignOpen(false)
+          setSelectedReassignAssignment(null)
+        }}
+        assignment={selectedReassignAssignment}
+        onSuccess={() => fetchData()}
       />
     </div>
   )
