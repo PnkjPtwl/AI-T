@@ -10,3 +10,4 @@ python-docx
 pgvector
 numpy
 langchain-huggingface
+python-multipart

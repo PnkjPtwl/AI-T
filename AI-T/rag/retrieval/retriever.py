@@ -9,10 +9,19 @@ class KnowledgeRetriever:
         self.vector_store = SupabaseVectorStore(embedder=embedder)
         self.reranker = RerankerSingleton.get_instance()
 
-    def search(self, query: str, k: int = 5):
+    def search(self, query: str, k: int = 5, account_slug: str = None):
         # 1. Fetch more documents initially (k * 4) to ensure high recall
         initial_k = k * 4
-        base_results = self.vector_store.similarity_search_with_score(query, k=initial_k)
+        
+        filter_metadata = {}
+        if account_slug:
+            filter_metadata["account"] = account_slug
+            
+        base_results = self.vector_store.similarity_search_with_score(
+            query, 
+            k=initial_k, 
+            filter_metadata=filter_metadata
+        )
         
         if not base_results:
             return []

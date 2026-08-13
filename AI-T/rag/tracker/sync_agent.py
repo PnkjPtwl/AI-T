@@ -94,7 +94,11 @@ class PhoenixSyncAgent:
 
             logger.info(f"[PhoenixSyncAgent] Created {len(enriched_chunks)} chunks from {len(documents)} docs")
 
-            # 4. Embed & Upsert to Supabase Vector Store
+            # 4. Wipe existing Phoenix Automotive embeddings before re-uploading
+            #    This prevents duplicates accumulating on every sync run.
+            self.vector_store.wipe_by_account(self.account_id)
+
+            # 5. Embed & Upsert to Supabase Vector Store
             self.vector_store.add_documents(enriched_chunks, batch_size=50)
 
             self._last_sync_time = datetime.utcnow().isoformat() + "Z"

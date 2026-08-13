@@ -19,6 +19,18 @@ class SupabaseVectorStore:
         except Exception as e:
             print(f"Warning wiping Supabase vectors: {e}")
 
+    def wipe_by_account(self, account_slug: str):
+        """Deletes only the rows belonging to a specific account slug.
+        Safe to call before re-syncing — leaves all other KB accounts untouched."""
+        try:
+            self.client.table(self.table_name)\
+                .delete()\
+                .contains("metadata", {"account": account_slug})\
+                .execute()
+            print(f"Cleared existing vectors for account '{account_slug}' in Supabase.")
+        except Exception as e:
+            print(f"Warning wiping vectors for account '{account_slug}': {e}")
+
     def add_documents(self, documents: List[Document], batch_size: int = 50):
         """Embeds and uploads documents in batches to Supabase."""
         total = len(documents)

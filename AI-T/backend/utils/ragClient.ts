@@ -61,6 +61,7 @@ export async function searchKnowledgeBase(
 
 /**
  * Formats a list of RAG chunks into a context block for injection into the LLM prompt.
+ * Chunks are labelled by document category (customer | deal_history | seller) for precision.
  * Returns an empty string if no chunks are provided.
  */
 export function formatRagContext(chunks: RagChunk[], accountName?: string | null): string {
@@ -70,8 +71,16 @@ export function formatRagContext(chunks: RagChunk[], accountName?: string | null
     ? accountName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     : 'Knowledge Base'
 
+  // Map folder/category values to human-readable labels
+  const categoryLabel = (folder: string) => {
+    if (folder === 'customer') return '🏢 Customer Profile'
+    if (folder === 'deal_history') return '📞 Deal History'
+    if (folder === 'seller') return '🏷️ Seller / Product Docs'
+    return '📄 Knowledge Base'
+  }
+
   const contextLines = chunks
-    .map((c, i) => `[Source ${i + 1}: ${c.folder}/${c.filename}]\n${c.content.trim()}`)
+    .map((c, i) => `[Source ${i + 1} — ${categoryLabel(c.folder)} | ${c.filename}]\n${c.content.trim()}`)
     .join('\n\n')
 
   return `\n\n--- ACCOUNT KNOWLEDGE BASE & DEAL HISTORY WITH RELANTO (${accountLabel}) ---\n` +

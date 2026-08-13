@@ -1,5 +1,6 @@
 import { supabase } from '../db/supabase'
 import { getModeLimit, normalizeModeDisplay } from '../utils/modeHelper'
+import { createNotification } from './notificationController'
 
 /**
  * POST /api/manager/assignments
@@ -79,6 +80,38 @@ export const createAssignments = async (req: any, res: any) => {
       message: `Successfully assigned scenario to ${result.data.length} representative(s)`,
       assignments: result.data
     })
+
+    // 🔔 Notify manager: assignment(s) created (confirmation)
+    ;(async () => {
+      try {
+        const { data: scenInfo } = await supabase
+          .from('training_scenarios')
+          .select('persona_name, contact_title, contact_company')
+          .eq('id', scenarioId)
+          .single()
+        const scenarioTitle = scenInfo?.contact_title
+          ? `${scenInfo.contact_title} - ${scenInfo.contact_company || ''}`
+          : scenInfo?.persona_name || 'Training Scenario'
+        const { data: managerInfo } = await supabase
+          .from('users')
+          .select('org_id')
+          .eq('id', managerId)
+          .single()
+        if (managerInfo?.org_id) {
+          await createNotification({
+            orgId: managerInfo.org_id,
+            managerId,
+            type: 'assignment_created',
+            priority: 'low',
+            title: 'Training Assignment Created',
+            body: `You assigned "${scenarioTitle}" to ${result.data.length} rep${result.data.length > 1 ? 's' : ''}. They will be notified shortly.`,
+            metadata: { scenarioTitle, scenarioId, repCount: result.data.length }
+          })
+        }
+      } catch (notifErr: any) {
+        console.warn('[Notification] assignment_created notification failed (non-fatal):', notifErr.message)
+      }
+    })()
   } catch (err: any) {
     console.error('Error creating assignments:', err)
     res.status(500).json({ error: 'Failed to create assignments', message: err.message })

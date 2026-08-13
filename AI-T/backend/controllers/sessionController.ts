@@ -1,11 +1,12 @@
 import { supabase } from '../db/supabase'
 import Groq from 'groq-sdk'
 import { generateSystemInstruction } from '../utils/promptGenerator'
-import { generateEvaluationPrompt, getScorecardScoreKeys, generateConversationAnalyticsPrompt } from '../utils/evaluationGenerator'
+import { generateEvaluationPrompt, getScorecardScoreKeys, generateConversationAnalyticsPrompt, DynamicMetric } from '../utils/evaluationGenerator'
 import { getSecret } from '../lib/secrets'
 import { searchKnowledgeBase, formatRagContext } from '../utils/ragClient'
 import { calculateFillerRatio, calculateWPM, calculateTalkListenRatio, calculateQuestionCount, evaluateTriggers, LiveMetrics, CoachTrigger } from '../utils/mechanicsCalculator'
 import { getModeLimit, normalizeModeDisplay } from '../utils/modeHelper'
+import { createNotification, notificationExists } from './notificationController'
 
 const safeUpdateTrainingSession = async (sessionId: string, sessionUpdates: any) => {
   const { error } = await supabase
@@ -224,6 +225,36 @@ export const startPractice = async (req: any, res: any) => {
       session_id: data.id,
       status: 'In Progress'
     })
+
+    // 🔔 Notify manager: rep started training
+    try {
+      const { data: assignInfo } = await supabase
+        .from('training_assignments')
+        .select('manager_id, rep:users!rep_id(id, name, org_id), scenario:training_scenarios!training_assignments_scenario_id_fkey(persona_name, contact_title, contact_company)')
+        .eq('id', targetAssignmentId)
+        .single()
+      if (assignInfo?.manager_id) {
+        const rep = (assignInfo as any).rep
+        const sc = (assignInfo as any).scenario
+        const repName = rep?.name || 'A rep'
+        const orgId = rep?.org_id
+        const scenarioTitle = sc?.contact_title ? `${sc.contact_title} - ${sc.contact_company || ''}` : sc?.persona_name || 'Training Scenario'
+        const alreadyExists = await notificationExists(assignInfo.manager_id, 'training_started', targetAssignmentId)
+        if (!alreadyExists && orgId) {
+          await createNotification({
+            orgId,
+            managerId: assignInfo.manager_id,
+            type: 'training_started',
+            priority: 'medium',
+            title: 'Rep Started Training',
+            body: `${repName} has started their training on "${scenarioTitle}".`,
+            metadata: { repName, repId: rep?.id, scenarioTitle, assignmentId: targetAssignmentId, sessionId: data.id }
+          })
+        }
+      }
+    } catch (notifErr: any) {
+      console.warn('[Notification] training_started notification failed (non-fatal):', notifErr.message)
+    }
   }
 
   res.json({ sessionId: data.id, avatarType: assignmentAvatarType, trainingMode: assignmentTrainingMode })
@@ -418,6 +449,77 @@ export const endSession = async (req: any, res: any) => {
         session_id: sessionId
       })
       console.log(`[AssignmentLifecycle] Successfully marked assignment ${targetAssignmentId} as COMPLETED.`);
+
+      // 🔔 Fire notifications — score thresholds and completion
+      // These run async after response; errors are non-fatal
+      ;(async () => {
+        try {
+          const { data: assignInfo } = await supabase
+            .from('training_assignments')
+            .select('manager_id, rep:users!rep_id(id, name, org_id), scenario:training_scenarios!training_assignments_scenario_id_fkey(persona_name, contact_title, contact_company)')
+            .eq('id', targetAssignmentId)
+            .single()
+          if (!assignInfo?.manager_id) return
+          const rep = (assignInfo as any).rep
+          const sc = (assignInfo as any).scenario
+          const managerId: string = assignInfo.manager_id
+          const orgId: string = rep?.org_id
+          const repName: string = rep?.name || 'A rep'
+          const repId: string = rep?.id
+          const scenarioTitle: string = sc?.contact_title ? `${sc.contact_title} - ${sc.contact_company || ''}` : sc?.persona_name || 'Training Scenario'
+          if (!orgId) return
+
+          // Fetch score from already-computed feedback (set later), or fetch sessions
+          const { data: prevSessions } = await supabase
+            .from('training_sessions')
+            .select('feedback_json, completed_at')
+            .eq('rep_id', session.rep_id)
+            .eq('scenario_id', session.scenario_id)
+            .not('completed_at', 'is', null)
+            .order('completed_at', { ascending: false })
+            .limit(5)
+
+          const allScores = (prevSessions || []).map((s: any) => s.feedback_json?.overall_score).filter((v: any) => typeof v === 'number' && v > 0)
+          const latestScore = allScores[0] || 0
+          const prevScore = allScores[1] || 0
+
+          const notifMeta = { repName, repId, scenarioTitle, assignmentId: targetAssignmentId, sessionId, score: latestScore }
+
+          // 1. Score critical (<50)
+          if (latestScore > 0 && latestScore < 50) {
+            await createNotification({ orgId, managerId, type: 'score_critical', priority: 'critical', title: 'Critical Score Alert', body: `${repName} scored ${latestScore}/100 on "${scenarioTitle}" — immediate coaching needed.`, metadata: notifMeta })
+          }
+          // 2. Score low (50–64)
+          else if (latestScore >= 50 && latestScore < 65) {
+            await createNotification({ orgId, managerId, type: 'score_low', priority: 'high', title: 'Low Score Alert', body: `${repName} scored ${latestScore}/100 on "${scenarioTitle}" — coaching recommended.`, metadata: notifMeta })
+          }
+          // 3. Score high (85+)
+          else if (latestScore >= 85) {
+            await createNotification({ orgId, managerId, type: 'score_high', priority: 'low', title: 'Outstanding Performance 🎉', body: `${repName} scored ${latestScore}/100 on "${scenarioTitle}". Great result!`, metadata: notifMeta })
+          }
+
+          // 4. Score improved significantly (+15)
+          if (prevScore > 0 && latestScore > 0 && latestScore - prevScore >= 15) {
+            await createNotification({ orgId, managerId, type: 'score_improved', priority: 'medium', title: 'Score Improvement Detected', body: `${repName} improved by ${latestScore - prevScore} points on "${scenarioTitle}" (${prevScore} → ${latestScore}).`, metadata: { ...notifMeta, prevScore } })
+          }
+
+          // 5. Assignment completed
+          const alreadyCompleted = await notificationExists(managerId, 'assignment_completed', targetAssignmentId)
+          if (!alreadyCompleted) {
+            await createNotification({ orgId, managerId, type: 'assignment_completed', priority: 'high', title: 'Training Completed', body: `${repName} has completed the training on "${scenarioTitle}"${latestScore > 0 ? ` with a score of ${latestScore}/100` : ''}.`, metadata: notifMeta })
+          }
+
+          // 6. Attempt limit reached (check if this was the last allowed attempt)
+          const { data: assignmentRow } = await supabase.from('training_assignments').select('training_mode').eq('id', targetAssignmentId).single()
+          const { count: totalAttempts } = await supabase.from('training_sessions').select('id', { count: 'exact', head: true }).eq('assignment_id', targetAssignmentId)
+          const limit = getModeLimit(assignmentRow?.training_mode || 'coach')
+          if ((totalAttempts || 0) >= limit && latestScore < 65) {
+            await createNotification({ orgId, managerId, type: 'attempt_limit', priority: 'high', title: 'Attempt Limit Reached', body: `${repName} has used all ${limit} attempt(s) on "${scenarioTitle}" without achieving a satisfactory score.`, metadata: { ...notifMeta, maxAttempts: limit } })
+          }
+        } catch (notifErr: any) {
+          console.warn('[Notification] endSession notifications failed (non-fatal):', notifErr.message)
+        }
+      })()
     }
 
     // 2.5 AGGREGATE VOICE METRICS
@@ -454,7 +556,51 @@ export const endSession = async (req: any, res: any) => {
       }
     }
 
-    const prompt = generateEvaluationPrompt(scenarioName, transcript, evaluationFocus, voiceAggregate, metricWeights, dynamicMetrics || undefined)
+    // 3.1 RAG CONTEXT — only for personas with a linked knowledge base (account_name)
+    // Injected into the evaluation prompt so better_answer suggestions are account-grounded
+    let evalRagContext = ''
+    try {
+      let evalAccountName: string | null = scenario?.account_name || null
+        if (!evalAccountName) {
+          const combined = `${scenario?.contact_company || ''} ${scenario?.persona_name || ''} ${scenario?.context_text || ''}`.toLowerCase()
+          if (combined.includes('phoenix')) evalAccountName = 'phoenix_automotive'
+          else if (combined.includes('spark') || combined.includes('relanto')) evalAccountName = 'spark_solutions'
+        }
+      if (evalAccountName) {
+        // Search using a broad coverage query so we pull varied KB chunks covering the full call
+        const searchQuery = `${scenarioName} ${transcript.substring(0, 300)} deal history pain points requirements specs`.trim()
+        const ragChunks = await searchKnowledgeBase(searchQuery, evalAccountName, 5)
+        if (ragChunks && ragChunks.length > 0) {
+          evalRagContext = formatRagContext(ragChunks, evalAccountName)
+          console.log(`[EvalRAG] Injected ${ragChunks.length} KB chunks for account: ${evalAccountName}`)
+        }
+      }
+    } catch (ragErr: any) {
+      console.warn('[EvalRAG] RAG fetch failed (non-fatal, eval continues without KB context):', ragErr.message)
+    }
+
+    // 3.2 Inject KB Accuracy metric for KB-linked personas
+    // When RAG context exists, add a dynamic "Knowledge Base Accuracy" metric to the scorecard
+    let metricsForEval = dynamicMetrics || undefined
+    if (evalRagContext) {
+      const kbAccuracyMetric: DynamicMetric = {
+        name: 'Knowledge Base Accuracy',
+        description: 'Did the rep accurately reference facts from the account knowledge base (deal history, specs, contacts, timelines)? Penalise fabricated or contradictory claims. Reward correct use of KB-sourced facts. If the rep did not reference any KB facts at all, score based on missed opportunities to leverage account knowledge.',
+        weight: 0
+      }
+      if (Array.isArray(metricsForEval)) {
+        // Check if KB Accuracy already exists (avoid duplicates)
+        const alreadyHasKbMetric = metricsForEval.some((m: DynamicMetric) => m.name.toLowerCase().includes('knowledge base accuracy'))
+        if (!alreadyHasKbMetric) {
+          metricsForEval = [...metricsForEval, kbAccuracyMetric]
+        }
+      } else {
+        metricsForEval = [kbAccuracyMetric]
+      }
+      console.log(`[EvalRAG] Injected 'Knowledge Base Accuracy' scorecard metric for KB-linked persona`)
+    }
+
+    const prompt = generateEvaluationPrompt(scenarioName, transcript, evaluationFocus, voiceAggregate, metricWeights, metricsForEval, evalRagContext || undefined)
 
     let feedback: any = null
 
@@ -478,12 +624,12 @@ export const endSession = async (req: any, res: any) => {
         const groqApiKey = await getSecret('GROQ_API_KEY')
         const groq = new Groq({ apiKey: groqApiKey || '' })
         const completion = await groq.chat.completions.create({
-          model: 'llama-3.1-8b-instant',
+          model: 'llama-3.3-70b-versatile',
           messages: [
             { role: 'system', content: 'You are an expert sales coach analyst. Return only raw JSON.' },
             { role: 'user', content: prompt }
           ],
-          max_tokens: 2500,
+          max_tokens: 3500,
           temperature: 0.3,
           response_format: { type: 'json_object' }
         })
@@ -709,6 +855,37 @@ export const submitSessionToManager = async (req: any, res: any) => {
         session_id: sessionId
       })
       console.log(`[AssignmentLifecycle] Successfully marked assignment ${targetAssignmentId} as COMPLETED on Submit to Manager.`)
+
+      // 🔔 Notify manager: assignment submitted and completed
+      ;(async () => {
+        try {
+          const { data: assignInfo } = await supabase
+            .from('training_assignments')
+            .select('manager_id, rep:users!rep_id(id, name, org_id), scenario:training_scenarios!training_assignments_scenario_id_fkey(persona_name, contact_title, contact_company)')
+            .eq('id', targetAssignmentId)
+            .single()
+          if (!assignInfo?.manager_id) return
+          const rep = (assignInfo as any).rep
+          const sc = (assignInfo as any).scenario
+          const managerId: string = assignInfo.manager_id
+          const orgId: string = rep?.org_id
+          const repName: string = rep?.name || 'A rep'
+          const scenarioTitle: string = sc?.contact_title ? `${sc.contact_title} - ${sc.contact_company || ''}` : sc?.persona_name || 'Training Scenario'
+          if (!orgId) return
+          const score: number = session.feedback_json?.overall_score || 0
+          const alreadyCompleted = await notificationExists(managerId, 'assignment_completed', targetAssignmentId)
+          if (!alreadyCompleted) {
+            await createNotification({
+              orgId, managerId, type: 'assignment_completed', priority: 'high',
+              title: 'Training Submitted',
+              body: `${repName} submitted their training on "${scenarioTitle}"${score > 0 ? ` with a score of ${score}/100` : ''} for your review.`,
+              metadata: { repName, repId: rep?.id, scenarioTitle, assignmentId: targetAssignmentId, sessionId, score }
+            })
+          }
+        } catch (notifErr: any) {
+          console.warn('[Notification] submitSessionToManager notification failed (non-fatal):', notifErr.message)
+        }
+      })()
     }
 
     return res.json({
@@ -753,20 +930,24 @@ export const deleteSession = async (req: any, res: any) => {
 /**
  * POST /api/sessions/live-sentiment
  * Fast, lightweight Groq call used by the real-time coaching bubble.
- * Analyses only the last rep↔customer exchange, returns sentiment + coaching hint.
- * Uses a small/fast model so it does NOT significantly delay the UX.
+ * Mode-aware:
+ *   - Coach Mode:   Returns hint-style coaching observations (non-clickable). Rep drives independently.
+ *   - Learning Mode: Returns detailed clickable suggestions + battle card + MEDDICC tip.
+ * Both modes leverage RAG KB context when a knowledge-backed persona is detected.
  */
 export const liveSentiment = async (req: any, res: any) => {
-  const { repMessage, customerReply, sessionId } = req.body
+  const { repMessage, customerReply, sessionId, trainingMode } = req.body
   if (!repMessage && !customerReply) {
     return res.status(400).json({ error: 'repMessage and customerReply are required' })
   }
+
+  const isLearning = (trainingMode || '').toLowerCase().includes('learning')
 
   try {
     const groqApiKey = await getSecret('GROQ_API_KEY')
     const groq = new Groq({ apiKey: groqApiKey || '' })
 
-    // Check if session belongs to a RAG persona / account
+    // ── RAG: fetch KB context for RAG personas ───────────────────────────────
     let accountName: string | null = null
     let kbContextStr = ''
 
@@ -783,48 +964,135 @@ export const liveSentiment = async (req: any, res: any) => {
 
         if (!accountName && scenario) {
           const combined = `${scenario.contact_company || ''} ${scenario.persona_name || ''} ${scenario.context_text || ''}`.toLowerCase()
-          if (combined.includes('phoenix')) {
-            accountName = 'phoenix_automotive'
-          }
+          if (combined.includes('phoenix')) accountName = 'phoenix_automotive'
+          else if (combined.includes('spark') || combined.includes('relanto')) accountName = 'spark_solutions'
         }
 
-        // ONLY for RAG Personas with a designated account_name, check RAG Knowledge Base
         if (accountName) {
           const searchTarget = `${customerReply || ''} ${repMessage || ''} ${accountName} deal history specs requirements pain points`.trim()
           const ragChunks = await searchKnowledgeBase(searchTarget, accountName, 4)
           if (ragChunks && ragChunks.length > 0) {
             kbContextStr = formatRagContext(ragChunks, accountName)
-            console.log(`[SuggestedFollowupsRAG] Retrieved ${ragChunks.length} KB chunks for RAG persona account: ${accountName}`)
+            console.log(`[LiveSentiment][${isLearning ? 'Learning' : 'Coach'}] RAG: ${ragChunks.length} KB chunks for ${accountName}`)
           }
         }
       } catch (ragErr) {
-        console.warn('[SuggestedFollowupsRAG] RAG check failed (fallback to LLM):', ragErr)
+        console.warn('[LiveSentiment] RAG check failed (non-fatal):', ragErr)
       }
     }
 
-    const prompt = `You are a real-time sales coaching AI assisting a Sales Rep in a live practice call with a Customer (Prospect). Analyse this single exchange and return ONLY a JSON object (no markdown).
+    // ── Build mode-specific prompt ────────────────────────────────────────────
+    const repSnippet = (repMessage || '').substring(0, 400)
+    const custSnippet = (customerReply || '').substring(0, 400)
+    const custShort   = (customerReply || '').substring(0, 120)
+    const ragBlock    = kbContextStr ? `\nKNOWLEDGE BASE CONTEXT (use to ground your advice):\n${kbContextStr}\n` : ''
 
-Sales Rep said: "${(repMessage || '').substring(0, 400)}"
+    let prompt: string
 
-Customer replied: "${(customerReply || '').substring(0, 400)}"
-${kbContextStr ? `\nKNOWLEDGE BASE RETRIEVED CONTEXT (RAG PERSONA):\n${kbContextStr}\n` : ''}
-Return exactly this JSON:
+    // ── Fact validation block (only when KB context exists) ──
+    const factCheckBlock = kbContextStr ? `
+RULES — FACT CHECK (CRITICAL — applies to ALL modes):
+- Compare the Sales Rep's latest message against the Knowledge Base context provided above.
+- If the rep stated something that DIRECTLY CONTRADICTS a fact in the KB (e.g. wrong price, wrong specs, wrong timeline, wrong contact name, wrong deal history), set has_contradiction to true.
+- If no contradiction is found, OR if the KB simply does not contain the relevant information, set has_contradiction to false. Do NOT flag missing info as a contradiction — ONLY flag actual conflicts.
+- Include the "fact_check" field in your JSON response.
+` : ''
+
+    const factCheckJsonBlock = kbContextStr ? `,
+  "fact_check": {
+    "has_contradiction": <boolean>,
+    "rep_claim": "<what the rep said that contradicts the KB, or empty string if no contradiction>",
+    "kb_fact": "<the actual fact from the KB that contradicts the rep's claim, or empty string>",
+    "correction_hint": "<a short, helpful correction the rep should know, or empty string>"
+  }` : ''
+
+    if (isLearning) {
+      // ── LEARNING MODE: detailed suggestions + battle card + MEDDICC tip ──
+      prompt = `You are a real-time AI sales coach helping a Sales Rep during a live practice call. Return ONLY a raw JSON object (no markdown, no backticks).
+
+Sales Rep said: "${repSnippet}"
+Customer replied: "${custSnippet}"
+${ragBlock}
+Return this exact JSON structure:
 {
-  "customer_sentiment": <0-100, where 0=very negative, 50=neutral, 100=very positive>,
+  "customer_sentiment": <integer 0-100, 0=very negative, 50=neutral, 100=very positive>,
   "rep_tone_type": "good" | "warn",
-  "coaching_hint": "<1 short actionable sentence for the rep right now>",
-  "suggested_followups": ["<rep followup 1>", "<rep followup 2>", "<rep followup 3>"],
-  "tone_distribution": { "alert": <0-100>, "hesitant": <0-100>, "warm": <0-100>, "wise": <0-100> }
+  "coaching_hint": "<1 concise, prescriptive coaching sentence — reference MEDDICC framework stages if relevant>",
+  "suggested_followups": ["<full response 1>", "<full response 2>", "<full response 3>"],
+  ${kbContextStr ? '"suggested_followups_sources": ["kb" | "general", "kb" | "general", "kb" | "general"],' : ''}
+  "battle_card": "<1-2 sentence competitive or product positioning insight the rep can use right now>",
+  "meddicc_tip": "<1 sentence identifying which MEDDICC component to probe next, with a specific suggested question>",
+  "tone_distribution": { "alert": <int>, "hesitant": <int>, "warm": <int>, "wise": <int> }${factCheckJsonBlock}
 }
-Note: tone_distribution values must sum to 100 exactly.
+tone_distribution values must sum to exactly 100.
 
-RULES FOR SUGGESTED FOLLOW-UPS (CRITICAL):
-- "suggested_followups" MUST BE 3 distinct, ready-to-send questions or statements written EXCLUSIVELY from the perspective of the Sales Rep (the user).
-- Each suggested follow-up MUST directly address the Customer's specific concern, objection, or question in their latest reply ("${(customerReply || '').substring(0, 100)}").
-${kbContextStr ? `- FOR THIS RAG PERSONA: Incorporate specific factual details, technical specs, past meeting history, or metrics from the Knowledge Base Context above into the suggested follow-ups.` : `- Provide contextually relevant, high-impact follow-up questions for the rep.`}
-- The Sales Rep will click these suggestions to send them as their next message in the chat. NEVER generate questions from the customer's perspective.
-- rep_tone_type is "good" if the rep's message was empathetic, clear, and purposeful; "warn" if it was vague, too long, too pushy, or missed the customer's concern.
-- coaching_hint must be specific to what just happened — not generic advice.`
+RULES — SUGGESTED FOLLOW-UPS (Learning Mode):
+- Write 3 complete, ready-to-send responses from the Sales Rep's perspective ONLY.
+- Each must be 2-3 sentences and DIRECTLY address the customer's concern: "${custShort}"
+${kbContextStr
+  ? `- THIS IS A KB-LINKED PERSONA. At least 2 out of 3 suggested responses MUST be grounded STRICTLY in facts from the Knowledge Base above (deal history, past call references, specific specs, pain points, timelines, contact names from the documents). 
+- CRITICAL: Do NOT fabricate stats, ROI figures, or product features (like algorithm names). If the KB does not contain specific numbers, do NOT invent them.
+- For each suggestion, set the corresponding entry in "suggested_followups_sources" to "kb" if it uses KB facts, or "general" if it is a general sales strategy response.
+- The 3rd response may be a general strategic response not tied to KB facts (marked "general").`
+  : `- Be SPECIFIC and TECHNICAL — reference product capabilities, ROI figures, timelines, or competitive advantages.
+- Include quantified value statements where possible (e.g. "reduces onboarding time by 40%", "used by 3 of your top competitors").`
+}
+- The rep will click to send these verbatim. Make them sound natural and confident, not robotic.
+
+RULES — BATTLE CARD:
+- Give 1 competitive or product-positioning insight specific to what the customer just said.
+${kbContextStr ? `- Tie it to account-specific context from the KB if relevant.` : `- Focus on a concrete product differentiator or ROI angle.`}
+- Keep it to 1-2 sentences. Do NOT use generic phrases like "emphasise value".
+
+RULES — MEDDICC TIP:
+- Identify which MEDDICC dimension (Metrics, Economic Buyer, Decision Criteria, Decision Process, Identify Pain, Champion) is currently weakest based on the conversation.
+- Give one specific question the rep should ask to address it.
+
+RULES — COACHING HINT:
+- Be prescriptive, not vague. Reference MEDDICC, specific objection type, or conversation stage.
+- rep_tone_type is "warn" if the rep was vague, too long, too pushy, or missed the customer's concern.
+${factCheckBlock}`
+
+    } else {
+      // ── COACH MODE: hint-style observations — no direct responses ──────────
+      prompt = `You are a real-time sales coaching AI assisting a Sales Rep in a live practice call. Return ONLY a raw JSON object (no markdown, no backticks).
+
+Sales Rep said: "${repSnippet}"
+Customer replied: "${custSnippet}"
+${ragBlock}
+Return this exact JSON structure:
+{
+  "customer_sentiment": <integer 0-100, 0=very negative, 50=neutral, 100=very positive>,
+  "rep_tone_type": "good" | "warn",
+  "coaching_hint": "<1 short, specific observation about what the rep just did well or should adjust>",
+  "suggested_followups": ["<observation 1>", "<observation 2>", "<observation 3>"],
+  "tone_distribution": { "alert": <int>, "hesitant": <int>, "warm": <int>, "wise": <int> }${factCheckJsonBlock}
+}
+tone_distribution values must sum to exactly 100.
+
+RULES — COACHING OBSERVATIONS (Coach Mode — NOT clickable responses):
+- "suggested_followups" in Coach Mode contains 3 SHORT DIRECTIONAL HINTS, NOT full responses.
+- These are observations and nudges for the rep to think about — the rep drives the conversation.
+- Each hint must be 1 sentence max. Start with the situation, then the nudge.
+${kbContextStr
+  ? `- This is a RAG persona: reference specific account history facts from the KB to make observations concrete (e.g. "They mentioned Q3 budget review last call — probe if that timeline shifted").`
+  : `- Be specific to what the customer just said. Avoid generic advice.`
+}
+- GOOD examples: "The prospect signalled budget hesitation — ask what their typical approval threshold is."
+  "They're asking about timeline, suggesting urgency — clarify their go-live target."
+  "You haven't asked about the decision process yet — now is a good time."
+- BAD examples: "Ask more questions." "Be more confident." "Try to close."
+
+RULES — COACHING HINT:
+- 1 sentence. What should the rep do RIGHT NOW based on what the customer just said?
+- Be specific — name the objection type or conversation stage.
+- rep_tone_type is "warn" if the rep was vague, too long, too pushy, or missed the customer's point.
+${factCheckBlock}`
+    }
+
+    // ── Call Groq (fast small model) ─────────────────────────────────────────
+    // Learning Mode gets more tokens for the richer response; KB personas need extra for fact_check + sources
+    const maxTokens = isLearning ? (kbContextStr ? 650 : 500) : (kbContextStr ? 450 : 350)
 
     const completion = await groq.chat.completions.create({
       model: 'llama-3.1-8b-instant',
@@ -832,23 +1100,39 @@ ${kbContextStr ? `- FOR THIS RAG PERSONA: Incorporate specific factual details, 
         { role: 'system', content: 'Return only raw JSON with no markdown or backticks.' },
         { role: 'user', content: prompt }
       ],
-      max_tokens: 300,
-      temperature: 0.4,
+      max_tokens: maxTokens,
+      temperature: isLearning ? 0.5 : 0.35,
       response_format: { type: 'json_object' }
     })
 
     const text = completion.choices[0].message.content || '{}'
     const parsed = JSON.parse(text)
+
+    // Tag the response with mode so the frontend can render appropriately
+    parsed.mode = isLearning ? 'learning' : 'coach'
+    parsed.has_kb = !!kbContextStr
+
+    // Ensure fact_check defaults for non-KB or when LLM omits it
+    if (kbContextStr && !parsed.fact_check) {
+      parsed.fact_check = { has_contradiction: false, rep_claim: '', kb_fact: '', correction_hint: '' }
+    }
+
     return res.json(parsed)
+
   } catch (err: any) {
     console.error('[LiveSentiment] Error:', err)
-    // Graceful fallback — never crash the caller
     return res.json({
       customer_sentiment: 50,
       rep_tone_type: 'good',
-      coaching_hint: 'Keep going — stay curious and listen actively.',
+      coaching_hint: isLearning ? 'Use MEDDICC — identify the Economic Buyer and their key decision criteria.' : 'Stay curious — probe the customer\'s specific concern with an open question.',
       suggested_followups: [],
-      tone_distribution: { alert: 10, hesitant: 20, warm: 50, wise: 20 }
+      suggested_followups_sources: [],
+      battle_card: null,
+      meddicc_tip: null,
+      tone_distribution: { alert: 10, hesitant: 20, warm: 50, wise: 20 },
+      mode: isLearning ? 'learning' : 'coach',
+      has_kb: false,
+      fact_check: { has_contradiction: false, rep_claim: '', kb_fact: '', correction_hint: '' }
     })
   }
 }
@@ -905,6 +1189,8 @@ export const processLiveTurn = async (req: any, res: any) => {
       const combined = `${scenario.contact_company || ''} ${scenario.persona_name || ''} ${scenario.context_text || ''}`.toLowerCase()
       if (combined.includes('phoenix')) {
         accountName = 'phoenix_automotive'
+      } else if (combined.includes('spark') || combined.includes('relanto')) {
+        accountName = 'spark_solutions'
       }
     }
     let hasRagContext = false

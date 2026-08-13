@@ -79,6 +79,16 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
 
   // Suggested follow-ups state
   const [suggestedFollowUps, setSuggestedFollowUps] = useState<string[]>([])
+  const [suggestedFollowUpsSources, setSuggestedFollowUpsSources] = useState<string[]>([])
+
+  // Learning Mode extra fields
+  const [battleCard, setBattleCard] = useState<string | null>(null)
+  const [meddiccTip, setMeddiccTip] = useState<string | null>(null)
+
+  // KB fact-check state (real-time contradiction detection)
+  const [factCheck, setFactCheck] = useState<{ has_contradiction: boolean; rep_claim: string; kb_fact: string; correction_hint: string } | null>(null)
+  const [hasKb, setHasKb] = useState(false)
+  const [factCheckDismissed, setFactCheckDismissed] = useState(false)
 
   // Whether the first message has been sent (gates metric display)
   const [isSessionStarted, setIsSessionStarted] = useState(false)
@@ -231,6 +241,12 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
                   const sentData = await sentRes.json()
                   if (sentData.suggested_followups && sentData.suggested_followups.length > 0) {
                     setSuggestedFollowUps(sentData.suggested_followups)
+                    setSuggestedFollowUpsSources(sentData.suggested_followups_sources || [])
+                  }
+                  if (sentData.has_kb !== undefined) setHasKb(sentData.has_kb)
+                  if (sentData.fact_check) {
+                    setFactCheck(sentData.fact_check)
+                    setFactCheckDismissed(false)
                   }
                   if (sentData.coaching_hint) {
                     setInlineCoachNote(`🎯 ${sentData.coaching_hint}`)
@@ -660,7 +676,8 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
             body: JSON.stringify({
               repMessage: messageText,
               customerReply: aiRespText,
-              sessionId: currentSessionId
+              sessionId: currentSessionId,
+              trainingMode   // pass mode so backend forks prompt correctly
             })
           })
 
@@ -698,6 +715,18 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
 
             if (sentData.suggested_followups && sentData.suggested_followups.length > 0) {
               setSuggestedFollowUps(sentData.suggested_followups)
+              setSuggestedFollowUpsSources(sentData.suggested_followups_sources || [])
+            }
+            // KB and fact-check state
+            if (sentData.has_kb !== undefined) setHasKb(sentData.has_kb)
+            if (sentData.fact_check) {
+              setFactCheck(sentData.fact_check)
+              setFactCheckDismissed(false)
+            }
+            // Learning Mode extras
+            if (isLearningMode) {
+              setBattleCard(sentData.battle_card || null)
+              setMeddiccTip(sentData.meddicc_tip || null)
             }
           }
         } catch (sentErr) {
@@ -1109,26 +1138,111 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
               </div>
             </div>
 
-            {/* CONTEXTUAL SUGGESTED FOLLOW-UPS (REP SUGGESTIONS) */}
-            <div className="space-y-3 pt-3 border-t border-gray-100">
-              <div className="flex items-center justify-between">
-                <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">SUGGESTED FOLLOW-UPS</p>
-                <span className="text-[9px] text-purple-600 font-[600]">Click to Send</span>
+            {/* ── FACT CHECK ALERT (all non-Exam modes, KB personas only) ── */}
+            {factCheck && factCheck.has_contradiction && !factCheckDismissed && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl relative animate-in fade-in slide-in-from-top-2 duration-300">
+                <button
+                  onClick={() => setFactCheckDismissed(true)}
+                  className="absolute top-2 right-2 text-amber-400 hover:text-amber-600 text-xs font-bold"
+                  title="Dismiss"
+                >
+                  ✕
+                </button>
+                <div className="flex items-start gap-2">
+                  <span className="text-amber-600 text-sm shrink-0 mt-0.5">⚠️</span>
+                  <div>
+                    <p className="font-[800] text-amber-800 text-[10px] uppercase tracking-wider">Fact Check Alert</p>
+                    <p className="text-[11px] font-[600] text-amber-900 leading-snug mt-1">{factCheck.correction_hint}</p>
+                    {factCheck.kb_fact && (
+                      <p className="text-[10px] text-amber-700 mt-1 italic">KB: {factCheck.kb_fact}</p>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                {suggestedFollowUps.map((question, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSendMessage(question)}
-                    title="Click to send this response"
-                    className="w-full p-2.5 text-left bg-purple-50/50 hover:bg-purple-100/80 border border-purple-200/80 rounded-xl text-xs font-[600] text-purple-950 hover:text-purple-900 transition-all shadow-sm flex items-start gap-2 group"
-                  >
-                    <span className="text-purple-600 text-sm group-hover:scale-110 transition-transform shrink-0">💡</span>
-                    <span className="leading-snug">"{question}"</span>
-                  </button>
-                ))}
+            )}
+
+            {/* ── COACH MODE: Coaching Observations (non-clickable hints) ── */}
+            {!isLearningMode && suggestedFollowUps.length > 0 && (
+              <div className="space-y-3 pt-3 border-t border-gray-100">
+                <div>
+                  <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">COACHING OBSERVATIONS</p>
+                  <p className="text-[9px] text-[#94A3B8] mt-0.5">Directional hints — you drive the conversation</p>
+                </div>
+                <div className="space-y-2">
+                  {suggestedFollowUps.map((obs, idx) => (
+                    <div
+                      key={idx}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-[500] text-slate-700 flex items-start gap-2"
+                    >
+                      <span className="text-slate-400 text-sm shrink-0 mt-0.5">💭</span>
+                      <span className="leading-snug">{obs}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* ── LEARNING MODE: Clickable Suggestions + Battle Card + MEDDICC ── */}
+            {isLearningMode && (
+              <>
+                {/* Clickable Follow-Ups */}
+                {suggestedFollowUps.length > 0 && (
+                  <div className="space-y-3 pt-3 border-t border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">SUGGESTED RESPONSES</p>
+                      <span className="text-[9px] text-purple-600 font-[600]">Click to Send</span>
+                    </div>
+                    <div className="space-y-2">
+                      {suggestedFollowUps.map((question, idx) => {
+                        const isKbGrounded = suggestedFollowUpsSources[idx] === 'kb'
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => handleSendMessage(question)}
+                            title="Click to send this response"
+                            className={`w-full p-2.5 text-left rounded-xl text-xs font-[600] transition-all shadow-sm flex items-start gap-2 group ${
+                              isKbGrounded
+                                ? 'bg-emerald-50/60 hover:bg-emerald-100/80 border border-emerald-300/80 text-emerald-950 hover:text-emerald-900'
+                                : 'bg-purple-50/50 hover:bg-purple-100/80 border border-purple-200/80 text-purple-950 hover:text-purple-900'
+                            }`}
+                          >
+                            <span className={`text-sm group-hover:scale-110 transition-transform shrink-0 ${
+                              isKbGrounded ? 'text-emerald-600' : 'text-purple-600'
+                            }`}>{isKbGrounded ? '📚' : '💡'}</span>
+                            <div className="flex-1">
+                              {isKbGrounded && (
+                                <span className="inline-block text-[9px] font-[700] text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-1.5 py-0.5 mb-1 uppercase tracking-wider">KB-Grounded</span>
+                              )}
+                              <span className="leading-snug block">{question}</span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Battle Card */}
+                {battleCard && (
+                  <div className="pt-3 border-t border-gray-100 space-y-2">
+                    <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">⚔️ BATTLE CARD</p>
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                      <p className="text-[11px] font-[600] text-amber-900 leading-snug">{battleCard}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* MEDDICC Tip */}
+                {meddiccTip && (
+                  <div className="pt-3 border-t border-gray-100 space-y-2">
+                    <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">🎯 MEDDICC COACHING</p>
+                    <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                      <p className="text-[11px] font-[600] text-indigo-900 leading-snug">{meddiccTip}</p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>

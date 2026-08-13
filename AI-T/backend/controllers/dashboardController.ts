@@ -184,9 +184,9 @@ export const getRepDashboard = async (req: any, res: any) => {
     const now = new Date()
     const transformedAssignments = (assignments || []).map(assign => {
       const sc: any = assign.scenario || {}
-      // Match sessions specifically to this assignment via session_id (preferred) or scenario_id fallback
+      // Match sessions to this assignment (via assignment_id directly, or fallback to scenario_id for legacy rows)
       const assignSessions = (sessions || []).filter(s =>
-        assign.session_id ? s.id === assign.session_id : s.scenario_id === assign.scenario_id
+        s.assignment_id === assign.id || (!s.assignment_id && s.scenario_id === assign.scenario_id)
       )
       const assignCompleted = assignSessions.filter(s => s.completed_at !== null)
 

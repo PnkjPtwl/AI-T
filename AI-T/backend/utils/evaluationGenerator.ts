@@ -63,7 +63,8 @@ export function generateEvaluationPrompt(
   evaluationFocus?: string,
   voiceAggregate?: any,
   metricWeights?: Record<string, number>,
-  dynamicMetrics?: DynamicMetric[]
+  dynamicMetrics?: DynamicMetric[],
+  ragContext?: string          // ← Only provided for RAG-linked personas
 ): string {
   let criteriaText = ''
   let scoreKeys = ''
@@ -140,7 +141,11 @@ ${criteriaText}
 
 --- SCENARIO ---
 Scenario Name: ${scenarioName}
-
+${ragContext ? `
+--- ACCOUNT KNOWLEDGE BASE (RAG PERSONA) ---
+This scenario involves a real account with a linked knowledge base. Use the facts below to make your evaluation grounded and account-specific — especially when writing better_answer suggestions.
+${ragContext}
+` : ''}
 --- TRANSCRIPT ---
 ${transcript}
 ${voiceSection}
@@ -149,6 +154,14 @@ ${voiceSection}
 2. SHORT CONVERSATIONS: If the transcript is extremely short (e.g. the rep only spoke 1 or 2 lines), they have NOT demonstrated most skills. Any skill NOT explicitly demonstrated MUST receive a score of 0. Do not give "neutral" scores (like 50) for unobserved skills.
 3. NO HALLUCINATIONS: Do not invent objections, highlights, or feedback for things that did not actually happen in the transcript.
 4. EVALUATE ONLY THE SALES REP: All quotes in 'actual_answer' and all suggestions in 'better_answer' MUST evaluate the human Sales Rep's statements. NEVER quote, evaluate, or suggest alternative responses for the AI Persona / Buyer.
+${ragContext ? `5. RAG PERSONA — better_answer MUST USE ACCOUNT FACTS: For every 'better_answer', incorporate specific facts from the Account Knowledge Base above (e.g. deal history, past objections, specs, timelines, contacts). Do NOT write generic responses. Write responses as if the rep had done their account research.
+6. KB ACCURACY SCORING: For the "Knowledge Base Accuracy" metric (if present in the criteria above), score STRICTLY based on factual correctness against the Account Knowledge Base:
+   - 90-100: Rep correctly referenced multiple specific KB facts (names, dates, specs, past interactions)
+   - 70-89: Rep referenced some KB facts correctly but missed key opportunities to leverage account knowledge
+   - 50-69: Rep made vague references without specific KB details, or did not use account knowledge at all
+   - 30-49: Rep fabricated facts or stats that are NOT in the KB (e.g. made-up numbers, invented history)
+   - 0-29: Rep stated facts that DIRECTLY CONTRADICT the KB (wrong timeline, wrong specs, wrong contacts)
+7. CROSS-REFERENCE ALL METRICS AGAINST KB: For a RAG persona, ALL metric scores must be influenced by factual accuracy. If the rep made up product names, algorithm names, statistics, or claims that do NOT exist in the Account Knowledge Base, this should SEVERELY lower their scores across ALL relevant metrics (especially Value Communication and Customer Understanding). A rep who fabricates information is demonstrating POOR customer understanding and POOR value communication, regardless of how confident they sound.` : ''}
 
 --- INSTRUCTIONS ---
 Analyse the transcript deeply based on the rules above. Return ONLY a raw JSON object with no markdown, no backticks, no extra text.

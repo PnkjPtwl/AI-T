@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
   { name: 'Training Management', href: '/training', icon: '📋' },
   { name: 'Persona Library', href: '/scenarios', icon: '👤' },
+  { name: 'Knowledge Base', href: '/knowledge-base', icon: '📚' },
   { name: 'Team Analytics', href: '/team-analytics', icon: '📈' },
 ]
 
