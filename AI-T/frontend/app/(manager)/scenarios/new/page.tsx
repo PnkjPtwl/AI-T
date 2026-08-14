@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -36,7 +36,7 @@ const AVATAR_PRESETS = [
   { id: 'casey',   name: 'Casey',   style: 'lorelei-neutral'     as AvatarStyle, tag: 'Direct & Assertive',    desc: 'Decisive, results-focused' },
 ]
 
-export default function NewScenarioPage() {
+function NewScenarioPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get('edit')
@@ -719,5 +719,13 @@ export default function NewScenarioPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function NewScenarioPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <NewScenarioPageContent />
+    </Suspense>
   )
 }
