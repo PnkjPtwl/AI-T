@@ -1,6 +1,7 @@
 # =============================================================================
 # docker-compose.yml — SalesCoach Demo Deployment
-# No IAM role required — secrets are passed as env vars, logs use json-file
+# Secrets are NOT stored here — they are loaded from a .env file on the server.
+# Copy .env to EC2 via SCP. See deployment guide for instructions.
 # =============================================================================
 version: '3.8'
 
@@ -13,22 +14,21 @@ services:
     container_name: salescoach-backend
     restart: unless-stopped
     expose:
-      - "4000"  # Exposed to Docker network, NOT to host
+      - "4000"
     environment:
       - PORT=4000
       - NODE_ENV=production
-      - ALLOWED_ORIGIN=13.50.236.160
+      - ALLOWED_ORIGIN=${EC2_IP}
       - RAG_API_URL=http://rag-api:8001
-      # Secrets — passed directly (no Secrets Manager / IAM role needed)
-      - SUPABASE_URL=https://pcgsizytsqayyidriyfu.supabase.co
-      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjZ3Npenl0c3FheXlpZHJpeWZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNTQzMjQsImV4cCI6MjA5ODczMDMyNH0.VIUJ5-lZ2Nh-rW5DPLlGbVAw3QjYnKvG5U-fYWPndLc
-      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjZ3Npenl0c3FheXlpZHJpeWZ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzE1NDMyNCwiZXhwIjoyMDk4NzMwMzI0fQ.1n-eMaJmJKDV6BQ0HSNzXvDo6ACnzxRVrWXkqSbkCCA
-      - GROQ_API_KEY=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
-      - ASSEMBLYAI_API_KEY=3183626f7af647edbc0c45cc4566cdfd
-      - ELEVENLABS_API_KEY=sk_cad715d54bdb1a0a307651b4d6fc43f8bbc60d3d72c69c8f
-      - ELEVENLABS_VOICE_ID_MALE=pNInz6obpgDQGcFmaJgB
-      - ELEVENLABS_VOICE_ID_FEMALE=EXAVITQu4vr4xnSDxMaL
-      - DEEPGRAM_API_KEY=8a0e8df64fbaabaf8d67e21792b7de1ebb845273
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - ASSEMBLYAI_API_KEY=${ASSEMBLYAI_API_KEY}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - ELEVENLABS_VOICE_ID_MALE=${ELEVENLABS_VOICE_ID_MALE}
+      - ELEVENLABS_VOICE_ID_FEMALE=${ELEVENLABS_VOICE_ID_FEMALE}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
     depends_on:
       - rag-api
     logging:
@@ -58,8 +58,8 @@ services:
       - "8001"
     environment:
       - PORT=8001
-      - SUPABASE_URL=https://pcgsizytsqayyidriyfu.supabase.co
-      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjZ3Npenl0c3FheXlpZHJpeWZ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzE1NDMyNCwiZXhwIjoyMDk4NzMwMzI0fQ.1n-eMaJmJKDV6BQ0HSNzXvDo6ACnzxRVrWXkqSbkCCA
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     logging:
       driver: json-file
       options:
@@ -68,14 +68,13 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2048M  # Needs ~1.5GB for embedding + reranker models
+          memory: 2048M
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8001/health"]
       interval: 30s
       timeout: 15s
       retries: 3
-      start_period: 60s  # Models take ~30s to load on first start
-
+      start_period: 60s
 
   # ── Frontend Service (Next.js) ─────────────────────────────────────────────
   frontend:
@@ -83,7 +82,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://13.50.236.160
+        - NEXT_PUBLIC_API_URL=http://${EC2_IP}
     container_name: salescoach-frontend
     restart: unless-stopped
     expose:
