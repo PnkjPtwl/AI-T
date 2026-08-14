@@ -6,7 +6,7 @@ import { getSecret } from '../lib/secrets'
 import OpenAI from 'openai'
 
 export const synthesizeSpeech = async (req: any, res: any) => {
-  const { text, voice_id } = req.body
+  const { text, voice_id, avatarType } = req.body
 
   if (!text || typeof text !== 'string' || text.trim().length === 0) {
     return res.status(400).json({ error: 'text is required' })
@@ -17,7 +17,14 @@ export const synthesizeSpeech = async (req: any, res: any) => {
     return res.status(500).json({ error: 'ElevenLabs API key not configured' })
   }
 
-  const selectedVoiceId = voice_id || 'EXAVITQu4vr4xnSDxMaL'
+  let selectedVoiceId = voice_id || 'EXAVITQu4vr4xnSDxMaL'
+  if (avatarType === 'male') {
+    selectedVoiceId = await getSecret('ELEVENLABS_VOICE_ID_MALE') || 'pNInz6obpgDQGcFmaJgB';
+  } else if (avatarType === 'female') {
+    selectedVoiceId = await getSecret('ELEVENLABS_VOICE_ID_FEMALE') || 'EXAVITQu4vr4xnSDxMaL';
+  }
+
+  console.log(`[TTS] Request for avatarType='${avatarType}', using voice_id='${selectedVoiceId}'`);
 
   try {
     const elevenRes = await fetch(
@@ -75,9 +82,10 @@ export const synthesizeSpeech = async (req: any, res: any) => {
         }
         
         const openai = new OpenAI({ apiKey: openaiApiKey })
+        const openAiVoice = avatarType === 'male' ? 'onyx' : 'alloy';
         const mp3 = await openai.audio.speech.create({
           model: 'tts-1',
-          voice: 'alloy',
+          voice: openAiVoice,
           input: text.trim(),
         })
         
@@ -101,7 +109,7 @@ export const synthesizeSpeech = async (req: any, res: any) => {
 }
 
 export const synthesizeSpeechBase64 = async (req: any, res: any) => {
-  const { text, voice_id } = req.body
+  const { text, voice_id, avatarType } = req.body
 
   if (!text || typeof text !== 'string' || text.trim().length === 0) {
     return res.status(400).json({ error: 'text is required' })
@@ -112,7 +120,12 @@ export const synthesizeSpeechBase64 = async (req: any, res: any) => {
     return res.status(500).json({ error: 'ElevenLabs API key not configured' })
   }
 
-  const selectedVoiceId = voice_id || 'EXAVITQu4vr4xnSDxMaL'
+  let selectedVoiceId = voice_id || 'EXAVITQu4vr4xnSDxMaL'
+  if (avatarType === 'male') {
+    selectedVoiceId = await getSecret('ELEVENLABS_VOICE_ID_MALE') || 'pNInz6obpgDQGcFmaJgB';
+  } else if (avatarType === 'female') {
+    selectedVoiceId = await getSecret('ELEVENLABS_VOICE_ID_FEMALE') || 'EXAVITQu4vr4xnSDxMaL';
+  }
 
   try {
     const elevenRes = await fetch(

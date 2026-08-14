@@ -40,6 +40,7 @@ export default function AssignTrainingWizard({
   const [notifyImmediate, setNotifyImmediate] = useState(true)
   const [notifyReminder, setNotifyReminder] = useState(true)
   const [notifyCompletion, setNotifyCompletion] = useState(true)
+  const [avatarType, setAvatarType] = useState<'female' | 'male'>('female')
   const [assigning, setAssigning] = useState(false)
 
   useEffect(() => {
@@ -104,10 +105,12 @@ export default function AssignTrainingWizard({
 
       const isUuid = (str: string) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)
       const validSelectedRepIds = selectedRepIds.filter(id => isUuid(id))
-      const validRepsFromProps = reps.map(r => r.id).filter(id => isUuid(id))
-      const finalRepIds = validSelectedRepIds.length > 0
-        ? validSelectedRepIds
-        : (validRepsFromProps.length > 0 ? validRepsFromProps : [])
+      if (validSelectedRepIds.length === 0) {
+        alert('Please select at least one sales representative.')
+        setAssigning(false)
+        return
+      }
+      const finalRepIds = validSelectedRepIds
 
       const res = await fetch(`${API}/api/users/assign-training`, {
         method: 'POST',
@@ -120,6 +123,7 @@ export default function AssignTrainingWizard({
           scenarioId: isUuid(selectedScenario?.id) ? selectedScenario.id : (isUuid(scenarios[0]?.id) ? scenarios[0].id : selectedScenario?.id),
           deadline,
           priority,
+          avatarType,
           trainingMode,
           notes,
           notifyImmediate,
@@ -347,6 +351,34 @@ export default function AssignTrainingWizard({
                   </div>
                 </div>
 
+                <div className="space-y-1.5 pt-2">
+                  <label className="text-xs font-[700] text-[#1E293B]">AI Voice Persona</label>
+                  <div className="flex gap-4 mt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="avatarType" 
+                        value="female" 
+                        checked={avatarType === 'female'} 
+                        onChange={() => setAvatarType('female')}
+                        className="text-[#1E1B4B] focus:ring-[#1E1B4B]"
+                      />
+                      <span className="text-xs font-[600] text-[#1E293B]">Female Voice</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="avatarType" 
+                        value="male" 
+                        checked={avatarType === 'male'} 
+                        onChange={() => setAvatarType('male')}
+                        className="text-[#1E1B4B] focus:ring-[#1E1B4B]"
+                      />
+                      <span className="text-xs font-[600] text-[#1E293B]">Male Voice</span>
+                    </label>
+                  </div>
+                </div>
+
                 {/* Scenario Details Preview Card */}
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-2">
                   <p className="text-[10px] font-[800] text-[#64748B] uppercase">SCENARIO DETAILS</p>
@@ -498,45 +530,6 @@ export default function AssignTrainingWizard({
                     />
                   </div>
                 </div>
-
-                {/* Notifications Options */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4">
-                  <h3 className="text-xs font-[800] text-[#64748B] tracking-wider uppercase flex items-center gap-2">
-                    <span>🔔</span> NOTIFICATIONS
-                  </h3>
-
-                  <div className="space-y-2.5">
-                    <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200/80 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={notifyImmediate}
-                        onChange={e => setNotifyImmediate(e.target.checked)}
-                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                      />
-                      <span className="text-xs font-[600] text-[#1E293B]">Notify immediately</span>
-                    </label>
-
-                    <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200/80 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={notifyReminder}
-                        onChange={e => setNotifyReminder(e.target.checked)}
-                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                      />
-                      <span className="text-xs font-[600] text-[#1E293B]">Reminder 1 day before deadline</span>
-                    </label>
-
-                    <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200/80 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={notifyCompletion}
-                        onChange={e => setNotifyCompletion(e.target.checked)}
-                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                      />
-                      <span className="text-xs font-[600] text-[#1E293B]">Send completion notification</span>
-                    </label>
-                  </div>
-                </div>
               </div>
 
               {/* Right Assignment Preview Column */}
@@ -558,6 +551,10 @@ export default function AssignTrainingWizard({
                   <div className="flex justify-between text-purple-200">
                     <span>Type</span>
                     <span className="font-[700] text-white">Voice Call</span>
+                  </div>
+                  <div className="flex justify-between text-purple-200">
+                    <span>AI Voice</span>
+                    <span className="font-[700] text-white capitalize">{avatarType}</span>
                   </div>
                   <div className="flex justify-between text-purple-200">
                     <span>Difficulty</span>
@@ -585,9 +582,9 @@ export default function AssignTrainingWizard({
                 <div className="pt-3 border-t border-purple-900/50 space-y-2">
                   <p className="text-[10px] font-[800] text-purple-300 uppercase">Representatives</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {(selectedRepsList.length > 0 ? selectedRepsList : [{ name: 'Pankaj' }]).map((r: any, idx: number) => (
+                    {(selectedRepsList.length > 0 ? selectedRepsList : []).map((r: any, idx: number) => (
                       <span key={idx} className="px-2.5 py-1 bg-white/10 text-white text-[11px] font-[600] rounded-md border border-white/10">
-                        {r.name?.split(' ')[0] || 'Pankaj'}
+                        {r.name?.split(' ')[0] || 'Unknown'}
                       </span>
                     ))}
                   </div>
@@ -630,7 +627,13 @@ export default function AssignTrainingWizard({
 
             {step < 4 ? (
               <button
-                onClick={() => setStep((step + 1) as any)}
+                onClick={() => {
+                  if (step === 3 && selectedRepIds.length === 0) {
+                    alert('Please select at least one sales representative.')
+                    return
+                  }
+                  setStep((step + 1) as any)
+                }}
                 className="px-6 py-2.5 rounded-xl bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] shadow-md transition-colors"
               >
                 Next →

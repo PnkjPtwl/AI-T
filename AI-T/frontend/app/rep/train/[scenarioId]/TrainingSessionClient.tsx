@@ -10,6 +10,7 @@ interface ChatMessage {
   content: string
   timestamp?: string
   inlineCoachNote?: string
+  emotionLabel?: { emotion: string; colorClass: string; changeText: string }
 }
 
 interface LiveMetricsState {
@@ -41,6 +42,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
   const [textInput, setTextInput] = useState('')
   const [isAiSpeaking, setIsAiSpeaking] = useState(false)
   const [micActive, setMicActive] = useState(false)
+  const [avatarType, setAvatarType] = useState<string>('female')
   const [autoSendOnSilence, setAutoSendOnSilence] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [isEnding, setIsEnding] = useState(false)
@@ -63,6 +65,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     warm: 0,
     wise: 0
   })
+  const prevToneDistributionRef = useRef({ alert: 0, hesitant: 0, warm: 0, wise: 0 })
 
   // Live metrics state
   const [metrics, setMetrics] = useState<LiveMetricsState>({
@@ -83,7 +86,17 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
 
   // Learning Mode extra fields
   const [battleCard, setBattleCard] = useState<string | null>(null)
-  const [meddiccTip, setMeddiccTip] = useState<string | null>(null)
+  const [meddpiccTip, setMeddpiccTip] = useState<string | null>(null)
+  const [meddpiccStatus, setMeddpiccStatus] = useState<Record<string, boolean>>({
+    "Metrics": false,
+    "Economic Buyer": false,
+    "Decision Criteria": false,
+    "Decision Process": false,
+    "Paper Process": false,
+    "Identify Pain": false,
+    "Champion": false,
+    "Competition": false
+  })
 
   // KB fact-check state (real-time contradiction detection)
   const [factCheck, setFactCheck] = useState<{ has_contradiction: boolean; rep_claim: string; kb_fact: string; correction_hint: string } | null>(null)
@@ -167,6 +180,9 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
           if (startRes.ok) {
             const startData = await startRes.json()
             sessId = startData.sessionId
+            if (startData.avatarType) {
+              setAvatarType(startData.avatarType)
+            }
             if (sessId) {
               setActiveSessionId(sessId)
               const newUrl = window.location.pathname + `?sessionId=${sessId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}`
@@ -188,6 +204,15 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
           const data = await res.json()
           const sess = data.session || data
           setScenario(data.scenario || sess.training_scenarios)
+
+          const assignObj = Array.isArray(sess.training_assignments)
+            ? sess.training_assignments[0]
+            : (sess.training_assignments || sess.assignment)
+
+          const resolvedAvatar = assignObj?.avatar_type || searchParams.get('avatarType') || searchParams.get('avatar_type')
+          if (resolvedAvatar) {
+            setAvatarType(resolvedAvatar)
+          }
 
           if (sess.current_stage) setCurrentStage(sess.current_stage)
           if (sess.progress_percentage) setProgressPct(sess.progress_percentage)
@@ -499,7 +524,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       const res = await fetch(`${API}/api/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text, voiceId: 'EXAVITQu4vr4xnSDxMaL' })
+        body: JSON.stringify({ text, avatarType: avatarType || 'female' })
       })
       if (res.ok) {
         const blob = await res.blob()
@@ -594,6 +619,9 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
           if (startRes.ok) {
             const startData = await startRes.json()
             currentSessionId = startData.sessionId
+            if (startData.avatarType) {
+              setAvatarType(startData.avatarType)
+            }
             if (currentSessionId) {
               setActiveSessionId(currentSessionId)
               const newUrl = window.location.pathname + `?sessionId=${currentSessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}`
@@ -701,17 +729,73 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
             }
 
             // Update Tone Distribution dynamically
+            let newToneDist = prevToneDistributionRef.current;
             if (sentData.tone_distribution) {
+              newToneDist = sentData.tone_distribution;
               setToneDistribution(sentData.tone_distribution)
             } else {
               if (newMood >= 70) {
-                setToneDistribution({ alert: 10, hesitant: 10, warm: 50, wise: 30 })
+                newToneDist = { alert: 10, hesitant: 10, warm: 50, wise: 30 }
               } else if (newMood <= 45) {
-                setToneDistribution({ alert: 40, hesitant: 40, warm: 10, wise: 10 })
+                newToneDist = { alert: 40, hesitant: 40, warm: 10, wise: 10 }
               } else {
-                setToneDistribution({ alert: 15, hesitant: 35, warm: 30, wise: 20 })
+                newToneDist = { alert: 15, hesitant: 35, warm: 30, wise: 20 }
+              }
+              setToneDistribution(newToneDist)
+            }
+
+            let maxAbsChange = 0;
+            let largestShiftEmotion: 'alert' | 'hesitant' | 'warm' | 'wise' | null = null;
+            let actualDiff = 0;
+            const emotions = ['alert', 'hesitant', 'warm', 'wise'] as const;
+
+            const prevTotal = prevToneDistributionRef.current.alert + prevToneDistributionRef.current.hesitant + prevToneDistributionRef.current.warm + prevToneDistributionRef.current.wise;
+
+            if (prevTotal > 0) {
+              for (const em of emotions) {
+                const diff = newToneDist[em] - prevToneDistributionRef.current[em];
+                if (Math.abs(diff) >= 20 && Math.abs(diff) > maxAbsChange) {
+                  maxAbsChange = Math.abs(diff);
+                  largestShiftEmotion = em;
+                  actualDiff = diff;
+                }
               }
             }
+
+            if (largestShiftEmotion) {
+              const colorMap = {
+                alert: 'text-red-700 bg-red-100 border-red-300',
+                hesitant: 'text-orange-700 bg-orange-100 border-orange-300',
+                warm: 'text-yellow-700 bg-yellow-100 border-yellow-300',
+                wise: 'text-green-700 bg-green-100 border-green-300'
+              };
+              const nameMap = {
+                alert: 'Alert',
+                hesitant: 'Hesitant',
+                warm: 'Warm',
+                wise: 'Wise'
+              };
+
+              setMessages(prevMsgs => {
+                const newMsgs = [...prevMsgs];
+                for (let i = newMsgs.length - 1; i >= 0; i--) {
+                  if (newMsgs[i].role === 'user') {
+                    newMsgs[i] = {
+                      ...newMsgs[i],
+                      emotionLabel: {
+                        emotion: nameMap[largestShiftEmotion!],
+                        colorClass: colorMap[largestShiftEmotion!],
+                        changeText: actualDiff > 0 ? `+${actualDiff}%` : `${actualDiff}%`
+                      }
+                    };
+                    break;
+                  }
+                }
+                return newMsgs;
+              });
+            }
+
+            prevToneDistributionRef.current = newToneDist;
 
             if (sentData.suggested_followups && sentData.suggested_followups.length > 0) {
               setSuggestedFollowUps(sentData.suggested_followups)
@@ -726,7 +810,18 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
             // Learning Mode extras
             if (isLearningMode) {
               setBattleCard(sentData.battle_card || null)
-              setMeddiccTip(sentData.meddicc_tip || null)
+              setMeddpiccTip(sentData.meddpicc_tip || null)
+              if (sentData.meddpicc_status) {
+                setMeddpiccStatus(prev => {
+                  const updated = { ...prev };
+                  for (const key in sentData.meddpicc_status) {
+                    if (sentData.meddpicc_status[key]) {
+                      updated[key] = true;
+                    }
+                  }
+                  return updated;
+                });
+              }
             }
           }
         } catch (sentErr) {
@@ -958,21 +1053,21 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
 
             {isSessionStarted ? (
             <div className="grid grid-cols-4 gap-2">
-              <div className="bg-blue-50/60 border border-blue-100 p-2 rounded-lg text-center">
-                <p className="text-[10px] font-[600] text-blue-600">Alert</p>
-                <p className="text-sm font-[800] text-[#1E293B]">{toneDistribution.alert}%</p>
+              <div className="bg-red-600 border border-red-700 p-2 rounded-lg text-center shadow-sm">
+                <p className="text-[10px] font-[600] text-red-100">Alert</p>
+                <p className="text-sm font-[800] text-white">{toneDistribution.alert}%</p>
               </div>
-              <div className="bg-amber-50/60 border border-amber-100 p-2 rounded-lg text-center">
-                <p className="text-[10px] font-[600] text-amber-600">Hesitant</p>
-                <p className="text-sm font-[800] text-[#1E293B]">{toneDistribution.hesitant}%</p>
+              <div className="bg-orange-500 border border-orange-600 p-2 rounded-lg text-center shadow-sm">
+                <p className="text-[10px] font-[600] text-orange-50">Hesitant</p>
+                <p className="text-sm font-[800] text-white">{toneDistribution.hesitant}%</p>
               </div>
-              <div className="bg-yellow-50/80 border-2 border-yellow-400 p-2 rounded-lg text-center shadow-sm">
-                <p className="text-[10px] font-[800] text-yellow-700">Warm</p>
-                <p className="text-sm font-[800] text-[#1E293B]">{toneDistribution.warm}%</p>
+              <div className="bg-yellow-400 border border-yellow-500 p-2 rounded-lg text-center shadow-sm">
+                <p className="text-[10px] font-[600] text-yellow-900">Warm</p>
+                <p className="text-sm font-[800] text-black">{toneDistribution.warm}%</p>
               </div>
-              <div className="bg-indigo-50/60 border border-indigo-100 p-2 rounded-lg text-center">
-                <p className="text-[10px] font-[600] text-indigo-600">Wise</p>
-                <p className="text-sm font-[800] text-[#1E293B]">{toneDistribution.wise}%</p>
+              <div className="bg-green-600 border border-green-700 p-2 rounded-lg text-center shadow-sm">
+                <p className="text-[10px] font-[600] text-green-100">Wise</p>
+                <p className="text-sm font-[800] text-white">{toneDistribution.wise}%</p>
               </div>
             </div>
             ) : (
@@ -997,9 +1092,16 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
                   >
                     <p className={isUser ? "text-white" : ""}>{m.content}</p>
                   </div>
-                  <span className="text-[10px] font-[600] text-[#64748B] mt-1 px-1 flex items-center gap-1">
-                    {isUser ? 'You (Sales Rep)' : personaName}
-                  </span>
+                  <div className="flex flex-col">
+                    <span className={`text-[10px] font-[600] text-[#64748B] mt-1 px-1 flex items-center gap-1 ${isUser ? 'justify-end' : 'justify-start'}`}>
+                      {isUser ? 'You (Sales Rep)' : personaName}
+                    </span>
+                    {isUser && m.emotionLabel && (
+                      <div className={`mt-1 self-end inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold border ${m.emotionLabel.colorClass}`}>
+                        <span>{m.emotionLabel.emotion} Shift: {m.emotionLabel.changeText}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -1232,13 +1334,26 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
                   </div>
                 )}
 
-                {/* MEDDICC Tip */}
-                {meddiccTip && (
+                {/* MEDDPICC Checklist & Tip */}
+                {(meddpiccTip || Object.values(meddpiccStatus).some(Boolean)) && (
                   <div className="pt-3 border-t border-gray-100 space-y-2">
-                    <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">🎯 MEDDICC COACHING</p>
-                    <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
-                      <p className="text-[11px] font-[600] text-indigo-900 leading-snug">{meddiccTip}</p>
+                    <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">🎯 MEDDPICC COACHING</p>
+                    <div className="space-y-1 mt-2">
+                      {['Metrics', 'Economic Buyer', 'Decision Criteria', 'Decision Process', 'Paper Process', 'Identify Pain', 'Champion', 'Competition'].map(stage => {
+                        const isCompleted = meddpiccStatus[stage];
+                        return (
+                          <div key={stage} className={`text-[10px] font-[700] flex items-center gap-2 ${isCompleted ? 'text-green-600' : 'text-gray-400'}`}>
+                            <span>{isCompleted ? '✓' : '○'}</span>
+                            <span>{stage} {isCompleted && <span className="text-[9px] uppercase">(Completed)</span>}</span>
+                          </div>
+                        )
+                      })}
                     </div>
+                    {meddpiccTip && (
+                      <div className="p-3 mt-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                        <p className="text-[11px] font-[600] text-indigo-900 leading-snug">{meddpiccTip}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </>

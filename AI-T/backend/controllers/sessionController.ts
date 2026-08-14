@@ -141,6 +141,17 @@ export const startPractice = async (req: any, res: any) => {
       if (autoAssign.status === 'In Progress' && autoAssign.session_id) {
         existingSessionId = autoAssign.session_id;
       }
+    } else if (scenarioId) {
+      const { data: scenData } = await supabase
+        .from('training_scenarios')
+        .select('avatar_config')
+        .eq('id', scenarioId)
+        .maybeSingle();
+      if (scenData?.avatar_config?.avatarType) {
+        assignmentAvatarType = scenData.avatar_config.avatarType;
+      } else if (scenData?.avatar_config?.avatar_type) {
+        assignmentAvatarType = scenData.avatar_config.avatar_type;
+      }
     }
   }
 
@@ -167,7 +178,8 @@ export const startPractice = async (req: any, res: any) => {
     const { count } = await supabase
       .from('training_sessions')
       .select('id', { count: 'exact', head: true })
-      .eq('assignment_id', targetAssignmentId);
+      .eq('rep_id', repId)
+      .eq('scenario_id', scenarioId);
     existingAttemptsCount = count || 0;
   } else {
     const { count } = await supabase
@@ -511,7 +523,7 @@ export const endSession = async (req: any, res: any) => {
 
           // 6. Attempt limit reached (check if this was the last allowed attempt)
           const { data: assignmentRow } = await supabase.from('training_assignments').select('training_mode').eq('id', targetAssignmentId).single()
-          const { count: totalAttempts } = await supabase.from('training_sessions').select('id', { count: 'exact', head: true }).eq('assignment_id', targetAssignmentId)
+          const { count: totalAttempts } = await supabase.from('training_sessions').select('id', { count: 'exact', head: true }).eq('rep_id', session.rep_id).eq('scenario_id', session.scenario_id)
           const limit = getModeLimit(assignmentRow?.training_mode || 'coach')
           if ((totalAttempts || 0) >= limit && latestScore < 65) {
             await createNotification({ orgId, managerId, type: 'attempt_limit', priority: 'high', title: 'Attempt Limit Reached', body: `${repName} has used all ${limit} attempt(s) on "${scenarioTitle}" without achieving a satisfactory score.`, metadata: { ...notifMeta, maxAttempts: limit } })
@@ -904,7 +916,7 @@ export const getSession = async (req: any, res: any) => {
   const { sessionId } = req.params
   const { data, error } = await supabase
     .from('training_sessions')
-    .select('*, training_scenarios(*)')
+    .select('*, training_scenarios(*), training_assignments(*)')
     .eq('id', sessionId)
     .single()
 
@@ -1021,7 +1033,8 @@ Return this exact JSON structure:
   "suggested_followups": ["<full response 1>", "<full response 2>", "<full response 3>"],
   ${kbContextStr ? '"suggested_followups_sources": ["kb" | "general", "kb" | "general", "kb" | "general"],' : ''}
   "battle_card": "<1-2 sentence competitive or product positioning insight the rep can use right now>",
-  "meddicc_tip": "<1 sentence identifying which MEDDICC component to probe next, with a specific suggested question>",
+  "meddpicc_status": { "Metrics": <bool>, "Economic Buyer": <bool>, "Decision Criteria": <bool>, "Decision Process": <bool>, "Paper Process": <bool>, "Identify Pain": <bool>, "Champion": <bool>, "Competition": <bool> },
+  "meddpicc_tip": "<1 sentence identifying the most critical unchecked MEDDPICC component to probe next, with a specific suggested question>",
   "tone_distribution": { "alert": <int>, "hesitant": <int>, "warm": <int>, "wise": <int> }${factCheckJsonBlock}
 }
 tone_distribution values must sum to exactly 100.
@@ -1044,9 +1057,10 @@ RULES — BATTLE CARD:
 ${kbContextStr ? `- Tie it to account-specific context from the KB if relevant.` : `- Focus on a concrete product differentiator or ROI angle.`}
 - Keep it to 1-2 sentences. Do NOT use generic phrases like "emphasise value".
 
-RULES — MEDDICC TIP:
-- Identify which MEDDICC dimension (Metrics, Economic Buyer, Decision Criteria, Decision Process, Identify Pain, Champion) is currently weakest based on the conversation.
-- Give one specific question the rep should ask to address it.
+RULES — MEDDPICC CHECKLIST:
+- Analyze the entire conversation context to determine which MEDDPICC dimensions (Metrics, Economic Buyer, Decision Criteria, Decision Process, Paper Process, Identify Pain, Champion, Competition) have been adequately discussed by the rep. Set those to true in "meddpicc_status", otherwise false.
+- Identify the most critical unchecked MEDDPICC dimension based on the conversation stage.
+- Give one specific question the rep should ask to address it in "meddpicc_tip".
 
 RULES — COACHING HINT:
 - Be prescriptive, not vague. Reference MEDDICC, specific objection type, or conversation stage.
@@ -1128,7 +1142,8 @@ ${factCheckBlock}`
       suggested_followups: [],
       suggested_followups_sources: [],
       battle_card: null,
-      meddicc_tip: null,
+      meddpicc_status: { "Metrics": false, "Economic Buyer": false, "Decision Criteria": false, "Decision Process": false, "Paper Process": false, "Identify Pain": false, "Champion": false, "Competition": false },
+      meddpicc_tip: null,
       tone_distribution: { alert: 10, hesitant: 20, warm: 50, wise: 20 },
       mode: isLearning ? 'learning' : 'coach',
       has_kb: false,

@@ -1104,7 +1104,7 @@ export const getMyAssignments = async (req: any, res: any) => {
 
     const { data: repSessionsData } = await supabase
       .from('training_sessions')
-      .select('id, assignment_id, rep_id, scenario_id')
+      .select('id, rep_id, scenario_id')
       .eq('rep_id', repId);
 
     const now = new Date();
@@ -1209,14 +1209,12 @@ export const getTeamAssignments = async (req: any, res: any) => {
 
     const { data: teamSessionsData } = await supabase
       .from('training_sessions')
-      .select('id, assignment_id, rep_id, scenario_id');
+      .select('id, rep_id, scenario_id, feedback_json, created_at, completed_at');
 
     const now = new Date();
     const transformed = assignmentsList.map((a: any) => {
       const rep = repMap[a.rep_id] || {};
       const scenario = scenarioMap[a.scenario_id] || {};
-      const feedback = a.session_id ? sessionMap[a.session_id] : null;
-      const score = feedback?.overall_score || null;
 
       const deadlineDate = a.deadline ? new Date(a.deadline) : null;
       let status = a.status || 'Pending';
@@ -1231,6 +1229,27 @@ export const getTeamAssignments = async (req: any, res: any) => {
       const matchedSessions = (teamSessionsData || []).filter((s: any) =>
         s.assignment_id === a.id || (s.rep_id === a.rep_id && s.scenario_id === a.scenario_id)
       );
+      
+      const completedSessions = matchedSessions.filter((s: any) => s.completed_at !== null);
+      
+      let bestScore: number | null = null;
+      let latestFeedback: any = null;
+      let timePracticedMins = 0;
+      
+      // Only count completed sessions for time. Cap each at 180 min to avoid stale sessions skewing data.
+      completedSessions.forEach((s: any) => {
+        if (s.created_at && s.completed_at) {
+          const mins = Math.round((new Date(s.completed_at).getTime() - new Date(s.created_at).getTime()) / 60000);
+          timePracticedMins += Math.min(mins, 180);
+        }
+      });
+
+      if (completedSessions.length > 0) {
+        completedSessions.sort((x: any, y: any) => new Date(y.completed_at).getTime() - new Date(x.completed_at).getTime());
+        latestFeedback = completedSessions[0].feedback_json;
+        bestScore = Math.max(...completedSessions.map((s: any) => s.feedback_json?.overall_score || 0));
+      }
+
       const attemptsCount = matchedSessions.length;
       const maxAttempts = getModeLimit(a.training_mode);
 
@@ -1244,7 +1263,25 @@ export const getTeamAssignments = async (req: any, res: any) => {
         deadline: a.deadline,
         created_at: a.created_at,
         training_mode: normalizeModeForDisplay(a.training_mode),
-        score,
+        score: bestScore,
+        best_score: bestScore,
+        completed_at: completedSessions.length > 0 ? completedSessions[0].completed_at : null,
+        time_practiced_mins: timePracticedMins,
+        feedback: latestFeedback,
+        strengths: latestFeedback?.strengths || [],
+        skill_gaps: latestFeedback?.improvements || latestFeedback?.areas_for_improvement || [],
+        recent_activity: [
+          ...completedSessions.slice(0, 5).map((s: any) => ({
+            text: `Session completed — Score: ${s.feedback_json?.overall_score ?? 'N/A'}%`,
+            time: new Date(s.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            color: 'bg-green-500'
+          })),
+          {
+            text: 'Assignment created',
+            time: a.created_at ? new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
+            color: 'bg-purple-500'
+          }
+        ],
         attempts_count: attemptsCount,
         attemptsCount,
         max_attempts: maxAttempts,

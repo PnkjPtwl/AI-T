@@ -159,14 +159,13 @@ export const getManagerAssignments = async (req: any, res: any) => {
 
     const { data: sessions } = await supabase
       .from('training_sessions')
-      .select('id, assignment_id, rep_id, scenario_id, feedback_json, progress_percentage, completed_at, created_at')
+      .select('id, rep_id, scenario_id, feedback_json, completed_at, created_at')
 
     const transformed = assignmentsList.map((assign: any) => {
       const rep = repMap[assign.rep_id] || {};
       const scenario = scenarioMap[assign.scenario_id] || {};
 
-      const repSessions = (sessions || []).filter(s => 
-        (s.assignment_id && s.assignment_id === assign.id) || 
+      const repSessions = (sessions || []).filter((s: any) => 
         (s.rep_id === assign.rep_id && s.scenario_id === assign.scenario_id)
       )
       const completedSess = repSessions.filter(s => s.completed_at !== null)

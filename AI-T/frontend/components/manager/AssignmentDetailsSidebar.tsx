@@ -39,13 +39,13 @@ export default function AssignmentDetailsSidebar({
   const assignedBy = 'Lokesh (Manager)'
   const industry = assignment.industry || 'Tech'
 
-  const scorePct = assignment.score ? Math.round(assignment.score) : (assignment.score_pct || assignment.progress?.bestScore || null)
-  const attemptsCount = assignment.attempts_count ?? assignment.attemptsCount ?? assignment.progress?.attemptsCount ?? (scorePct ? 1 : 0)
+  const scorePct = assignment.score !== undefined && assignment.score !== null ? Math.round(assignment.score) : (assignment.score_pct ?? assignment.progress?.bestScore ?? null)
+  const attemptsCount = assignment.attempts_count ?? assignment.attemptsCount ?? assignment.progress?.attemptsCount ?? (scorePct !== null ? 1 : 0)
   const trainingMode = assignment.training_mode || assignment.trainingMode || 'Coach Mode'
   const modeLower = trainingMode.toLowerCase()
   const maxAttempts = assignment.max_attempts || assignment.maxAttempts || assignment.progress?.maxAttempts || (modeLower.includes('exam') ? 1 : modeLower.includes('learning') ? 3 : 5)
-  const timePracticedMins = assignment.time_practiced_mins || assignment.progress?.minutesPracticed || (scorePct ? 12 : 0)
-  const bestScore = assignment.score ? Math.round(assignment.score) : (assignment.best_score || assignment.progress?.bestScore || null)
+  const timePracticedMins = assignment.time_practiced_mins !== undefined && assignment.time_practiced_mins !== null ? assignment.time_practiced_mins : (assignment.progress?.minutesPracticed ?? (scorePct !== null ? 12 : 0))
+  const bestScore = assignment.best_score !== undefined && assignment.best_score !== null ? Math.round(assignment.best_score) : (assignment.score !== undefined && assignment.score !== null ? Math.round(assignment.score) : (assignment.progress?.bestScore ?? null))
 
   // Helper to parse strings or arrays safely
   const parseList = (val: any, fallback: string[]): string[] => {
@@ -56,13 +56,18 @@ export default function AssignmentDetailsSidebar({
     return fallback
   }
 
+  // Prefer top-level backend fields, then fall back to nested feedback object
   let strengths = parseList(assignment.strengths, [])
   let skillGaps = parseList(assignment.skill_gaps, [])
 
+  // Override from feedback if present and strengths/skillGaps are still empty
   if (assignment.feedback) {
-    if (Array.isArray(assignment.feedback.strengths)) strengths = assignment.feedback.strengths
-    if (Array.isArray(assignment.feedback.areas_for_improvement)) skillGaps = assignment.feedback.areas_for_improvement
-    else if (Array.isArray(assignment.feedback.weaknesses)) skillGaps = assignment.feedback.weaknesses
+    if (strengths.length === 0 && Array.isArray(assignment.feedback.strengths)) strengths = assignment.feedback.strengths
+    if (skillGaps.length === 0) {
+      if (Array.isArray(assignment.feedback.areas_for_improvement)) skillGaps = assignment.feedback.areas_for_improvement
+      else if (Array.isArray(assignment.feedback.weaknesses)) skillGaps = assignment.feedback.weaknesses
+      else if (Array.isArray(assignment.feedback.improvements)) skillGaps = assignment.feedback.improvements
+    }
   }
 
   const generatedActivity = []
@@ -173,8 +178,13 @@ export default function AssignmentDetailsSidebar({
             <h3 className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">PROGRESS</h3>
             <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between text-center">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full border-4 border-amber-500 flex items-center justify-center font-[800] text-sm text-[#1E293B]">
-                  {scorePct}%
+                <div className={`w-12 h-12 rounded-full border-4 flex items-center justify-center font-[800] text-sm ${
+                  scorePct === null ? 'border-gray-300 text-gray-400' :
+                  scorePct >= 70 ? 'border-green-500 text-green-700' :
+                  scorePct >= 40 ? 'border-amber-500 text-amber-700' :
+                  'border-red-400 text-red-600'
+                }`}>
+                  {scorePct !== null ? `${scorePct}%` : '--'}
                 </div>
               </div>
 
@@ -186,12 +196,12 @@ export default function AssignmentDetailsSidebar({
               </div>
 
               <div>
-                <p className="text-base font-[800] text-[#1E293B]">{timePracticedMins} min</p>
+                <p className="text-base font-[800] text-[#1E293B]">{timePracticedMins > 0 ? `${timePracticedMins} min` : '--'}</p>
                 <p className="text-[10px] font-[600] text-[#64748B]">Practiced</p>
               </div>
 
               <div>
-                <p className="text-base font-[800] text-[#1E293B]">{bestScore}%</p>
+                <p className="text-base font-[800] text-[#1E293B]">{bestScore !== null ? `${bestScore}%` : '--'}</p>
                 <p className="text-[10px] font-[600] text-[#64748B]">Best Score</p>
               </div>
             </div>
@@ -201,24 +211,32 @@ export default function AssignmentDetailsSidebar({
           <div className="space-y-3 pt-2 border-t border-gray-100">
             <div className="space-y-1.5">
               <h4 className="text-[10px] font-[800] text-[#64748B] uppercase">STRENGTHS</h4>
-              <ul className="space-y-1 text-[#334155]">
-                {strengths.map((s: string, idx: number) => (
-                  <li key={idx} className="flex items-center gap-1.5">
-                    <span className="text-green-600 font-[700]">✓</span> {s}
-                  </li>
-                ))}
-              </ul>
+              {strengths.length > 0 ? (
+                <ul className="space-y-1 text-[#334155]">
+                  {strengths.map((s: string, idx: number) => (
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <span className="text-green-600 font-[700] mt-0.5">✓</span> <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[11px] text-[#94A3B8] italic">{attemptsCount > 0 ? 'No strengths recorded yet' : 'No sessions completed yet'}</p>
+              )}
             </div>
 
             <div className="space-y-1.5 pt-2">
               <h4 className="text-[10px] font-[800] text-[#64748B] uppercase">SKILL GAPS</h4>
-              <ul className="space-y-1 text-[#334155]">
-                {skillGaps.map((g: string, idx: number) => (
-                  <li key={idx} className="flex items-center gap-1.5">
-                    <span className="text-amber-500 font-[700]">⚠️</span> {g}
-                  </li>
-                ))}
-              </ul>
+              {skillGaps.length > 0 ? (
+                <ul className="space-y-1 text-[#334155]">
+                  {skillGaps.map((g: string, idx: number) => (
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <span className="text-amber-500 font-[700] mt-0.5">⚠</span> <span>{g}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[11px] text-[#94A3B8] italic">{attemptsCount > 0 ? 'No skill gaps recorded' : 'Complete a session to see skill gaps'}</p>
+              )}
             </div>
           </div>
 
