@@ -9,16 +9,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
+# Copy requirements and install (fastapi + uvicorn are already listed here)
 COPY rag/requirements.txt ./rag/requirements.txt
 RUN pip install --no-cache-dir -r rag/requirements.txt
-RUN pip install --no-cache-dir uvicorn fastapi
 
-# Copy the full RAG package and backend .env
+# Copy the full RAG package
+# NOTE: backend/.env is NOT copied here — on AWS the RAG api reads secrets
+# from Secrets Manager (via AWS_REGION env var) or from docker-compose env vars.
+# For local dev, rag/config.py will fall back to reading ../backend/.env at runtime.
 COPY rag/ ./rag/
-COPY backend/.env ./backend/.env
 
-# Pre-download models at build time so startup is fast
+# Pre-download models at build time so container startup is fast (~30s saved)
 RUN python -c "from rag.embeddings.embedder import EmbedderSingleton; EmbedderSingleton.get_instance()" || true
 
 EXPOSE 8001

@@ -52,8 +52,11 @@ services:
       - "8001"
     environment:
       - PORT=8001
-      - AWS_REGION=ap-south-1
-      - SECRET_NAME=salescoach/demo/backend
+      # RAG config.py reads purely from os.getenv() — no Secrets Manager SDK.
+      # These must be set explicitly here. Values are fetched from your
+      # AWS Secrets Manager secret named salescoach/demo/backend.
+      - SUPABASE_URL=https://pcgsizytsqayyidriyfu.supabase.co
+      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjZ3Npenl0c3FheXlpZHJpeWZ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzE1NDMyNCwiZXhwIjoyMDk4NzMwMzI0fQ.1n-eMaJmJKDV6BQ0HSNzXvDo6ACnzxRVrWXkqSbkCCA
     logging:
       driver: awslogs
       options:

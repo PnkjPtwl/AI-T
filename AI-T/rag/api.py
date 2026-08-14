@@ -11,7 +11,7 @@ Start locally:
 Endpoints:
     POST /search              — semantic KB search with optional account filter
     GET  /health              — liveness probe
-    GET  /accounts            — list all unique account names in the KB
+    GET  /accounts            — list all KB accounts from Supabase
     POST /kb/upload           — upload & process docs for a custom KB account
     GET  /kb/list             — list all custom KB accounts from Supabase
     DELETE /kb/{slug}         — delete all embeddings for a KB account
@@ -141,35 +141,21 @@ async def search(req: SearchRequest):
 @app.get("/accounts")
 async def list_accounts():
     """
-    Returns unique customer account names in the knowledge base.
-    Combines Phoenix Automotive (static) + custom KBs from knowledge_bases table.
+    Returns all KB account names from the knowledge_bases Supabase table.
     """
     try:
         client = SupabaseStoreClient.get_client()
-
-        # Fetch custom KBs from the knowledge_bases table
         kb_res = client.table("knowledge_bases").select("slug, name, status").execute()
-        custom_kbs = kb_res.data or []
-
-        formatted_accounts = [
-            {"id": "phoenix_automotive", "name": "Phoenix Automotive"}
+        accounts = [
+            {"id": kb["slug"], "name": kb["name"]}
+            for kb in (kb_res.data or [])
+            if kb.get("slug") and kb.get("name")
         ]
-
-        for kb in custom_kbs:
-            slug = kb.get("slug", "")
-            name = kb.get("name", "")
-            if slug and slug != "phoenix_automotive" and name:
-                formatted_accounts.append({"id": slug, "name": name})
-
-        return {"accounts": formatted_accounts}
+        return {"accounts": accounts}
 
     except Exception as e:
         logger.exception("Failed to list accounts")
-        return {
-            "accounts": [
-                {"id": "phoenix_automotive", "name": "Phoenix Automotive"}
-            ]
-        }
+        return {"accounts": [], "error": str(e)}
 
 
 # ─── KB Upload Route ──────────────────────────────────────────────────────────
@@ -281,48 +267,11 @@ async def kb_delete(slug: str):
         return {"success": False, "error": str(e)}
 
 
-# ─── Phoenix Sync Routes ──────────────────────────────────────────────────────
-
-from rag.tracker.sync_agent import get_phoenix_sync_agent
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Initializing Phoenix Automotive Background Sync Agent...")
-    agent = get_phoenix_sync_agent()
-    # Run initial sync and start background polling worker (every 10 mins)
-    agent.start_background_tracker(interval_seconds=600)
-
-
-@app.post("/sync/phoenix")
-async def sync_phoenix():
-    """
-    Triggers an immediate live sync for Phoenix Automotive.
-    Captures new/updated CRM records from HubSpot and email threads from Gmail,
-    embeds them, and updates the Supabase Vector Store.
-    """
-    try:
-        agent = get_phoenix_sync_agent()
-        status = agent.sync_now()
-        return {"success": True, "message": "Phoenix Automotive sync completed", "data": status}
-    except Exception as e:
-        logger.exception("Failed to sync Phoenix Automotive")
-        return {"success": False, "error": str(e)}
-
-
-@app.get("/sync/status")
-async def sync_status():
-    """
-    Returns the live sync status, document count, and last sync timestamp for Phoenix Automotive.
-    """
-    agent = get_phoenix_sync_agent()
-    return agent.get_status()
-
+# ─── Health Route ─────────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health():
-    agent = get_phoenix_sync_agent()
     return {
         "status": "ok",
         "model_loaded": _retriever is not None,
-        "sync_agent": agent.get_status()
     }

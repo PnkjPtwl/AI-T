@@ -307,7 +307,7 @@ export default function TeamAnalyticsPage() {
                   <th className="p-3">REPRESENTATIVE</th>
                   <th className="p-3">AVG SCORE</th>
                   <th className="p-3">COMPLETION</th>
-                  <th className="p-3">TREND</th>
+                  <th className="p-3">GROWTH</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-[600] text-[#334155]">

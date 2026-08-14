@@ -109,7 +109,7 @@ export default function KnowledgeBasePage() {
                   <span className="font-[800] text-base">Phoenix Automotive</span>
                   <span className="text-[9px] font-[700] bg-white/20 px-2 py-0.5 rounded-full tracking-wider">SYSTEM</span>
                 </div>
-                <p className="text-white/60 text-xs font-[500]">Static knowledge base · Synced via HubSpot CRM &amp; Gmail</p>
+                <p className="text-white/60 text-xs font-[500]">Static knowledge base</p>
               </div>
             </div>
             <div className="flex items-center gap-6 text-right">
@@ -117,11 +117,6 @@ export default function KnowledgeBasePage() {
                 <div className="text-lg font-[900]">10+</div>
                 <div className="text-[10px] text-white/50 font-[600] uppercase tracking-wide">Documents</div>
               </div>
-              <div>
-                <div className="text-lg font-[900]">Live</div>
-                <div className="text-[10px] text-white/50 font-[600] uppercase tracking-wide">CRM Sync</div>
-              </div>
-              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
             </div>
           </div>
         </div>
