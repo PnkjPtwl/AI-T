@@ -78,6 +78,15 @@ def get_upload_pipeline() -> UploadPipeline:
 
 class SearchRequest(BaseModel):
     query: str
+
+
+# ─── Health check ─────────────────────────────────────────────────────────────
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
     account_name: Optional[str] = None   # e.g. "phoenix automotive"
     k: int = 5                           # balanced default: 5 chunks
 
