@@ -200,7 +200,7 @@ export const getManagerAssignments = async (req: any, res: any) => {
         attemptsCount: repSessions.length,
         maxAttempts,
         isLimitReached: repSessions.length >= maxAttempts,
-        liveProgressPct: latestSess && !latestSess.completed_at ? (latestSess.progress_percentage || 74) : null
+        liveProgressPct: latestSess && !latestSess.completed_at ? ((latestSess as any).progress_percentage || 74) : null
       }
     })
 
