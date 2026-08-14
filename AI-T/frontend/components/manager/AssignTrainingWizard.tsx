@@ -8,6 +8,7 @@ interface AssignTrainingWizardProps {
   scenarios: any[]
   reps: any[]
   onSuccess: () => void
+  initialScenarioId?: string
   initialData?: {
     scenarioId?: string
     repId?: string
@@ -22,6 +23,7 @@ export default function AssignTrainingWizard({
   scenarios = [],
   reps = [],
   onSuccess,
+  initialScenarioId,
   initialData
 }: AssignTrainingWizardProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
