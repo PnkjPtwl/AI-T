@@ -1,5 +1,5 @@
 import { AssemblyAI } from 'assemblyai'
-import { Groq } from 'groq-sdk'
+import OpenAI from 'openai'
 import { getSecret } from '../lib/secrets'
 
 export const generatePersonaFromAudio = async (req: any, res: any) => {
@@ -38,7 +38,7 @@ export const generatePersonaFromAudio = async (req: any, res: any) => {
       .join('\n')
 
     const groqApiKey = await getSecret('GROQ_API_KEY')
-    const groq = new Groq({ apiKey: groqApiKey })
+    const openai = new OpenAI({ apiKey: groqApiKey || '', baseURL: 'https://api.groq.com/openai/v1' })
 
     const extractionPrompt = `
 You are an expert sales coach and persona designer.
@@ -74,11 +74,12 @@ Return ONLY a valid JSON object matching this exact structure:
 }
 `
 
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+    const completion = await openai.chat.completions.create({
+      model: 'openai/gpt-oss-120b',
       messages: [{ role: 'user', content: extractionPrompt }],
       response_format: { type: 'json_object' },
-      temperature: 0.3
+      temperature: 0.3,
+      max_tokens: 4000
     })
 
     const resultText = completion.choices[0].message.content

@@ -128,7 +128,7 @@ export const createKnowledgeBase = async (req: any, res: Response) => {
     return res.status(400).json({ error: 'Knowledge base name is required' })
   }
 
-  const files: Express.Multer.File[] = (req as any).files || []
+  const files: any[] = (req as any).files || []
   if (!files.length) {
     return res.status(400).json({ error: 'At least one document must be uploaded' })
   }
@@ -215,7 +215,7 @@ export const createKnowledgeBase = async (req: any, res: Response) => {
 export const uploadDocuments = async (req: any, res: Response) => {
   const { slug } = req.params
   const orgId = req.user.org_id
-  const files: Express.Multer.File[] = (req as any).files || []
+  const files: any[] = (req as any).files || []
 
   if (!files.length) {
     return res.status(400).json({ error: 'No files uploaded' })

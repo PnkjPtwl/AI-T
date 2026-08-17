@@ -30,7 +30,7 @@ export default function AssignTrainingWizard({
 
   // Form State
   const [trainingMode, setTrainingMode] = useState<'Exam Mode' | 'Coach Mode' | 'Learning Mode'>('Exam Mode')
-  const [selectedScenarioId, setSelectedScenarioId] = useState(scenarios[0]?.id || '')
+  const [selectedScenarioId, setSelectedScenarioId] = useState(initialScenarioId || initialData?.scenarioId || scenarios[0]?.id || '')
   const [selectedRepIds, setSelectedRepIds] = useState<string[]>([])
   const [deadline, setDeadline] = useState(() => {
     const d = new Date();
@@ -47,7 +47,8 @@ export default function AssignTrainingWizard({
 
   useEffect(() => {
     if (isOpen) {
-      if (initialData?.scenarioId) setSelectedScenarioId(initialData.scenarioId)
+      const targetScenarioId = initialScenarioId || initialData?.scenarioId
+      if (targetScenarioId) setSelectedScenarioId(targetScenarioId)
       else if (scenarios && scenarios.length > 0) setSelectedScenarioId(scenarios[0].id)
       
       if (initialData?.repId) setSelectedRepIds([initialData.repId])
@@ -61,7 +62,7 @@ export default function AssignTrainingWizard({
       
       setStep(1)
     }
-  }, [isOpen, initialData, scenarios])
+  }, [isOpen, initialScenarioId, initialData, scenarios])
 
   if (!isOpen) return null
 
@@ -335,14 +336,7 @@ export default function AssignTrainingWizard({
                   </select>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-[600] text-gray-400">Deals (Optional)</label>
-                  <input
-                    disabled
-                    placeholder="Select a deal..."
-                    className="w-full h-11 bg-gray-100 border border-gray-200 rounded-xl px-3.5 text-xs text-gray-400 cursor-not-allowed"
-                  />
-                </div>
+
 
                 <div className="space-y-1.5 pt-2">
                   <label className="text-xs font-[700] text-[#1E293B]">Scenario Difficulty</label>
@@ -493,6 +487,7 @@ export default function AssignTrainingWizard({
                     <label className="text-xs font-[700] text-[#1E293B]">Deadline*</label>
                     <input
                       type="date"
+                      min={new Date().toISOString().split('T')[0]}
                       value={deadline}
                       onChange={e => setDeadline(e.target.value)}
                       className="w-full h-11 bg-gray-50 border border-gray-200 rounded-xl px-3.5 text-xs text-[#1E293B] focus:outline-none"

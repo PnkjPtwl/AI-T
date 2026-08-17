@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import { supabase } from '../db/supabase'
-import Groq from 'groq-sdk'
+import OpenAI from 'openai'
 import { getSecret } from '../lib/secrets'
 import { searchKnowledgeBase, formatRagContext } from '../utils/ragClient'
 
@@ -14,7 +14,7 @@ export const generateQuestions = async (req: Request, res: Response) => {
       : ['Discovery', 'Objection Handling', 'Value Proposition', 'Closing Skills']
 
     const groqApiKey = await getSecret('GROQ_API_KEY')
-    const groq = new Groq({ apiKey: groqApiKey || '' })
+    const openai = new OpenAI({ apiKey: groqApiKey || '', baseURL: 'https://api.groq.com/openai/v1' })
 
     // Fetch Knowledge Base chunks from RAG ONLY if a specific account_name is provided
     let kbContextStr = ''
@@ -61,14 +61,15 @@ Return ONLY raw JSON with this format:
 }
 `
 
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+    const completion = await openai.chat.completions.create({
+      model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: 'You are an expert AI API. Output ONLY raw JSON.' },
         { role: 'user', content: prompt }
       ],
-      max_tokens: 1000,
-      temperature: 0.5
+      max_tokens: 4000,
+      temperature: 0.5,
+      response_format: { type: 'json_object' }
     })
 
     const text = completion.choices[0].message.content || '{}'

@@ -184,9 +184,9 @@ export const getRepDashboard = async (req: any, res: any) => {
     const now = new Date()
     const transformedAssignments = (assignments || []).map(assign => {
       const sc: any = assign.scenario || {}
-      // Match sessions to this assignment (via assignment_id directly, or fallback to scenario_id for legacy rows)
+      // Match sessions to this assignment strictly via the JSON field
       const assignSessions = (sessions || []).filter(s =>
-        (s.scenario_id === assign.scenario_id)
+        s.feedback_json?.assignment_id === assign.id
       )
       const assignCompleted = assignSessions.filter(s => s.completed_at !== null)
 
@@ -201,6 +201,8 @@ export const getRepDashboard = async (req: any, res: any) => {
       if (lastSession) {
         const days = Math.floor((now.getTime() - new Date(lastSession.created_at).getTime()) / (1000 * 3600 * 24))
         lastAttemptText = days === 0 ? 'Last attempt today' : `Last attempt ${days} days ago`
+      } else if (assign.status === 'Completed') {
+        lastAttemptText = 'Completed'
       }
 
       const deadlineDate = assign.deadline ? new Date(assign.deadline) : null
@@ -225,7 +227,14 @@ export const getRepDashboard = async (req: any, res: any) => {
 
       const modeDisplay = normalizeModeDisplay(assign.training_mode || sc.training_mode)
       const maxAttempts = getModeLimit(assign.training_mode || sc.training_mode)
-      const attemptsCount = assignSessions.length
+      // Only count sessions the rep actually ended (completed_at NOT NULL)
+      const completedAttempts = assignCompleted.length
+      let rawAttemptsCount = completedAttempts
+      if (rawAttemptsCount === 0 && assign.status === 'Completed' && assign.session_id) {
+        rawAttemptsCount = 1
+      }
+      const attemptsCount = Math.min(rawAttemptsCount, maxAttempts)
+      const isLimitReached = assign.status === 'Completed' || attemptsCount >= maxAttempts
 
       return {
         id: assign.id,
@@ -241,7 +250,7 @@ export const getRepDashboard = async (req: any, res: any) => {
         trainingMode: modeDisplay,
         attemptsCount,
         maxAttempts,
-        isLimitReached: attemptsCount >= maxAttempts,
+        isLimitReached,
         priority: assign.priority || 'Medium',
         difficulty: sc.difficulty || 'Medium',
         durationMins: sc.estimated_duration_mins || 20,

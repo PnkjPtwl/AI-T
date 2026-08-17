@@ -1,5 +1,5 @@
 import { supabase } from '../db/supabase'
-import Groq from 'groq-sdk'
+import OpenAI from 'openai'
 import { generateSystemInstruction } from '../utils/promptGenerator'
 import { generateEvaluationPrompt, getScorecardScoreKeys, generateConversationAnalyticsPrompt, DynamicMetric } from '../utils/evaluationGenerator'
 import { getSecret } from '../lib/secrets'
@@ -171,22 +171,24 @@ export const startPractice = async (req: any, res: any) => {
     }
   }
 
-  // Check strict attempt limits before creating a new session
+  // Check strict attempt limits before creating a new session.
+  // ONLY count sessions where the rep actually ended (completed_at IS NOT NULL).
   const modeLimit = getModeLimit(assignmentTrainingMode);
   let existingAttemptsCount = 0;
   if (targetAssignmentId) {
     const { count } = await supabase
       .from('training_sessions')
       .select('id', { count: 'exact', head: true })
-      .eq('rep_id', repId)
-      .eq('scenario_id', scenarioId);
+      .eq('feedback_json->>assignment_id', targetAssignmentId)
+      .not('completed_at', 'is', null);
     existingAttemptsCount = count || 0;
   } else {
     const { count } = await supabase
       .from('training_sessions')
       .select('id', { count: 'exact', head: true })
       .eq('rep_id', repId)
-      .eq('scenario_id', scenarioId);
+      .eq('scenario_id', scenarioId)
+      .not('completed_at', 'is', null);
     existingAttemptsCount = count || 0;
   }
 
@@ -349,12 +351,12 @@ export const sendMessage = async (req: any, res: any) => {
     messagesPayload[0] = { role: 'system', content: systemInstruction }
 
     const groqApiKey = await getSecret('GROQ_API_KEY')
-    const groq = new Groq({ apiKey: groqApiKey || '' })
+    const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
 
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+    const completion = await openai.chat.completions.create({
+      model: 'openai/gpt-oss-120b',
       messages: messagesPayload,
-      max_tokens: 80,
+      max_tokens: 250,
       temperature: 0.7
     })
 
@@ -455,12 +457,40 @@ export const endSession = async (req: any, res: any) => {
     }
 
     if (targetAssignmentId) {
-      await safeUpdateTrainingAssignment(targetAssignmentId, {
-        status: 'Completed',
-        completed_at: new Date().toISOString(),
-        session_id: sessionId
-      })
-      console.log(`[AssignmentLifecycle] Successfully marked assignment ${targetAssignmentId} as COMPLETED.`);
+      // Count how many times this rep has now ended a session for this assignment
+      const { count: completedCount } = await supabase
+        .from('training_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('feedback_json->>assignment_id', targetAssignmentId)
+        .not('completed_at', 'is', null);
+
+      // Also fetch assignment to get training_mode for limit check
+      const { data: assignRow } = await supabase
+        .from('training_assignments')
+        .select('training_mode')
+        .eq('id', targetAssignmentId)
+        .single();
+
+      const attemptLimit = getModeLimit(assignRow?.training_mode || 'Coach Mode');
+      const attemptsDone = completedCount || 0;
+      const limitNowReached = attemptsDone >= attemptLimit;
+
+      if (limitNowReached) {
+        // Limit hit: mark assignment as Completed permanently
+        await safeUpdateTrainingAssignment(targetAssignmentId, {
+          status: 'Completed',
+          completed_at: new Date().toISOString(),
+          session_id: sessionId
+        })
+        console.log(`[AssignmentLifecycle] Limit reached (${attemptsDone}/${attemptLimit}). Assignment ${targetAssignmentId} marked COMPLETED.`);
+      } else {
+        // Still attempts remaining — keep assignment In Progress but update session_id
+        await safeUpdateTrainingAssignment(targetAssignmentId, {
+          status: 'In Progress',
+          session_id: sessionId
+        })
+        console.log(`[AssignmentLifecycle] Attempt ${attemptsDone}/${attemptLimit} done. Assignment ${targetAssignmentId} stays In Progress.`);
+      }
 
       // 🔔 Fire notifications — score thresholds and completion
       // These run async after response; errors are non-fatal
@@ -634,9 +664,9 @@ export const endSession = async (req: any, res: any) => {
     } else {
       try {
         const groqApiKey = await getSecret('GROQ_API_KEY')
-        const groq = new Groq({ apiKey: groqApiKey || '' })
-        const completion = await groq.chat.completions.create({
-          model: 'llama-3.3-70b-versatile',
+        const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
+        const completion = await openai.chat.completions.create({
+          model: 'openai/gpt-oss-120b',
           messages: [
             { role: 'system', content: 'You are an expert sales coach analyst. Return only raw JSON.' },
             { role: 'user', content: prompt }
@@ -723,10 +753,10 @@ export const endSession = async (req: any, res: any) => {
     if (transcript.trim()) {
       try {
         const groqApiKey2 = await getSecret('GROQ_API_KEY')
-        const groq2 = new Groq({ apiKey: groqApiKey2 || '' })
+        const openai2 = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey2 || '' })
         const analyticsPrompt = generateConversationAnalyticsPrompt(transcript, voiceAggregate)
-        const analyticsCompletion = await groq2.chat.completions.create({
-          model: 'llama-3.1-8b-instant',
+        const analyticsCompletion = await openai2.chat.completions.create({
+          model: 'openai/gpt-oss-20b',
           messages: [
             { role: 'system', content: 'You are a conversation analytics expert. Return only raw JSON.' },
             { role: 'user', content: analyticsPrompt }
@@ -957,7 +987,7 @@ export const liveSentiment = async (req: any, res: any) => {
 
   try {
     const groqApiKey = await getSecret('GROQ_API_KEY')
-    const groq = new Groq({ apiKey: groqApiKey || '' })
+    const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
 
     // ── RAG: fetch KB context for RAG personas ───────────────────────────────
     let accountName: string | null = null
@@ -1104,17 +1134,14 @@ RULES — COACHING HINT:
 ${factCheckBlock}`
     }
 
-    // ── Call Groq (fast small model) ─────────────────────────────────────────
-    // Learning Mode gets more tokens for the richer response; KB personas need extra for fact_check + sources
-    const maxTokens = isLearning ? (kbContextStr ? 650 : 500) : (kbContextStr ? 450 : 350)
-
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
+    // ── Call Groq ─────────────────────────────────────────
+    const completion = await openai.chat.completions.create({
+      model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: 'Return only raw JSON with no markdown or backticks.' },
         { role: 'user', content: prompt }
       ],
-      max_tokens: maxTokens,
+      max_tokens: 1500,
       temperature: isLearning ? 0.5 : 0.35,
       response_format: { type: 'json_object' }
     })
@@ -1161,7 +1188,7 @@ export const processLiveTurn = async (req: any, res: any) => {
     }
 
     const groqApiKey = await getSecret('GROQ_API_KEY')
-    const groq = new Groq({ apiKey: groqApiKey || '' })
+    const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
 
     if (!transcript.trim()) {
       return res.json({ aiResponse: '', metrics: null, coachTip: null })
@@ -1235,11 +1262,11 @@ export const processLiveTurn = async (req: any, res: any) => {
     // Prompt A: AI Response
     let aiResponse = ''
     try {
-      const chatCompletion = await groq.chat.completions.create({
+      const chatCompletion = await openai.chat.completions.create({
         messages: messagesPayload as any,
-        model: 'llama-3.1-8b-instant',
+        model: 'openai/gpt-oss-120b',
         temperature: 0.7,
-        max_tokens: 150
+        max_tokens: 250
       })
       aiResponse = chatCompletion.choices[0]?.message?.content || ''
     } catch (groqErr) {
@@ -1319,7 +1346,7 @@ export const processLiveCoach = async (req: any, res: any) => {
     }
 
     const groqApiKey = await getSecret('GROQ_API_KEY')
-    const groq = new Groq({ apiKey: groqApiKey || '' })
+    const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
 
     let coachTip = null
     // Prompt B: Coach Analysis
@@ -1328,9 +1355,9 @@ export const processLiveCoach = async (req: any, res: any) => {
         { role: 'system', content: 'You are an expert sales coach. Keep tips under 15 words. Analyze this live metrics payload and provide a quick tip if needed. If no tip is needed, return empty string.' },
         { role: 'user', content: JSON.stringify(metrics) + '\nTranscript: ' + transcript }
       ]
-      const coachCompletion = await groq.chat.completions.create({
+      const coachCompletion = await openai.chat.completions.create({
         messages: coachPrompt as any,
-        model: 'llama-3.1-8b-instant',
+        model: 'openai/gpt-oss-20b',
         temperature: 0.3,
         max_tokens: 50
       })
@@ -1404,9 +1431,9 @@ export const pauseSession = async (req: any, res: any) => {
     } else {
       try {
         const groqApiKey = await getSecret('GROQ_API_KEY')
-        const groq = new Groq({ apiKey: groqApiKey || '' })
-        const completion = await groq.chat.completions.create({
-          model: 'llama-3.3-70b-versatile',
+        const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
+        const completion = await openai.chat.completions.create({
+          model: 'openai/gpt-oss-120b',
           messages: [
             { role: 'system', content: 'You are an expert sales coach analyst. Return only raw JSON.' },
             { role: 'user', content: prompt }

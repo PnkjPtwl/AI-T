@@ -32,6 +32,18 @@ export const createAssignments = async (req: any, res: any) => {
       return res.status(400).json({ error: 'No valid sales representatives specified.' });
     }
 
+    // Check for existing active assignments for the selected reps and scenario
+    const { data: existingAssignments } = await supabase
+      .from('training_assignments')
+      .select('rep_id')
+      .eq('scenario_id', scenarioId)
+      .in('rep_id', validRepIds)
+      .neq('status', 'Completed');
+
+    if (existingAssignments && existingAssignments.length > 0) {
+      return res.status(400).json({ error: 'One or more selected representatives already have an active assignment for this training scenario.' });
+    }
+
     const normalizeModeForDb = (modeStr?: string): string => {
       if (!modeStr) return 'coach';
       const l = modeStr.toLowerCase().trim();
@@ -159,15 +171,21 @@ export const getManagerAssignments = async (req: any, res: any) => {
 
     const { data: sessions } = await supabase
       .from('training_sessions')
-      .select('id, rep_id, scenario_id, feedback_json, completed_at, created_at')
+      .select('id, rep_id, scenario_id, assignment_id, feedback_json, completed_at, created_at')
 
     const transformed = assignmentsList.map((assign: any) => {
       const rep = repMap[assign.rep_id] || {};
       const scenario = scenarioMap[assign.scenario_id] || {};
 
-      const repSessions = (sessions || []).filter((s: any) => 
-        (s.rep_id === assign.rep_id && s.scenario_id === assign.scenario_id)
-      )
+      const repSessions = (sessions || []).filter((s: any) => {
+        if (s.assignment_id && s.assignment_id === assign.id) return true;
+        if (assign.session_id && s.id === assign.session_id) return true;
+        return false;
+      })
+      let rawAttempts = repSessions.length;
+      if (rawAttempts === 0 && (assign.status === 'Completed' || assign.session_id)) {
+        rawAttempts = 1;
+      }
       const completedSess = repSessions.filter(s => s.completed_at !== null)
       const latestSess = repSessions[0]
 
@@ -237,7 +255,7 @@ export const getAssignmentDetails = async (req: any, res: any) => {
     const { data: sessions } = await supabase
       .from('training_sessions')
       .select('*')
-      .or(`assignment_id.eq.${id},and(rep_id.eq.${assign.rep_id},scenario_id.eq.${assign.scenario_id})`)
+      .or(`assignment_id.eq.${id},and(assignment_id.is.null,rep_id.eq.${assign.rep_id},scenario_id.eq.${assign.scenario_id})`)
       .order('created_at', { ascending: false })
 
     const repSessions = sessions || []

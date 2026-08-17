@@ -399,12 +399,16 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       setMicActive(true)
       micActiveRef.current = true
       setSttStatus('🎙️ Listening... Speak clearly into your mic.')
-      if (!speechStartTimeRef.current) {
-        speechStartTimeRef.current = Date.now()
-      }
+    }
+
+    recognition.onspeechstart = () => {
+      speechStartTimeRef.current = Date.now()
     }
 
     recognition.onresult = (event: any) => {
+      if (!speechStartTimeRef.current) {
+        speechStartTimeRef.current = Date.now()
+      }
       let interim = ''
       let final = ''
 
@@ -561,13 +565,31 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       clearTimeout(speechSilenceTimerRef.current)
     }
 
+    const wasMicActive = micActiveRef.current
+
     // Calculate actual speech duration
     const speechEndTime = Date.now()
-    const rawDurationMs = speechStartTimeRef.current ? Math.max(1500, speechEndTime - speechStartTimeRef.current) : 3500
+    const userWords = messageText.trim().split(/\s+/).length
+    let rawDurationMs = 0
+    let calculatedWpm = metrics.wpm || 135
+
+    if (wasMicActive && speechStartTimeRef.current) {
+      const elapsedMs = Math.max(800, speechEndTime - speechStartTimeRef.current)
+      // Clamped realistic speaking duration (avoid silence skewing)
+      const maxSensibleMs = Math.max(1200, userWords * 750)
+      const effectiveMs = Math.min(elapsedMs, maxSensibleMs)
+      calculatedWpm = Math.round((userWords / (effectiveMs / 60000))) || 135
+      // Clamp to realistic physical speaking pace bounds (90 - 210 WPM)
+      calculatedWpm = Math.min(210, Math.max(90, calculatedWpm))
+      rawDurationMs = effectiveMs
+    } else {
+      // For typed messages (no mic), maintain previous pace or healthy baseline (135 WPM)
+      calculatedWpm = metrics.wpm > 0 ? metrics.wpm : 135
+      rawDurationMs = Math.round((userWords / 135) * 60000)
+    }
     speechStartTimeRef.current = null
 
     // Tell the onend handler NOT to auto-restart — we'll do it ourselves in the finally block
-    const wasMicActive = micActiveRef.current
     if (wasMicActive && recognitionRef.current) {
       isSendingRef.current = true
       try {
@@ -581,8 +603,6 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     setTextInput('')
 
     // Update cumulative metrics
-    const userWords = messageText.trim().split(/\s+/).length
-    const calculatedWpm = Math.round((userWords / (rawDurationMs / 60000))) || 135
     const fillerRegex = /\b(um|uh|like|you know|so|basically)\b/gi
     const fillerMatches = messageText.match(fillerRegex) || []
     const calculatedFillerRatio = Math.round((fillerMatches.length / userWords) * 1000) / 10

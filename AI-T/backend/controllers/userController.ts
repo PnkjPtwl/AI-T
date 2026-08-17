@@ -1007,6 +1007,17 @@ export const assignTraining = async (req: any, res: any) => {
       return res.status(400).json({ error: 'No valid sales representatives found to assign.' });
     }
 
+    const { data: existingAssignments } = await supabase
+      .from('training_assignments')
+      .select('rep_id')
+      .eq('scenario_id', targetScenarioId)
+      .in('rep_id', validRepIds)
+      .neq('status', 'Completed');
+
+    if (existingAssignments && existingAssignments.length > 0) {
+      return res.status(400).json({ error: 'One or more selected representatives already have an active assignment for this training scenario.' });
+    }
+
     const assignments = validRepIds.map((repId: string) => ({
       rep_id: repId,
       scenario_id: targetScenarioId,
@@ -1104,7 +1115,7 @@ export const getMyAssignments = async (req: any, res: any) => {
 
     const { data: repSessionsData } = await supabase
       .from('training_sessions')
-      .select('id, rep_id, scenario_id')
+      .select('id, rep_id, scenario_id, completed_at, feedback_json')
       .eq('rep_id', repId);
 
     const now = new Date();
@@ -1122,11 +1133,18 @@ export const getMyAssignments = async (req: any, res: any) => {
       const personaName = scenario.persona_name || scenario.contact_title || 'Prospect';
       const company = scenario.contact_company || 'Company';
 
-      const matchedSessions = (repSessionsData || []).filter((s: any) =>
-        s.assignment_id === a.id || (s.rep_id === a.rep_id && s.scenario_id === a.scenario_id)
-      );
-      const attemptsCount = matchedSessions.length;
+      // Only count sessions the rep actually completed (End clicked) — not abandoned/in-progress rows
+      const matchedSessions = (repSessionsData || []).filter((s: any) => {
+        const linkedToThisAssignment = s.feedback_json?.assignment_id === a.id;
+        return linkedToThisAssignment && s.completed_at !== null;
+      });
+      let rawAttemptsCount = matchedSessions.length;
+      if (rawAttemptsCount === 0 && a.status === 'Completed' && a.session_id) {
+        rawAttemptsCount = 1;
+      }
       const maxAttempts = getModeLimit(a.training_mode);
+      const attemptsCount = Math.min(rawAttemptsCount, maxAttempts);
+      const isLimitReached = a.status === 'Completed' || attemptsCount >= maxAttempts;
 
       return {
         ...a,
@@ -1136,8 +1154,8 @@ export const getMyAssignments = async (req: any, res: any) => {
         attemptsCount,
         max_attempts: maxAttempts,
         maxAttempts,
-        is_limit_reached: attemptsCount >= maxAttempts,
-        isLimitReached: attemptsCount >= maxAttempts,
+        is_limit_reached: isLimitReached,
+        isLimitReached,
         training_mode: normalizeModeForDisplay(a.training_mode),
         assigned_by: 'Manager',
         persona_name: personaName,

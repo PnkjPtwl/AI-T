@@ -123,6 +123,7 @@ export default function ReassignModal({ isOpen, onClose, assignment, onSuccess }
               <label className="block text-xs font-[700] text-[#1E293B] mb-2">Due Date (Optional)</label>
               <input
                 type="date"
+                min={new Date().toISOString().split('T')[0]}
                 value={dueDate}
                 onChange={e => setDueDate(e.target.value)}
                 className="w-full h-11 bg-gray-50 border border-gray-200 rounded-xl px-4 text-sm font-[600] text-[#1E293B] focus:outline-none focus:ring-2 focus:ring-[#1E1B4B]/20"

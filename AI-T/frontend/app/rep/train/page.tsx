@@ -140,6 +140,7 @@ export default function TrainingCenter() {
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Scenario</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Deadline</th>
+                <th className="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Attempts</th>
                 <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Score</th>
                 <th className="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
               </tr>
@@ -163,6 +164,11 @@ export default function TrainingCenter() {
                     <td className="px-6 py-4">{statusBadge(a)}</td>
                     <td className="px-6 py-4 text-gray-500 text-sm">
                       {dl ? dl.toLocaleDateString() : '—'}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-[700] bg-gray-100 text-gray-700">
+                        {Math.min(a.attempts_count ?? a.attemptsCount ?? 0, a.max_attempts ?? a.maxAttempts ?? 3)} / {a.max_attempts ?? a.maxAttempts ?? 3}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       {s === 'completed' ? (
