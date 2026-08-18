@@ -34,7 +34,7 @@ export const getMySignals = async (req: any, res: any) => {
 
 export const generateStudyGuide = async (req: any, res: any) => {
   const { repName, weakestSkill, strongestSkill } = req.body
-  const apiKey = await getSecret('GROQ_API_KEY')
+  const apiKey = await getSecret('CEREBRAS_API_KEY')
 
   if (!apiKey) {
     return res.status(500).json({ error: 'AI Service not configured' })
@@ -57,21 +57,22 @@ Include:
 
 Format the response in professional Markdown.`
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetch('https://api.cerebras.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'openai/gpt-oss-120b',
+        model: 'gpt-oss-120b',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7
       })
     })
 
     const data = await response.json() as any
-    const guide = data.choices?.[0]?.message?.content || 'Failed to generate guide.'
+    const msg = data.choices?.[0]?.message
+    const guide = msg?.content || msg?.reasoning || 'Failed to generate guide.'
 
     res.json({ guide })
   } catch (err: any) {

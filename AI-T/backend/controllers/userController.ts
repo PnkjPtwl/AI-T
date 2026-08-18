@@ -1115,29 +1115,52 @@ export const getMyAssignments = async (req: any, res: any) => {
 
     const { data: repSessionsData } = await supabase
       .from('training_sessions')
-      .select('id, rep_id, scenario_id, completed_at, feedback_json')
+      .select('id, rep_id, scenario_id, created_at, completed_at, feedback_json')
       .eq('rep_id', repId);
 
     const now = new Date();
     const assignments = assignmentsList.map((a: any) => {
       const deadlineDate = a.deadline ? new Date(a.deadline) : null;
       let status = a.status || 'Pending';
-      const feedback = a.session_id ? sessionMap[a.session_id] : null;
+      const assignCreatedAt = new Date(a.created_at).getTime();
+      
+      // Find the created_at of the NEXT assignment for this scenario, to define a strict time window
+      const futureAssignments = assignmentsList.filter((other: any) => 
+        other.scenario_id === a.scenario_id && 
+        new Date(other.created_at).getTime() > assignCreatedAt
+      );
+      const nextAssignCreatedAt = futureAssignments.length > 0 
+        ? Math.min(...futureAssignments.map((other: any) => new Date(other.created_at).getTime()))
+        : Infinity;
+
+      // Find all completed sessions that belong to THIS assignment's time window
+      const matchedSessions = (repSessionsData || [])
+        .filter((s: any) =>
+          s.scenario_id === a.scenario_id &&
+          s.feedback_json !== null &&
+          new Date(s.created_at).getTime() >= assignCreatedAt &&
+          new Date(s.created_at).getTime() < nextAssignCreatedAt
+        )
+        .sort((x: any, y: any) => new Date(y.completed_at || y.created_at).getTime() - new Date(x.completed_at || x.created_at).getTime());
+
+      // Always use the LATEST session for the score and report button within this assignment's window
+      const latestSession = matchedSessions.length > 0 ? matchedSessions[0] : null;
+      const feedback = latestSession ? latestSession.feedback_json : (a.session_id ? sessionMap[a.session_id] : null);
       const score = feedback?.overall_score || 0;
-      const scenario = scenarioMap[a.scenario_id] || {};
+      
+      // Override the session_id so the 'Report' button opens the latest attempt
+      if (latestSession) {
+        a.session_id = latestSession.id;
+      }
 
       if (status !== 'Completed' && deadlineDate && deadlineDate < now) {
         status = 'Overdue';
       }
 
+      const scenario = scenarioMap[a.scenario_id] || {};
       const personaName = scenario.persona_name || scenario.contact_title || 'Prospect';
       const company = scenario.contact_company || 'Company';
 
-      // Only count sessions the rep actually completed (End clicked) — not abandoned/in-progress rows
-      const matchedSessions = (repSessionsData || []).filter((s: any) => {
-        const linkedToThisAssignment = s.feedback_json?.assignment_id === a.id;
-        return linkedToThisAssignment && s.completed_at !== null;
-      });
       let rawAttemptsCount = matchedSessions.length;
       if (rawAttemptsCount === 0 && a.status === 'Completed' && a.session_id) {
         rawAttemptsCount = 1;
@@ -1146,10 +1169,18 @@ export const getMyAssignments = async (req: any, res: any) => {
       const attemptsCount = Math.min(rawAttemptsCount, maxAttempts);
       const isLimitReached = a.status === 'Completed' || attemptsCount >= maxAttempts;
 
+      // Best score across all matched sessions
+      const bestScore = matchedSessions.reduce((best: number, s: any) => {
+        const sc = s.feedback_json?.overall_score
+        return typeof sc === 'number' && sc > best ? sc : best
+      }, 0)
+      const displayScore = bestScore || score  // fall back to linked session score
+
+
       return {
         ...a,
         status,
-        score,
+        score: displayScore,
         attempts_count: attemptsCount,
         attemptsCount,
         max_attempts: maxAttempts,
@@ -1244,8 +1275,22 @@ export const getTeamAssignments = async (req: any, res: any) => {
       const company = scenario.contact_company || 'Company';
       const scenarioName = scenario.persona_name || scenario.contact_title || 'Training Scenario';
 
+      const assignCreatedAt = new Date(a.created_at).getTime();
+      
+      const futureAssignments = assignmentsList.filter((other: any) => 
+        other.scenario_id === a.scenario_id && 
+        other.rep_id === a.rep_id &&
+        new Date(other.created_at).getTime() > assignCreatedAt
+      );
+      const nextAssignCreatedAt = futureAssignments.length > 0 
+        ? Math.min(...futureAssignments.map((other: any) => new Date(other.created_at).getTime()))
+        : Infinity;
+
       const matchedSessions = (teamSessionsData || []).filter((s: any) =>
-        s.assignment_id === a.id || (s.rep_id === a.rep_id && s.scenario_id === a.scenario_id)
+        s.rep_id === a.rep_id && 
+        s.scenario_id === a.scenario_id &&
+        new Date(s.created_at).getTime() >= assignCreatedAt &&
+        new Date(s.created_at).getTime() < nextAssignCreatedAt
       );
       
       const completedSessions = matchedSessions.filter((s: any) => s.completed_at !== null);

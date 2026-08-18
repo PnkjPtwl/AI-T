@@ -184,11 +184,13 @@ export const getRepDashboard = async (req: any, res: any) => {
     const now = new Date()
     const transformedAssignments = (assignments || []).map(assign => {
       const sc: any = assign.scenario || {}
-      // Match sessions to this assignment strictly via the JSON field
+      const assignCreatedAt = new Date(assign.created_at).getTime()
+      // Match sessions by scenario and ensure they occurred after this assignment was created
       const assignSessions = (sessions || []).filter(s =>
-        s.feedback_json?.assignment_id === assign.id
+        s.scenario_id === assign.scenario_id &&
+        new Date(s.created_at).getTime() >= assignCreatedAt
       )
-      const assignCompleted = assignSessions.filter(s => s.completed_at !== null)
+      const assignCompleted = assignSessions.filter(s => s.completed_at !== null && s.feedback_json !== null)
 
       let assignAvgScore = null
       if (assignCompleted.length > 0) {
@@ -251,6 +253,7 @@ export const getRepDashboard = async (req: any, res: any) => {
         attemptsCount,
         maxAttempts,
         isLimitReached,
+        hasPausedSession: assignSessions.some(s => s.completed_at === null),
         priority: assign.priority || 'Medium',
         difficulty: sc.difficulty || 'Medium',
         durationMins: sc.estimated_duration_mins || 20,

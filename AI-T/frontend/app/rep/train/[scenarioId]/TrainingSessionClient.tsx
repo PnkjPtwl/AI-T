@@ -132,6 +132,8 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const animFrameRef = useRef<number | null>(null)
   const isUnmountedRef = useRef(false)
+  const hasEverSpokenRef = useRef(false)
+  const [hasEverSpoken, setHasEverSpoken] = useState(false)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -203,6 +205,12 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
         if (res.ok) {
           const data = await res.json()
           const sess = data.session || data
+          
+          if (sess.status === 'Completed' || sess.status === 'In Review' || sess.completed_at) {
+            router.push(`/rep/train/${scenarioId}/review?sessionId=${sessId}`)
+            return
+          }
+
           setScenario(data.scenario || sess.training_scenarios)
 
           const assignObj = Array.isArray(sess.training_assignments)
@@ -582,10 +590,15 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       // Clamp to realistic physical speaking pace bounds (90 - 210 WPM)
       calculatedWpm = Math.min(210, Math.max(90, calculatedWpm))
       rawDurationMs = effectiveMs
+      // Mark that the rep has spoken at least once this session
+      if (!hasEverSpokenRef.current) {
+        hasEverSpokenRef.current = true
+        setHasEverSpoken(true)
+      }
     } else {
-      // For typed messages (no mic), maintain previous pace or healthy baseline (135 WPM)
-      calculatedWpm = metrics.wpm > 0 ? metrics.wpm : 135
-      rawDurationMs = Math.round((userWords / 135) * 60000)
+      // For typed messages (no mic): do NOT update WPM or fabricate talk-time duration
+      calculatedWpm = metrics.wpm  // keep existing value unchanged
+      rawDurationMs = 0            // typed turns don't count toward talk-time
     }
     speechStartTimeRef.current = null
 
@@ -614,7 +627,8 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
 
     setMetrics(prev => ({
       ...prev,
-      wpm: calculatedWpm,
+      // Only update WPM when the turn was delivered via microphone (spoken)
+      ...(wasMicActive ? { wpm: calculatedWpm } : {}),
       fillerRatio: calculatedFillerRatio,
       userTalkTimeMs: updatedUserTalkMs,
       talkListenRatio: calcTalkListenRatio,
@@ -835,7 +849,8 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
                 setMeddpiccStatus(prev => {
                   const updated = { ...prev };
                   for (const key in sentData.meddpicc_status) {
-                    if (sentData.meddpicc_status[key]) {
+                    // Only ever promote to true (progress is persistent); never regress
+                    if (sentData.meddpicc_status[key] === true) {
                       updated[key] = true;
                     }
                   }
@@ -1000,11 +1015,19 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
             ) : (
             <>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div className="bg-purple-50/60 border border-purple-100 p-2 rounded-xl text-center">
-                <p className="text-[9px] font-[700] text-purple-600 uppercase">Pace (WPM)</p>
-                <p className="text-sm font-[800] text-[#1E293B]">{metrics.wpm}</p>
-                <span className="text-[8px] text-gray-500">Target: 120-150</span>
-              </div>
+              {hasEverSpoken ? (
+                <div className="bg-purple-50/60 border border-purple-100 p-2 rounded-xl text-center">
+                  <p className="text-[9px] font-[700] text-purple-600 uppercase">Pace (WPM)</p>
+                  <p className="text-sm font-[800] text-[#1E293B]">{metrics.wpm}</p>
+                  <span className="text-[8px] text-gray-500">Target: 120-150</span>
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 p-2 rounded-xl text-center opacity-60">
+                  <p className="text-[9px] font-[700] text-gray-400 uppercase">Pace (WPM)</p>
+                  <p className="text-sm font-[800] text-gray-400">—</p>
+                  <span className="text-[8px] text-gray-400">🎙️ Voice only</span>
+                </div>
+              )}
               <div className="bg-amber-50/60 border border-amber-100 p-2 rounded-xl text-center">
                 <p className="text-[9px] font-[700] text-amber-600 uppercase">Fillers</p>
                 <p className="text-sm font-[800] text-[#1E293B]">{metrics.fillerRatio}%</p>

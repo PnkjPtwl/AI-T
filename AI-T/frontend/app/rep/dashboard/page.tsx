@@ -431,7 +431,7 @@ export default function RepDashboard() {
                     ) : assign.status === 'Completed' ? (
                       `Retake (${assign.attemptsCount ?? 0}/${assign.maxAttempts ?? 5}) →`
                     ) : assign.status === 'In Progress' ? (
-                      'Resume →'
+                      assign.hasPausedSession ? 'Resume →' : `Try Again (${assign.attemptsCount ?? 0}/${assign.maxAttempts ?? 5}) →`
                     ) : (
                       `Start (${assign.attemptsCount ?? 0}/${assign.maxAttempts ?? 5}) →`
                     )}

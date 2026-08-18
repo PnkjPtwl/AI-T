@@ -8,7 +8,7 @@
  */
 
 const RAG_API_URL = process.env.RAG_API_URL || 'http://localhost:8001'
-const RAG_TIMEOUT_MS = 4000 // 4s max wait — must not block the session response
+const RAG_TIMEOUT_MS = 8000 // 8s max wait — must not block the session response
 
 export interface RagChunk {
   content: string

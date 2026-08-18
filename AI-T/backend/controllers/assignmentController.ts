@@ -177,11 +177,22 @@ export const getManagerAssignments = async (req: any, res: any) => {
       const rep = repMap[assign.rep_id] || {};
       const scenario = scenarioMap[assign.scenario_id] || {};
 
-      const repSessions = (sessions || []).filter((s: any) => {
-        if (s.assignment_id && s.assignment_id === assign.id) return true;
-        if (assign.session_id && s.id === assign.session_id) return true;
-        return false;
-      })
+      const assignCreatedAt = new Date(assign.created_at).getTime();
+      const futureAssignments = assignmentsList.filter((other: any) => 
+        other.scenario_id === assign.scenario_id && 
+        other.rep_id === assign.rep_id &&
+        new Date(other.created_at).getTime() > assignCreatedAt
+      );
+      const nextAssignCreatedAt = futureAssignments.length > 0 
+        ? Math.min(...futureAssignments.map((other: any) => new Date(other.created_at).getTime()))
+        : Infinity;
+
+      const repSessions = (sessions || []).filter((s: any) =>
+        s.rep_id === assign.rep_id && 
+        s.scenario_id === assign.scenario_id &&
+        new Date(s.created_at).getTime() >= assignCreatedAt &&
+        new Date(s.created_at).getTime() < nextAssignCreatedAt
+      )
       let rawAttempts = repSessions.length;
       if (rawAttempts === 0 && (assign.status === 'Completed' || assign.session_id)) {
         rawAttempts = 1;
@@ -252,10 +263,24 @@ export const getAssignmentDetails = async (req: any, res: any) => {
       return res.status(404).json({ error: 'Assignment not found' })
     }
 
+    const { data: allAssignments } = await supabase
+      .from('training_assignments')
+      .select('created_at')
+      .eq('scenario_id', assign.scenario_id)
+      .eq('rep_id', assign.rep_id)
+      .gt('created_at', assign.created_at)
+
+    const nextAssignCreatedAt = allAssignments && allAssignments.length > 0 
+      ? Math.min(...allAssignments.map(a => new Date(a.created_at).getTime()))
+      : Infinity
+
     const { data: sessions } = await supabase
       .from('training_sessions')
       .select('*')
-      .or(`assignment_id.eq.${id},and(assignment_id.is.null,rep_id.eq.${assign.rep_id},scenario_id.eq.${assign.scenario_id})`)
+      .eq('rep_id', assign.rep_id)
+      .eq('scenario_id', assign.scenario_id)
+      .gte('created_at', assign.created_at)
+      .lt('created_at', nextAssignCreatedAt === Infinity ? '3000-01-01' : new Date(nextAssignCreatedAt).toISOString())
       .order('created_at', { ascending: false })
 
     const repSessions = sessions || []

@@ -37,8 +37,8 @@ export const generatePersonaFromAudio = async (req: any, res: any) => {
       .map(u => `Speaker ${u.speaker}: ${u.text}`)
       .join('\n')
 
-    const groqApiKey = await getSecret('GROQ_API_KEY')
-    const openai = new OpenAI({ apiKey: groqApiKey || '', baseURL: 'https://api.groq.com/openai/v1' })
+    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
+    const openai = new OpenAI({ apiKey: groqApiKey || '', baseURL: 'https://api.cerebras.ai/v1' })
 
     const extractionPrompt = `
 You are an expert sales coach and persona designer.
@@ -75,14 +75,15 @@ Return ONLY a valid JSON object matching this exact structure:
 `
 
     const completion = await openai.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+      model: 'gpt-oss-120b',
       messages: [{ role: 'user', content: extractionPrompt }],
-      response_format: { type: 'json_object' },
       temperature: 0.3,
-      max_tokens: 4000
+      max_tokens: 4000,
+      response_format: { type: 'json_object' }
     })
 
-    const resultText = completion.choices[0].message.content
+    const msg = completion.choices?.[0]?.message
+    const resultText = msg?.content || (msg as any)?.reasoning
     if (!resultText) {
       throw new Error("Failed to extract persona data from LLM.")
     }

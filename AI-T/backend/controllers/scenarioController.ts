@@ -25,8 +25,8 @@ export const generateScorecardMetrics = async (req: any, res: any) => {
   }
 
   try {
-    const groqApiKey = await getSecret('GROQ_API_KEY')
-    const openai = new OpenAI({ apiKey: groqApiKey || '', baseURL: 'https://api.groq.com/openai/v1' })
+    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
+    const openai = new OpenAI({ apiKey: groqApiKey || '', baseURL: 'https://api.cerebras.ai/v1' })
 
     // Infer account_name if not provided directly
     let targetAccount = account_name
@@ -67,32 +67,36 @@ INSTRUCTIONS:
 - Generate criteria that are SPECIFIC to this persona's context, industry, and behavior — not generic sales skills
 - Each criterion should be directly testable from a conversation transcript
 - Do NOT include weights (the manager will set those)
-- Return ONLY a raw JSON array, no markdown, no explanation:
+- Return ONLY a raw JSON object with a "metrics" array, no markdown, no explanation:
 
-[
-  {
-    "name": "<Short criterion name, 2-5 words>",
-    "description": "<1-2 sentence description of what to evaluate and what good/bad looks like for THIS specific persona>"
-  }
-]
+{
+  "metrics": [
+    {
+      "name": "<Short criterion name, 2-5 words>",
+      "description": "<1-2 sentence description of what to evaluate and what good/bad looks like for THIS specific persona>"
+    }
+  ]
+}
 
 Generate between 5 and 7 criteria. Make them precise and grounded in the Knowledge Base.`
 
     const completion = await openai.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+      model: 'gpt-oss-120b',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.5,
-      max_tokens: 1200
+      max_tokens: 1200,
+      response_format: { type: 'json_object' }
     })
 
-    let raw = completion.choices[0]?.message?.content || '[]'
+    let raw = completion.choices[0]?.message?.content || '{"metrics":[]}'
     raw = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
 
-    // Extract the JSON array
-    const match = raw.match(/\[[\s\S]*\]/)
-    if (!match) return res.status(500).json({ error: 'AI did not return valid JSON array' })
+    // Extract the JSON object
+    const match = raw.match(/\{[\s\S]*\}/)
+    if (!match) return res.status(500).json({ error: 'AI did not return valid JSON object' })
 
-    const metrics: Array<{ name: string; description: string }> = JSON.parse(match[0])
+    const parsed = JSON.parse(match[0])
+    const metrics: Array<{ name: string; description: string }> = parsed.metrics || []
 
     // Add default weight of 0 (manager sets)
     const withWeights: DynamicMetric[] = metrics.map(m => ({ ...m, weight: 0 }))

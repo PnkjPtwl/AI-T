@@ -1,4 +1,5 @@
 import { supabase } from '../db/supabase'
+import * as fs from 'fs'
 import OpenAI from 'openai'
 import { generateSystemInstruction } from '../utils/promptGenerator'
 import { generateEvaluationPrompt, getScorecardScoreKeys, generateConversationAnalyticsPrompt, DynamicMetric } from '../utils/evaluationGenerator'
@@ -7,6 +8,12 @@ import { searchKnowledgeBase, formatRagContext } from '../utils/ragClient'
 import { calculateFillerRatio, calculateWPM, calculateTalkListenRatio, calculateQuestionCount, evaluateTriggers, LiveMetrics, CoachTrigger } from '../utils/mechanicsCalculator'
 import { getModeLimit, normalizeModeDisplay } from '../utils/modeHelper'
 import { createNotification, notificationExists } from './notificationController'
+
+// Helper: extract text from Cerebras/OpenAI completion, falling back to reasoning field for thinking models
+const extractLLMContent = (completion: any, fallback = '{}'): string => {
+  const msg = completion.choices?.[0]?.message
+  return msg?.content || msg?.reasoning || fallback
+}
 
 const safeUpdateTrainingSession = async (sessionId: string, sessionUpdates: any) => {
   const { error } = await supabase
@@ -158,13 +165,18 @@ export const startPractice = async (req: any, res: any) => {
   if (existingSessionId) {
     const { data: checkSession } = await supabase
       .from('training_sessions')
-      .select('id')
+      .select('id, completed_at, status')
       .eq('id', existingSessionId)
       .maybeSingle()
 
     if (checkSession) {
-      console.log(`[AssignmentLifecycle] Resuming existing session ${existingSessionId}`);
-      return res.json({ sessionId: existingSessionId, avatarType: assignmentAvatarType, trainingMode: assignmentTrainingMode })
+      if (checkSession.completed_at || checkSession.status === 'Completed' || checkSession.status === 'In Review') {
+        console.log(`[AssignmentLifecycle] Existing session ${existingSessionId} is already completed/in-review. Ignoring and creating new session.`);
+        existingSessionId = null;
+      } else {
+        console.log(`[AssignmentLifecycle] Resuming existing session ${existingSessionId}`);
+        return res.json({ sessionId: existingSessionId, avatarType: assignmentAvatarType, trainingMode: assignmentTrainingMode })
+      }
     } else {
       console.log(`[AssignmentLifecycle] Existing session ${existingSessionId} was not found (likely deleted). Creating new session.`);
       existingSessionId = null;
@@ -176,20 +188,35 @@ export const startPractice = async (req: any, res: any) => {
   const modeLimit = getModeLimit(assignmentTrainingMode);
   let existingAttemptsCount = 0;
   if (targetAssignmentId) {
-    const { count } = await supabase
+    // Count sessions this rep completed (has feedback) for this scenario, AFTER this assignment was created
+    const { data: assignMeta } = await supabase
+      .from('training_assignments')
+      .select('scenario_id, created_at')
+      .eq('id', targetAssignmentId)
+      .maybeSingle()
+    const assignScenarioId = assignMeta?.scenario_id || scenarioId
+    
+    let query = supabase
       .from('training_sessions')
       .select('id', { count: 'exact', head: true })
-      .eq('feedback_json->>assignment_id', targetAssignmentId)
-      .not('completed_at', 'is', null);
-    existingAttemptsCount = count || 0;
+      .eq('rep_id', repId)
+      .eq('scenario_id', assignScenarioId)
+      .not('feedback_json', 'is', null)
+      
+    if (assignMeta?.created_at) {
+      query = query.gte('created_at', assignMeta.created_at)
+    }
+    
+    const { count } = await query
+    existingAttemptsCount = count || 0
   } else {
     const { count } = await supabase
       .from('training_sessions')
       .select('id', { count: 'exact', head: true })
       .eq('rep_id', repId)
       .eq('scenario_id', scenarioId)
-      .not('completed_at', 'is', null);
-    existingAttemptsCount = count || 0;
+      .not('feedback_json', 'is', null)
+    existingAttemptsCount = count || 0
   }
 
   if (existingAttemptsCount >= modeLimit) {
@@ -350,17 +377,17 @@ export const sendMessage = async (req: any, res: any) => {
     const systemInstruction = generateSystemInstruction(scenario, hasRagContext)
     messagesPayload[0] = { role: 'system', content: systemInstruction }
 
-    const groqApiKey = await getSecret('GROQ_API_KEY')
-    const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
+    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
+    const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
 
     const completion = await openai.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+      model: 'gpt-oss-120b',
       messages: messagesPayload,
-      max_tokens: 250,
+      max_tokens: 600,
       temperature: 0.7
     })
 
-    const replyText = completion.choices[0].message.content
+    const replyText = extractLLMContent(completion, '')
 
     if (!replyText) throw new Error("Empty response from Groq")
 
@@ -457,12 +484,14 @@ export const endSession = async (req: any, res: any) => {
     }
 
     if (targetAssignmentId) {
-      // Count how many times this rep has now ended a session for this assignment
+      // Count how many times this rep has ended a session (with feedback) for this scenario
+      // Use rep_id + scenario_id instead of the broken feedback_json->>assignment_id filter
       const { count: completedCount } = await supabase
         .from('training_sessions')
         .select('id', { count: 'exact', head: true })
-        .eq('feedback_json->>assignment_id', targetAssignmentId)
-        .not('completed_at', 'is', null);
+        .eq('rep_id', session.rep_id)
+        .eq('scenario_id', session.scenario_id)
+        .not('feedback_json', 'is', null)
 
       // Also fetch assignment to get training_mode for limit check
       const { data: assignRow } = await supabase
@@ -663,10 +692,10 @@ export const endSession = async (req: any, res: any) => {
       };
     } else {
       try {
-        const groqApiKey = await getSecret('GROQ_API_KEY')
-        const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
+        const groqApiKey = await getSecret('CEREBRAS_API_KEY')
+        const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
         const completion = await openai.chat.completions.create({
-          model: 'openai/gpt-oss-120b',
+          model: 'gpt-oss-120b',
           messages: [
             { role: 'system', content: 'You are an expert sales coach analyst. Return only raw JSON.' },
             { role: 'user', content: prompt }
@@ -676,10 +705,12 @@ export const endSession = async (req: any, res: any) => {
           response_format: { type: 'json_object' }
         })
 
-        const text = completion.choices[0].message.content || '{}';
+        const text = extractLLMContent(completion);
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         const jsonText = jsonMatch ? jsonMatch[0] : '{}';
-        feedback = JSON.parse(jsonText);
+        // Fix common LLM hallucination where commas are missing between array objects
+        const repairedJsonText = jsonText.replace(/\}\s*\{/g, '},{');
+        feedback = JSON.parse(repairedJsonText);
 
         // Ensure overall_score, strengths, and improvements are non-empty for non-empty sessions
         if (feedback && feedback.scores) {
@@ -706,41 +737,25 @@ export const endSession = async (req: any, res: any) => {
             feedback.improvements = ["Quantify value proposition with specific metrics", "Confirm clear next steps and timeline"]
           }
         }
-      } catch (evalErr) {
-        console.error("[AssignmentLifecycle] AI Evaluation failed, using dynamic fallback metrics", evalErr);
-        const turnCount = userMsgs.length
-        const baseScore = Math.min(88, 65 + (turnCount * 4))
-        const fallbackScores: Record<string, any> = {
-          'communication_professionalism': { score: baseScore, actual_answer: userMsgs[0]?.content || "Professional greeting", better_answer: "Keep up the clear, direct communication." },
-          'customer_understanding': { score: Math.max(60, baseScore - 5), actual_answer: userMsgs[1]?.content || "Inquired about process", better_answer: "Ask open-ended discovery questions to uncover deeper pain points." },
-          'active_listening_engagement': { score: baseScore, actual_answer: userMsgs[userMsgs.length - 1]?.content || "Acknowledged customer input", better_answer: "Reflect customer priorities back before presenting solution options." },
-          'value_communication': { score: Math.max(65, baseScore - 3), actual_answer: "Communicated key capabilities", better_answer: "Quantify potential ROI and operational efficiency gains." },
-          'objection_concern_handling': { score: Math.max(60, baseScore - 4), actual_answer: "Addressed timeline and feasibility", better_answer: "Acknowledge concerns with empathy before offering solutions." },
-          'next_steps_call_effectiveness': { score: baseScore, actual_answer: "Proposed follow-up steps", better_answer: "Confirm specific date and time for next technical review." }
-        }
+      } catch (evalErr: any) {
+        console.error("[endSession] AI Evaluation failed:", evalErr?.error?.code || evalErr?.message)
+        const isRateLimit = evalErr?.status === 429 || evalErr?.error?.code === 'rate_limit_exceeded'
 
         feedback = {
-          scores: fallbackScores,
-          overall_score: baseScore,
-          summary: `Interaction completed with ${turnCount} turns with ${scenario?.persona_name || 'the prospect'}. The rep maintained clear communication throughout.`,
-          strengths: ["Clear communication and professional tone", "Active engagement with prospect concerns"],
-          improvements: ["Quantify value proposition with specific benchmarks", "Establish firm date and time for next steps"],
-          objections_analysis: [
-            {
-              objection: "Timeline and implementation feasibility concern",
-              rep_response: userMsgs[userMsgs.length - 1]?.content || "We can confirm our team availability to get back to you.",
-              is_effective: true,
-              feedback: "Handled attentively. Reinforce concrete next steps to build buyer confidence."
-            }
-          ],
-          highlights: userMsgs.slice(0, 2).map((m: any) => ({
-            type: "strong",
-            rep_quote: m.content || "Engagement quote",
-            context: "Clear and purposeful rep communication."
-          })),
-          outcome_analysis: "The conversation built solid alignment and opened clear next steps.",
-          next_practice_recommendation: "Objection Handling & Closing"
-        };
+          scores: null,
+          overall_score: null,
+          evaluation_unavailable: true,
+          evaluation_error: isRateLimit ? 'rate_limit' : 'ai_error',
+          summary: isRateLimit
+            ? "AI evaluation could not be completed — the daily token limit was reached. Your session has been saved. Please check back later or start a new session tomorrow when the limit resets."
+            : "AI evaluation could not be completed due to a temporary error. Your session transcript has been saved.",
+          strengths: [],
+          improvements: [],
+          objections_analysis: [],
+          highlights: [],
+          outcome_analysis: null,
+          next_practice_recommendation: null
+        }
       }
     }
 
@@ -752,23 +767,25 @@ export const endSession = async (req: any, res: any) => {
     // 5. CONVERSATION ANALYTICS (Guarantee analytics object exists)
     if (transcript.trim()) {
       try {
-        const groqApiKey2 = await getSecret('GROQ_API_KEY')
-        const openai2 = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey2 || '' })
+        const groqApiKey2 = await getSecret('CEREBRAS_API_KEY')
+        const openai2 = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey2 || '' })
         const analyticsPrompt = generateConversationAnalyticsPrompt(transcript, voiceAggregate)
         const analyticsCompletion = await openai2.chat.completions.create({
-          model: 'openai/gpt-oss-20b',
+          model: 'gpt-oss-120b',
           messages: [
             { role: 'system', content: 'You are a conversation analytics expert. Return only raw JSON.' },
             { role: 'user', content: analyticsPrompt }
           ],
-          max_tokens: 1500,
+          max_tokens: 3500,
           temperature: 0.3,
           response_format: { type: 'json_object' }
         })
-        const analyticsText = analyticsCompletion.choices[0].message.content || '{}'
+        const analyticsText = extractLLMContent(analyticsCompletion)
         const analyticsJson = analyticsText.match(/\{[\s\S]*\}/)
         if (analyticsJson) {
-          feedback.conversation_analytics = JSON.parse(analyticsJson[0])
+          // Fix common LLM hallucination where commas are missing between array objects
+          const repairedJson = analyticsJson[0].replace(/\}\s*\{/g, '},{')
+          feedback.conversation_analytics = JSON.parse(repairedJson)
         }
       } catch (analyticsErr) {
         console.error('[ConversationAnalytics] Analytics call failed, generating fallback analytics:', analyticsErr)
@@ -813,10 +830,11 @@ export const endSession = async (req: any, res: any) => {
       }
     }
 
-    // 6. Save feedback (status: In Review until submitted to manager)
+    // 6. Save feedback + mark session as completed
     await safeUpdateTrainingSession(sessionId, {
       feedback_json: feedback,
-      status: 'In Review'
+      status: 'In Review',
+      completed_at: new Date().toISOString()
     })
 
     return res.json(feedback)
@@ -891,12 +909,45 @@ export const submitSessionToManager = async (req: any, res: any) => {
     }
 
     if (targetAssignmentId) {
+      const { data: assignData } = await supabase.from('training_assignments').select('training_mode, created_at, scenario_id').eq('id', targetAssignmentId).single()
+      
+      let newStatus = 'Completed'
+      
+      if (assignData) {
+        let modeLimit = 3
+        if (assignData.training_mode === 'expert' || assignData.training_mode === 'advanced') {
+          modeLimit = 1
+        }
+        
+        const { data: futureAssigns } = await supabase.from('training_assignments')
+          .select('created_at')
+          .eq('scenario_id', assignData.scenario_id || session.scenario_id)
+          .gt('created_at', assignData.created_at || '1970-01-01')
+          
+        const nextTime = futureAssigns && futureAssigns.length > 0
+          ? Math.min(...futureAssigns.map((a: any) => new Date(a.created_at).getTime()))
+          : Infinity
+          
+        const { count } = await supabase.from('training_sessions')
+          .select('id', { count: 'exact', head: true })
+          .eq('rep_id', session.rep_id)
+          .eq('scenario_id', assignData.scenario_id || session.scenario_id)
+          .gte('created_at', assignData.created_at || '1970-01-01')
+          .lt('created_at', nextTime === Infinity ? '3000-01-01' : new Date(nextTime).toISOString())
+          .not('feedback_json', 'is', null)
+          
+        const attempts = count || 0
+        if (attempts < modeLimit) {
+          newStatus = 'In Progress'
+        }
+      }
+
       await safeUpdateTrainingAssignment(targetAssignmentId, {
-        status: 'Completed',
-        completed_at: nowIso,
+        status: newStatus,
+        completed_at: newStatus === 'Completed' ? nowIso : undefined,
         session_id: sessionId
       })
-      console.log(`[AssignmentLifecycle] Successfully marked assignment ${targetAssignmentId} as COMPLETED on Submit to Manager.`)
+      console.log(`[AssignmentLifecycle] Successfully marked assignment ${targetAssignmentId} as ${newStatus} on Submit to Manager.`)
 
       // 🔔 Notify manager: assignment submitted and completed
       ;(async () => {
@@ -985,9 +1036,14 @@ export const liveSentiment = async (req: any, res: any) => {
 
   const isLearning = (trainingMode || '').toLowerCase().includes('learning')
 
+  // Names resolved from scenario — used to anchor prompts correctly
+  let repName = 'the Sales Rep'
+  let personaName = 'the Customer'
+  let turnCount = 1
+
   try {
-    const groqApiKey = await getSecret('GROQ_API_KEY')
-    const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
+    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
+    const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
 
     // ── RAG: fetch KB context for RAG personas ───────────────────────────────
     let accountName: string | null = null
@@ -995,14 +1051,30 @@ export const liveSentiment = async (req: any, res: any) => {
 
     if (sessionId) {
       try {
-        const { data: session } = await supabase
+        const { data: session, error: sessionErr } = await supabase
           .from('training_sessions')
-          .select('*, training_scenarios(*)')
+          .select('*, training_scenarios(*), messages_json')
           .eq('id', sessionId)
           .maybeSingle()
 
+        if (sessionErr) {
+          console.error('[LiveSentiment] Error fetching session:', sessionErr)
+        }
+
         const scenario = session?.training_scenarios
         accountName = scenario?.account_name || null
+
+        // Resolve persona and rep names for prompt anchoring
+        if (scenario) {
+          personaName = scenario.persona_name || scenario.contact_title || 'the Customer'
+          // Rep name is not stored on scenario; derive from user profile if possible
+          // For now leave as default — will be injected via prompt context
+        }
+
+        // Estimate turn count from stored history to gate MEDDPICC sensitivity
+        if (session?.messages_json && Array.isArray(session.messages_json)) {
+          turnCount = session.messages_json.filter((m: any) => m.role === 'user').length
+        }
 
         if (!accountName && scenario) {
           const combined = `${scenario.contact_company || ''} ${scenario.persona_name || ''} ${scenario.context_text || ''}`.toLowerCase()
@@ -1013,12 +1085,36 @@ export const liveSentiment = async (req: any, res: any) => {
         if (accountName) {
           const searchTarget = `${customerReply || ''} ${repMessage || ''} ${accountName} deal history specs requirements pain points`.trim()
           const ragChunks = await searchKnowledgeBase(searchTarget, accountName, 4)
+          try {
+            fs.appendFileSync('debug_live_sentiment.log', JSON.stringify({
+              step: 'rag_called',
+              accountName,
+              searchTarget,
+              ragChunksLength: ragChunks?.length || 0
+            }) + '\n');
+          } catch(e) {}
+          
           if (ragChunks && ragChunks.length > 0) {
             kbContextStr = formatRagContext(ragChunks, accountName)
             console.log(`[LiveSentiment][${isLearning ? 'Learning' : 'Coach'}] RAG: ${ragChunks.length} KB chunks for ${accountName}`)
           }
+        } else {
+          try {
+            fs.appendFileSync('debug_live_sentiment.log', JSON.stringify({
+              step: 'accountName_null',
+              scenario: !!scenario,
+              personaName: scenario?.persona_name,
+              contactCompany: scenario?.contact_company
+            }) + '\n');
+          } catch(e) {}
         }
-      } catch (ragErr) {
+      } catch (ragErr: any) {
+        try {
+            fs.appendFileSync('debug_live_sentiment.log', JSON.stringify({
+              step: 'rag_error',
+              error: ragErr.message
+            }) + '\n');
+        } catch(e) {}
         console.warn('[LiveSentiment] RAG check failed (non-fatal):', ragErr)
       }
     }
@@ -1027,7 +1123,9 @@ export const liveSentiment = async (req: any, res: any) => {
     const repSnippet = (repMessage || '').substring(0, 400)
     const custSnippet = (customerReply || '').substring(0, 400)
     const custShort   = (customerReply || '').substring(0, 120)
-    const ragBlock    = kbContextStr ? `\nKNOWLEDGE BASE CONTEXT (use to ground your advice):\n${kbContextStr}\n` : ''
+    const ragBlock    = kbContextStr ? `\nKNOWLEDGE BASE CONTEXT (use to ground your advice — this is BACKGROUND HISTORY, NOT the current conversation):\n${kbContextStr}\n` : ''
+    // Role context injected once, used by both modes
+    const roleContext = `ROLE CONTEXT: The Sales Rep is the person doing the practice (they said the first message above). The AI Persona they are speaking WITH is called "${personaName}". Suggestions must be written AS the Sales Rep speaking TO ${personaName} — never address the rep by name in the suggestions.`
 
     let prompt: string
 
@@ -1052,8 +1150,10 @@ RULES — FACT CHECK (CRITICAL — applies to ALL modes):
       // ── LEARNING MODE: detailed suggestions + battle card + MEDDICC tip ──
       prompt = `You are a real-time AI sales coach helping a Sales Rep during a live practice call. Return ONLY a raw JSON object (no markdown, no backticks).
 
+${roleContext}
+
 Sales Rep said: "${repSnippet}"
-Customer replied: "${custSnippet}"
+${personaName} (AI Persona) replied: "${custSnippet}"
 ${ragBlock}
 Return this exact JSON structure:
 {
@@ -1061,7 +1161,7 @@ Return this exact JSON structure:
   "rep_tone_type": "good" | "warn",
   "coaching_hint": "<1 concise, prescriptive coaching sentence — reference MEDDICC framework stages if relevant>",
   "suggested_followups": ["<full response 1>", "<full response 2>", "<full response 3>"],
-  ${kbContextStr ? '"suggested_followups_sources": ["kb" | "general", "kb" | "general", "kb" | "general"],' : ''}
+  "suggested_followups_sources": ["kb" | "general", "kb" | "general", "kb" | "general"],
   "battle_card": "<1-2 sentence competitive or product positioning insight the rep can use right now>",
   "meddpicc_status": { "Metrics": <bool>, "Economic Buyer": <bool>, "Decision Criteria": <bool>, "Decision Process": <bool>, "Paper Process": <bool>, "Identify Pain": <bool>, "Champion": <bool>, "Competition": <bool> },
   "meddpicc_tip": "<1 sentence identifying the most critical unchecked MEDDPICC component to probe next, with a specific suggested question>",
@@ -1070,27 +1170,33 @@ Return this exact JSON structure:
 tone_distribution values must sum to exactly 100.
 
 RULES — SUGGESTED FOLLOW-UPS (Learning Mode):
-- Write 3 complete, ready-to-send responses from the Sales Rep's perspective ONLY.
-- Each must be 2-3 sentences and DIRECTLY address the customer's concern: "${custShort}"
+- CRITICAL: Write 3 complete, ready-to-send responses FROM THE SALES REP'S PERSPECTIVE speaking TO ${personaName}.
+- DO NOT start any suggestion with the rep's own name or address the rep. The rep is the speaker, not the recipient.
+- Each must be 2-3 sentences and DIRECTLY address what ${personaName} just said: "${custShort}"
 ${kbContextStr
-  ? `- THIS IS A KB-LINKED PERSONA. At least 2 out of 3 suggested responses MUST be grounded STRICTLY in facts from the Knowledge Base above (deal history, past call references, specific specs, pain points, timelines, contact names from the documents). 
+  ? `- IF relevant to the immediate conversation, use facts from the Knowledge Base to ground your responses. 
+- You do NOT have to use the KB for every suggestion. Use it only when it naturally fits the conversation.
 - CRITICAL: Do NOT fabricate stats, ROI figures, or product features (like algorithm names). If the KB does not contain specific numbers, do NOT invent them.
-- For each suggestion, set the corresponding entry in "suggested_followups_sources" to "kb" if it uses KB facts, or "general" if it is a general sales strategy response.
-- The 3rd response may be a general strategic response not tied to KB facts (marked "general").`
+- In "suggested_followups_sources", output "kb" if the corresponding suggestion explicitly uses facts/numbers from the KB. Otherwise, output "general".`
   : `- Be SPECIFIC and TECHNICAL — reference product capabilities, ROI figures, timelines, or competitive advantages.
-- Include quantified value statements where possible (e.g. "reduces onboarding time by 40%", "used by 3 of your top competitors").`
+- Include quantified value statements where possible (e.g. "reduces onboarding time by 40%", "used by 3 of your top competitors").
+- In "suggested_followups_sources", output "general" for all 3 suggestions.`
 }
 - The rep will click to send these verbatim. Make them sound natural and confident, not robotic.
 
 RULES — BATTLE CARD:
-- Give 1 competitive or product-positioning insight specific to what the customer just said.
+- Give 1 competitive or product-positioning insight specific to what ${personaName} just said.
 ${kbContextStr ? `- Tie it to account-specific context from the KB if relevant.` : `- Focus on a concrete product differentiator or ROI angle.`}
 - Keep it to 1-2 sentences. Do NOT use generic phrases like "emphasise value".
 
 RULES — MEDDPICC CHECKLIST:
-- Analyze the entire conversation context to determine which MEDDPICC dimensions (Metrics, Economic Buyer, Decision Criteria, Decision Process, Paper Process, Identify Pain, Champion, Competition) have been adequately discussed by the rep. Set those to true in "meddpicc_status", otherwise false.
-- Identify the most critical unchecked MEDDPICC dimension based on the conversation stage.
-- Give one specific question the rep should ask to address it in "meddpicc_tip".
+- ONLY mark a dimension true if the Sales Rep EXPLICITLY discussed it in THIS conversation turn (the messages above). Do NOT infer from KB background history.
+- The conversation currently has approximately ${turnCount} rep turn(s). With fewer than 3 turns, most dimensions should be false unless explicitly covered.
+- Mark "Identify Pain" true only if the rep directly asked about or acknowledged a specific pain point this turn.
+- Mark "Champion" true only if the rep explicitly confirmed who their internal champion is this turn.
+- Mark "Decision Criteria" true only if the rep explicitly discussed evaluation criteria this turn.
+- When in doubt, set to false. It is better to coach the rep to cover more ground.
+- Give one specific question the rep should ask to address the most critical unchecked dimension in "meddpicc_tip".
 
 RULES — COACHING HINT:
 - Be prescriptive, not vague. Reference MEDDICC, specific objection type, or conversation stage.
@@ -1101,8 +1207,10 @@ ${factCheckBlock}`
       // ── COACH MODE: hint-style observations — no direct responses ──────────
       prompt = `You are a real-time sales coaching AI assisting a Sales Rep in a live practice call. Return ONLY a raw JSON object (no markdown, no backticks).
 
+${roleContext}
+
 Sales Rep said: "${repSnippet}"
-Customer replied: "${custSnippet}"
+${personaName} (AI Persona) replied: "${custSnippet}"
 ${ragBlock}
 Return this exact JSON structure:
 {
@@ -1128,7 +1236,7 @@ ${kbContextStr
 - BAD examples: "Ask more questions." "Be more confident." "Try to close."
 
 RULES — COACHING HINT:
-- 1 sentence. What should the rep do RIGHT NOW based on what the customer just said?
+- 1 sentence. What should the rep do RIGHT NOW based on what ${personaName} just said?
 - Be specific — name the objection type or conversation stage.
 - rep_tone_type is "warn" if the rep was vague, too long, too pushy, or missed the customer's point.
 ${factCheckBlock}`
@@ -1136,18 +1244,20 @@ ${factCheckBlock}`
 
     // ── Call Groq ─────────────────────────────────────────
     const completion = await openai.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+      model: 'gpt-oss-120b',  // Cerebras dedicated — gpt-oss-120b, no daily limits
       messages: [
-        { role: 'system', content: 'Return only raw JSON with no markdown or backticks.' },
+        { role: 'system', content: 'Return only raw JSON with no markdown or backticks. Your entire response must be a single valid JSON object.' },
         { role: 'user', content: prompt }
       ],
-      max_tokens: 1500,
-      temperature: isLearning ? 0.5 : 0.35,
-      response_format: { type: 'json_object' }
+      max_tokens: 1600,
+      temperature: isLearning ? 0.5 : 0.35
+      // No response_format — strict JSON mode not needed, we extract via regex
     })
 
-    const text = completion.choices[0].message.content || '{}'
-    const parsed = JSON.parse(text)
+    const rawText = extractLLMContent(completion)
+    // Robust JSON extraction: grab first { ... } block even if there is trailing text
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+    const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
 
     // Tag the response with mode so the frontend can render appropriately
     parsed.mode = isLearning ? 'learning' : 'coach'
@@ -1158,7 +1268,15 @@ ${factCheckBlock}`
       parsed.fact_check = { has_contradiction: false, rep_claim: '', kb_fact: '', correction_hint: '' }
     }
 
+    // Ensure fallback tags if LLM failed to generate them
+    if (parsed.suggested_followups && Array.isArray(parsed.suggested_followups)) {
+      if (!parsed.suggested_followups_sources || !Array.isArray(parsed.suggested_followups_sources) || parsed.suggested_followups_sources.length !== parsed.suggested_followups.length) {
+        parsed.suggested_followups_sources = parsed.suggested_followups.map(() => 'general')
+      }
+    }
+
     return res.json(parsed)
+
 
   } catch (err: any) {
     console.error('[LiveSentiment] Error:', err)
@@ -1187,8 +1305,8 @@ export const processLiveTurn = async (req: any, res: any) => {
       return res.status(400).json({ error: 'sessionId and transcript are required' })
     }
 
-    const groqApiKey = await getSecret('GROQ_API_KEY')
-    const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
+    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
+    const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
 
     if (!transcript.trim()) {
       return res.json({ aiResponse: '', metrics: null, coachTip: null })
@@ -1264,11 +1382,11 @@ export const processLiveTurn = async (req: any, res: any) => {
     try {
       const chatCompletion = await openai.chat.completions.create({
         messages: messagesPayload as any,
-        model: 'openai/gpt-oss-120b',
+        model: 'gpt-oss-120b',  // Cerebras dedicated
         temperature: 0.7,
-        max_tokens: 250
+        max_tokens: 600
       })
-      aiResponse = chatCompletion.choices[0]?.message?.content || ''
+      aiResponse = extractLLMContent(chatCompletion, '')
     } catch (groqErr) {
       console.error('[processLiveTurn] Groq AI completion failed, using context-aware fallback:', groqErr)
       const words = transcript.trim().split(/\s+/).slice(0, 6).join(' ')
@@ -1345,8 +1463,8 @@ export const processLiveCoach = async (req: any, res: any) => {
       return res.status(400).json({ error: 'metrics and transcript are required' })
     }
 
-    const groqApiKey = await getSecret('GROQ_API_KEY')
-    const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
+    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
+    const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
 
     let coachTip = null
     // Prompt B: Coach Analysis
@@ -1357,11 +1475,11 @@ export const processLiveCoach = async (req: any, res: any) => {
       ]
       const coachCompletion = await openai.chat.completions.create({
         messages: coachPrompt as any,
-        model: 'openai/gpt-oss-20b',
+        model: 'gpt-oss-120b',  // Cerebras dedicated
         temperature: 0.3,
-        max_tokens: 50
+        max_tokens: 400
       })
-      const tipText = coachCompletion.choices[0]?.message?.content || ''
+      const tipText = extractLLMContent(coachCompletion, '')
       if (tipText.trim()) {
         coachTip = { shouldPopup: true, tip: tipText, severity: 'info' }
       }
@@ -1430,10 +1548,10 @@ export const pauseSession = async (req: any, res: any) => {
       };
     } else {
       try {
-        const groqApiKey = await getSecret('GROQ_API_KEY')
-        const openai = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey || '' })
+        const groqApiKey = await getSecret('CEREBRAS_API_KEY')
+        const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
         const completion = await openai.chat.completions.create({
-          model: 'openai/gpt-oss-120b',
+          model: 'gpt-oss-120b',
           messages: [
             { role: 'system', content: 'You are an expert sales coach analyst. Return only raw JSON.' },
             { role: 'user', content: prompt }
@@ -1442,7 +1560,7 @@ export const pauseSession = async (req: any, res: any) => {
           temperature: 0.3,
           response_format: { type: 'json_object' }
         })
-        const text = completion.choices[0].message.content || '{}';
+        const text = extractLLMContent(completion);
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         feedback = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
       } catch (evalErr) {

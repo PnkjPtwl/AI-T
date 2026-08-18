@@ -13,8 +13,8 @@ export const generateQuestions = async (req: Request, res: Response) => {
       ? categories
       : ['Discovery', 'Objection Handling', 'Value Proposition', 'Closing Skills']
 
-    const groqApiKey = await getSecret('GROQ_API_KEY')
-    const openai = new OpenAI({ apiKey: groqApiKey || '', baseURL: 'https://api.groq.com/openai/v1' })
+    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
+    const openai = new OpenAI({ apiKey: groqApiKey || '', baseURL: 'https://api.cerebras.ai/v1' })
 
     // Fetch Knowledge Base chunks from RAG ONLY if a specific account_name is provided
     let kbContextStr = ''
@@ -62,7 +62,7 @@ Return ONLY raw JSON with this format:
 `
 
     const completion = await openai.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+      model: 'openai/gpt-oss-20b',
       messages: [
         { role: 'system', content: 'You are an expert AI API. Output ONLY raw JSON.' },
         { role: 'user', content: prompt }

@@ -34,7 +34,7 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
           const data = await res.json()
           const sess = data.session || data
           setSession(sess)
-          if (sess.completed_at || sess.status === 'Completed') {
+          if (sess.status === 'Completed') {
             setSubmitted(true)
           }
         } else {
@@ -98,7 +98,9 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
     if (s >= 50) return { label: 'Needs Improvement', color: 'text-yellow-600', bg: 'bg-yellow-50' }
     return { label: 'Focus Area', color: 'text-red-600', bg: 'bg-red-50' }
   }
-  const outcome = getOutcome(score)
+  const evaluationUnavailable = feedback.evaluation_unavailable === true
+  const isRateLimit = feedback.evaluation_error === 'rate_limit'
+  const outcome = evaluationUnavailable ? { label: 'Pending Evaluation', color: 'text-gray-500', bg: 'bg-gray-50' } : getOutcome(score)
 
   return (
     <div className="space-y-8 pb-12 text-left">
@@ -159,13 +161,25 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
           </div>
 
           <div className="flex flex-col items-center gap-2 bg-[#F8FAFC] p-6 rounded-xl border border-[#E2E8F0]">
-            <div className={`text-5xl font-bold ${outcome.color}`}>
-              {score}%
-            </div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">Overall Score</div>
-            <div className={`mt-2 px-3 py-1 rounded-md border border-[#E2E8F0] ${outcome.bg} ${outcome.color} text-xs font-semibold`}>
-              {outcome.label}
-            </div>
+            {evaluationUnavailable ? (
+              <div className="flex flex-col items-center gap-2 text-center">
+                <div className="text-4xl">⏳</div>
+                <div className="text-sm font-bold text-gray-600">Score Unavailable</div>
+                <div className="text-xs text-gray-400 max-w-[160px]">
+                  {isRateLimit ? 'Daily AI limit reached. Resets at midnight.' : 'Evaluation error. Try again.'}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className={`text-5xl font-bold ${outcome.color}`}>
+                  {score}%
+                </div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">Overall Score</div>
+                <div className={`mt-2 px-3 py-1 rounded-md border border-[#E2E8F0] ${outcome.bg} ${outcome.color} text-xs font-semibold`}>
+                  {outcome.label}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

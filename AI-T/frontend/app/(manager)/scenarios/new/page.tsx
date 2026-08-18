@@ -392,9 +392,8 @@ function NewScenarioPageContent() {
           { num: 1, label: 'Basics' },
           { num: 2, label: 'Context' },
           { num: 3, label: 'Scorecard' },
-          { num: 4, label: 'Avatar' },
-          { num: 5, label: 'Questions' },
-          { num: 6, label: 'Review' }
+          { num: 4, label: 'Questions' },
+          { num: 5, label: 'Review' }
         ].map((s, idx) => (
           <div key={s.num} className="flex items-center gap-2">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center font-[800] ${
@@ -403,7 +402,7 @@ function NewScenarioPageContent() {
               {step > s.num ? '✓' : s.num}
             </div>
             <span className={`font-[700] ${step === s.num ? 'text-[#1E1B4B]' : 'text-gray-400'}`}>{s.label}</span>
-            {idx < 5 && <div className={`w-6 h-0.5 ${step > s.num + 1 ? 'bg-green-600' : 'bg-gray-200'}`}></div>}
+            {idx < 4 && <div className={`w-6 h-0.5 ${step > s.num + 1 ? 'bg-green-600' : 'bg-gray-200'}`}></div>}
           </div>
         ))}
       </div>
@@ -549,70 +548,8 @@ function NewScenarioPageContent() {
         </div>
       )}
 
-      {/* ── STEP 4: AVATAR ──────────────────────────────────────────────────────── */}
+      {/* ── STEP 4: QUESTIONS ───────────────────────────────────────────────────── */}
       {step === 4 && (
-        <div className="bg-white rounded-2xl border border-gray-200/80 p-8 space-y-6 shadow-sm">
-          <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl w-fit">
-            {(['AI', 'Upload'] as const).map(tab => (
-              <button key={tab} type="button" onClick={() => setAvatarTab(tab)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-[700] transition-colors ${avatarTab === tab ? 'bg-white text-[#1E1B4B] shadow-sm' : 'text-[#64748B]'}`}>
-                {tab === 'AI' ? '🤖 AI Avatars' : '📷 Upload Photo'}
-              </button>
-            ))}
-          </div>
-
-          {avatarTab === 'AI' ? (
-            <>
-              <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="space-y-2"><p className="text-[10px] font-[800] text-[#64748B] uppercase">Skin Tone</p>
-                  <div className="flex gap-2">
-                    {[{ id: 'light', c: '#fce8d5' }, { id: 'medium', c: '#d4a574' }, { id: 'dark', c: '#8b5e3c' }].map(t => (
-                      <button key={t.id} type="button" onClick={() => setSkinTone(t.id)} style={{ backgroundColor: t.c }} className={`w-8 h-8 rounded-full border-2 ${skinTone === t.id ? 'border-[#1E1B4B] scale-110' : 'border-white'}`} />
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-2"><p className="text-[10px] font-[800] text-[#64748B] uppercase">Hair Color</p>
-                  <div className="flex gap-2">
-                    {[{ id: 'black', c: '#1a1a1a' }, { id: 'brown', c: '#6b3d2e' }, { id: 'blonde', c: '#d4a843' }].map(h => (
-                      <button key={h.id} type="button" onClick={() => setHairColor(h.id)} style={{ backgroundColor: h.c }} className={`w-8 h-8 rounded-full border-2 ${hairColor === h.id ? 'border-[#1E1B4B] scale-110' : 'border-white'}`} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                {AVATAR_PRESETS.map(av => (
-                  <div key={av.id} onClick={() => { setSelectedAvatarId(av.id); setAvatarTab('AI') }}
-                    className={`border rounded-2xl p-4 text-center cursor-pointer transition-all ${selectedAvatarId === av.id ? 'border-[#1E1B4B] ring-2 ring-[#1E1B4B]/20 bg-purple-50/20' : 'border-gray-200'}`}>
-                    <div className="w-20 h-20 rounded-full mx-auto overflow-hidden bg-gray-50">
-                      <img src={getAvatarUrl(av)} alt={av.name} className="w-full h-full object-cover" />
-                    </div>
-                    <p className="font-[800] mt-2">{av.name}</p>
-                    <p className="text-[9px] text-[#64748B]">{av.tag}</p>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="space-y-4">
-              <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-purple-200 rounded-2xl p-10 bg-purple-50/20 flex flex-col items-center justify-center cursor-pointer">
-                {uploadedImageUrl ? (
-                  <img src={uploadedImageUrl} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-4 border-[#1E1B4B]" />
-                ) : (
-                  <>
-                    <div className="text-2xl mb-2">📷</div>
-                    <p className="font-[700]">Upload photo</p>
-                  </>
-                )}
-              </div>
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── STEP 5: QUESTIONS ───────────────────────────────────────────────────── */}
-      {step === 5 && (
         <div className="bg-white rounded-2xl border border-gray-200/80 p-8 space-y-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -681,8 +618,8 @@ function NewScenarioPageContent() {
         </div>
       )}
 
-      {/* ── STEP 6: REVIEW & PUBLISH ────────────────────────────────────────────── */}
-      {step === 6 && (
+      {/* ── STEP 5: REVIEW & PUBLISH ────────────────────────────────────────────── */}
+      {step === 5 && (
         <div className="bg-white rounded-2xl border border-gray-200/80 p-8 space-y-6 shadow-sm text-xs">
           <h3 className="font-[800] text-[#1E293B] text-sm">Review Persona Configuration</h3>
           <div className="grid grid-cols-2 gap-4">
@@ -709,7 +646,7 @@ function NewScenarioPageContent() {
       <div className="flex items-center justify-between pt-4 border-t border-gray-200">
         <button type="button" onClick={() => step > 1 && setStep(step - 1)} disabled={step === 1}
           className="px-5 py-2.5 rounded-xl border border-gray-300 font-[700] hover:bg-gray-50 disabled:opacity-40">← Previous</button>
-        {step < 6 ? (
+        {step < 5 ? (
           <button type="button" onClick={() => setStep(step + 1)} className="px-6 py-2.5 rounded-xl bg-[#1E1B4B] text-white font-[700] shadow-md">Next Step →</button>
         ) : (
           <button type="button" onClick={handleSubmit} disabled={loading || !formData.persona_name}

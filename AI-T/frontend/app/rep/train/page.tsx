@@ -190,10 +190,10 @@ export default function TrainingCenter() {
                         </button>
                       ) : (a.is_limit_reached || a.isLimitReached) ? (
                         <button
-                          disabled
-                          className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-gray-200 text-gray-500 text-sm font-semibold rounded-lg cursor-not-allowed opacity-75"
+                          onClick={() => router.push(`/rep/train/${scenario.id}/review?sessionId=${a.session_id}`)}
+                          className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-all"
                         >
-                          Limit Reached ({a.attempts_count ?? 1}/{a.max_attempts ?? 1})
+                          Review & Submit
                         </button>
                       ) : (
                         <button
