@@ -21,3 +21,15 @@
 {"step":"rag_called","accountName":"spark_solutions","searchTarget":"Hi Alex, good to hear from you. What's the latest on the implementation timeline? hello priya spark_solutions deal history specs requirements pain points","ragChunksLength":4}
 {"step":"rag_called","accountName":"spark_solutions","searchTarget":"The demo looks on point, especially the payroll engine and integrations. My concerns are migration effort and ROI timeline—can you outline implementation resources? What do you think? spark_solutions deal history specs requirements pain points","ragChunksLength":4}
 {"step":"rag_called","accountName":"spark_solutions","searchTarget":"That helps, thanks. Could you specify how many hours per week our HR staff would need to allocate for data validation and parallel payroll testing? we have dedicated implementation engineer who will lead the migration spark_solutions deal history specs requirements pain points","ragChunksLength":4}
+{"step":"rag_called","accountName":"spark_solutions","searchTarget":"Sure thing. What’s the first item on the agenda? Hello David, Let's get started spark_solutions deal history specs requirements pain points","ragChunksLength":4}
+{"step":"rag_called","accountName":"spark_solutions","searchTarget":"We've already covered the employee self‑service portal, multi‑state payroll automation, and the AD/SSO integration you asked about, plus the compliance and security concerns raised in our technical deep‑dive. What specifics do you need next? selfie click go through what we have done previously spark_solutions deal history specs requirements pain points","ragChunksLength":4}
+{"step":"rag_called","accountName":"spark_solutions","searchTarget":"Got it—are you referring to the SCIM provisioning issue we discussed, or something else that was pending? yes yes open issue this has been fixed since we change the LLM this photo spark_solutions deal history specs requirements pain points","ragChunksLength":4}
+{"step":"accountName_null","scenario":true,"personaName":"Rachel Morgan","contactCompany":"Apex Manufacturing"}
+{"step":"accountName_null","scenario":true,"personaName":"Rachel Morgan","contactCompany":"Apex Manufacturing"}
+{"step":"accountName_null","scenario":true,"personaName":"Rachel Morgan","contactCompany":"Apex Manufacturing"}
+{"step":"accountName_null","scenario":true,"personaName":"Rachel Morgan","contactCompany":"Apex Manufacturing"}
+{"step":"accountName_null","scenario":true,"personaName":"Rachel Morgan","contactCompany":"Apex Manufacturing"}
+{"step":"accountName_null","scenario":true,"personaName":"Rachel Morgan","contactCompany":"Apex Manufacturing"}
+{"step":"accountName_null","scenario":true,"personaName":"Rachel Morgan","contactCompany":"Apex Manufacturing"}
+{"step":"accountName_null","scenario":true,"personaName":"Rachel Morgan","contactCompany":"Apex Manufacturing"}
+{"step":"accountName_null","scenario":true,"personaName":"Rachel Morgan","contactCompany":"Apex Manufacturing"}

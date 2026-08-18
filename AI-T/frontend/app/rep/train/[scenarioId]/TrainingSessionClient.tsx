@@ -627,9 +627,8 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
 
     setMetrics(prev => ({
       ...prev,
-      // Only update WPM when the turn was delivered via microphone (spoken)
-      ...(wasMicActive ? { wpm: calculatedWpm } : {}),
-      fillerRatio: calculatedFillerRatio,
+      // Only update WPM and fillerRatio when the turn was delivered via microphone (spoken)
+      ...(wasMicActive ? { wpm: calculatedWpm, fillerRatio: calculatedFillerRatio } : {}),
       userTalkTimeMs: updatedUserTalkMs,
       talkListenRatio: calcTalkListenRatio,
       questionCount: prev.questionCount + (messageText.includes('?') ? 1 : 0)
@@ -1028,11 +1027,19 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
                   <span className="text-[8px] text-gray-400">🎙️ Voice only</span>
                 </div>
               )}
-              <div className="bg-amber-50/60 border border-amber-100 p-2 rounded-xl text-center">
-                <p className="text-[9px] font-[700] text-amber-600 uppercase">Fillers</p>
-                <p className="text-sm font-[800] text-[#1E293B]">{metrics.fillerRatio}%</p>
-                <span className="text-[8px] text-gray-500">&lt;5% ideal</span>
-              </div>
+              {hasEverSpoken ? (
+                <div className="bg-amber-50/60 border border-amber-100 p-2 rounded-xl text-center">
+                  <p className="text-[9px] font-[700] text-amber-600 uppercase">Fillers</p>
+                  <p className="text-sm font-[800] text-[#1E293B]">{metrics.fillerRatio}%</p>
+                  <span className="text-[8px] text-gray-500">&lt;5% ideal</span>
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 p-2 rounded-xl text-center opacity-60">
+                  <p className="text-[9px] font-[700] text-gray-400 uppercase">Fillers</p>
+                  <p className="text-sm font-[800] text-gray-400">—</p>
+                  <span className="text-[8px] text-gray-400">🎙️ Voice only</span>
+                </div>
+              )}
             </div>
             <div className="bg-gray-50 border border-gray-200 p-2.5 rounded-xl space-y-1.5">
               <div className="flex justify-between text-[10px] font-[700] text-[#334155]">

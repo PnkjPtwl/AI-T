@@ -62,7 +62,7 @@ Return ONLY raw JSON with this format:
 `
 
     const completion = await openai.chat.completions.create({
-      model: 'openai/gpt-oss-20b',
+      model: 'gpt-oss-120b',
       messages: [
         { role: 'system', content: 'You are an expert AI API. Output ONLY raw JSON.' },
         { role: 'user', content: prompt }
