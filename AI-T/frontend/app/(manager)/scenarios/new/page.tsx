@@ -142,9 +142,6 @@ function NewScenarioPageContent() {
     if (step === 3 && !scorecardGenerated && formData.context_text) {
       handleGenerateScorecard()
     }
-    if (step === 5 && questions.length === 0) {
-      handleGenerateQuestions()
-    }
   }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Generate Scorecard ───────────────────────────────────────────────────────
@@ -530,9 +527,17 @@ function NewScenarioPageContent() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 font-[700]">
-                      <button type="button" onClick={() => setScorecardMetrics(prev => prev.map((item, i) => i === idx ? { ...item, weight: Math.max(0, item.weight - 5) } : item))} className="w-7 h-7 bg-white border border-gray-200 rounded-lg">−</button>
-                      <span className="w-10 text-center">{m.weight}%</span>
-                      <button type="button" onClick={() => setScorecardMetrics(prev => prev.map((item, i) => i === idx ? { ...item, weight: Math.min(100, item.weight + 5) } : item))} className="w-7 h-7 bg-white border border-gray-200 rounded-lg">+</button>
+                      <button type="button" onClick={() => setScorecardMetrics(prev => prev.map((item, i) => i === idx ? { ...item, weight: Math.max(0, item.weight - 1) } : item))} className="w-7 h-7 bg-white border border-gray-200 rounded-lg">−</button>
+                      <div className="flex items-center justify-center w-12">
+                        <input
+                          type="number"
+                          value={m.weight}
+                          onChange={(e) => setScorecardMetrics(prev => prev.map((item, i) => i === idx ? { ...item, weight: Math.min(100, Math.max(0, Number(e.target.value) || 0)) } : item))}
+                          className="w-7 text-center bg-transparent focus:outline-none font-[700] text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <span className="font-[700] text-xs">%</span>
+                      </div>
+                      <button type="button" onClick={() => setScorecardMetrics(prev => prev.map((item, i) => i === idx ? { ...item, weight: Math.min(100, item.weight + 1) } : item))} className="w-7 h-7 bg-white border border-gray-200 rounded-lg">+</button>
                       <button type="button" onClick={() => setScorecardMetrics(prev => prev.filter((_, i) => i !== idx))} className="w-7 h-7 text-red-400 hover:bg-red-50 rounded-lg ml-1">×</button>
                     </div>
                   </div>
@@ -647,7 +652,7 @@ function NewScenarioPageContent() {
         <button type="button" onClick={() => step > 1 && setStep(step - 1)} disabled={step === 1}
           className="px-5 py-2.5 rounded-xl border border-gray-300 font-[700] hover:bg-gray-50 disabled:opacity-40">← Previous</button>
         {step < 5 ? (
-          <button type="button" onClick={() => setStep(step + 1)} className="px-6 py-2.5 rounded-xl bg-[#1E1B4B] text-white font-[700] shadow-md">Next Step →</button>
+          <button type="button" onClick={() => setStep(step + 1)} disabled={step === 4 && questions.length === 0} className="px-6 py-2.5 rounded-xl bg-[#1E1B4B] text-white font-[700] shadow-md disabled:opacity-50">Next Step →</button>
         ) : (
           <button type="button" onClick={handleSubmit} disabled={loading || !formData.persona_name}
             className="px-7 py-2.5 rounded-xl bg-green-600 text-white font-[700] shadow-md disabled:opacity-50">
