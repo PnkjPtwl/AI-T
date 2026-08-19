@@ -269,7 +269,32 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
                     }`}>
                       {m.content}
                     </div>
-                    {/* Suggestion block removed */}
+                    {isUser && m.emotionLabel && (
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold border ${m.emotionLabel.colorClass || 'text-purple-700 bg-purple-50 border-purple-200'}`}>
+                          <span>🎯 {m.emotionLabel.emotion} Shift: {m.emotionLabel.changeText}</span>
+                        </div>
+                        {m.intent && (
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                            <span>Intent: {m.intent}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {isUser && !m.emotionLabel && (m.emotion || m.sentiment || m.intent) && (
+                      <div className="flex items-center gap-2 mt-1.5">
+                        {(m.emotion || m.sentiment) && (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
+                            <span>🎯 {m.emotion || m.sentiment}</span>
+                          </div>
+                        )}
+                        {m.intent && (
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                            <span>Intent: {m.intent}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -443,18 +468,39 @@ export default function ManagerSessionReviewPage({ params }: { params: { session
                 <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm">
                   <h3 className="text-sm font-bold text-[#1A2A3A] mb-5 uppercase tracking-wider">Communication Stats</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { label: 'Speaking Pace', value: voiceStats.avg_wpm ? `${voiceStats.avg_wpm} WPM` : 'N/A', sub: voiceStats.avg_wpm ? (voiceStats.avg_wpm < 120 ? 'Slow' : voiceStats.avg_wpm > 160 ? 'Fast' : 'Ideal') : 'From timing data' },
-                      { label: 'Style', value: voiceStats.communication_style || 'Unknown', sub: 'Primary approach' },
-                      { label: 'Energy', value: voiceStats.energy_label || 'Unknown', sub: 'Conversational momentum' },
-                      { label: 'Warmth Score', value: voiceStats.warmth_score != null ? `${voiceStats.warmth_score}%` : 'N/A', sub: 'Semantic empathy' },
-                    ].map((stat, i) => (
-                      <div key={i} className="bg-[#F8FAFC] rounded-xl p-4 border border-[#E2E8F0]">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-[#94A3B8] mb-1">{stat.label}</p>
-                        <p className="text-xl font-bold text-[#1A2A3A]">{stat.value}</p>
-                        <p className="text-[11px] text-[#64748B] mt-0.5">{stat.sub}</p>
-                      </div>
-                    ))}
+                    {(() => {
+                      const hasVoice = Boolean(feedback.voice_delivery || (voiceStats.avg_wpm && voiceStats.avg_wpm > 0));
+                      return [
+                        {
+                          label: 'Speaking Pace',
+                          value: hasVoice && voiceStats.avg_wpm ? `${voiceStats.avg_wpm} WPM` : 'N/A',
+                          sub: hasVoice && voiceStats.avg_wpm
+                            ? (voiceStats.avg_wpm < 120 ? 'Slow' : voiceStats.avg_wpm > 160 ? 'Fast' : 'Ideal')
+                            : 'Chat Session (No Audio)'
+                        },
+                        {
+                          label: 'Style',
+                          value: hasVoice && voiceStats.communication_style ? voiceStats.communication_style : 'N/A',
+                          sub: hasVoice && voiceStats.communication_style ? 'Primary approach' : 'Voice-only metric'
+                        },
+                        {
+                          label: 'Energy',
+                          value: hasVoice && voiceStats.energy_label ? voiceStats.energy_label : 'N/A',
+                          sub: hasVoice && voiceStats.energy_label ? 'Conversational momentum' : 'Voice-only metric'
+                        },
+                        {
+                          label: 'Warmth Score',
+                          value: hasVoice && voiceStats.warmth_score != null ? `${voiceStats.warmth_score}%` : 'N/A',
+                          sub: hasVoice && voiceStats.warmth_score != null ? 'Semantic empathy' : 'Voice-only metric'
+                        },
+                      ].map((stat, i) => (
+                        <div key={i} className="bg-[#F8FAFC] rounded-xl p-4 border border-[#E2E8F0]">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-[#94A3B8] mb-1">{stat.label}</p>
+                          <p className={`text-xl font-bold ${stat.value === 'N/A' ? 'text-gray-400' : 'text-[#1A2A3A]'}`}>{stat.value}</p>
+                          <p className="text-[11px] text-[#64748B] mt-0.5">{stat.sub}</p>
+                        </div>
+                      ));
+                    })()}
                   </div>
                 </div>
               </div>

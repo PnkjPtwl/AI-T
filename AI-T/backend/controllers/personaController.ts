@@ -37,8 +37,14 @@ export const generatePersonaFromAudio = async (req: any, res: any) => {
       .map(u => `Speaker ${u.speaker}: ${u.text}`)
       .join('\n')
 
-    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
-    const openai = new OpenAI({ apiKey: groqApiKey || '', baseURL: 'https://api.cerebras.ai/v1' })
+    const cerebrasApiKey = await getSecret('CEREBRAS_API_KEY')
+    const groqApiKey = await getSecret('GROQ_API_KEY')
+    const isCerebras = Boolean(cerebrasApiKey)
+    const openai = new OpenAI({
+      apiKey: cerebrasApiKey || groqApiKey || '',
+      baseURL: isCerebras ? 'https://api.cerebras.ai/v1' : 'https://api.groq.com/openai/v1'
+    })
+    const modelName = isCerebras ? 'gpt-oss-120b' : 'openai/gpt-oss-20b'
 
     const extractionPrompt = `
 You are an expert sales coach and persona designer.
@@ -75,7 +81,7 @@ Return ONLY a valid JSON object matching this exact structure:
 `
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-oss-120b',
+      model: modelName,
       messages: [{ role: 'user', content: extractionPrompt }],
       temperature: 0.3,
       max_tokens: 4000,

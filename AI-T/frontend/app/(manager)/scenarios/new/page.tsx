@@ -142,6 +142,9 @@ function NewScenarioPageContent() {
     if (step === 3 && !scorecardGenerated && formData.context_text) {
       handleGenerateScorecard()
     }
+    if (step === 4 && questions.length === 0 && formData.context_text) {
+      handleGenerateQuestions()
+    }
   }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Generate Scorecard ───────────────────────────────────────────────────────
@@ -514,8 +517,36 @@ function NewScenarioPageContent() {
             <>
               <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                 <span className="text-[10px] font-[800] text-[#64748B] uppercase">{scorecardMetrics.length} CRITERIA</span>
-                <span className={`text-xs font-[800] ${weightColor(totalWeight)}`}>Total: {totalWeight}%</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (scorecardMetrics.length === 0) return
+                      const count = scorecardMetrics.length
+                      const baseWeight = Math.floor(100 / count)
+                      const remainder = 100 - (baseWeight * count)
+                      setScorecardMetrics(prev => prev.map((item, i) => ({
+                        ...item,
+                        weight: baseWeight + (i === 0 ? remainder : 0)
+                      })))
+                    }}
+                    className="px-2.5 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 font-[700] rounded-lg text-[11px] border border-purple-200 transition-colors"
+                  >
+                    ⚖️ Distribute Evenly
+                  </button>
+                  <span className={`text-xs font-[800] px-2.5 py-1 rounded-lg ${totalWeight === 100 ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                    Total: {totalWeight}% {totalWeight === 100 ? '✓' : '(Must be 100%)'}
+                  </span>
+                </div>
               </div>
+
+              {totalWeight !== 100 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>Total weight is <strong>{totalWeight}%</strong>. Please adjust the criteria weights to equal exactly <strong>100%</strong> before proceeding.</span>
+                </div>
+              )}
+
               <div className="space-y-2">
                 {scorecardMetrics.map((m, idx) => (
                   <div key={idx} className="flex items-start justify-between p-3.5 bg-gray-50 border border-gray-200/80 rounded-xl text-xs gap-3">
@@ -527,25 +558,54 @@ function NewScenarioPageContent() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 font-[700]">
-                      <button type="button" onClick={() => setScorecardMetrics(prev => prev.map((item, i) => i === idx ? { ...item, weight: Math.max(0, item.weight - 1) } : item))} className="w-7 h-7 bg-white border border-gray-200 rounded-lg">−</button>
-                      <div className="flex items-center justify-center w-12">
+                      <button
+                        type="button"
+                        title="Decrease by 1%"
+                        onClick={() => setScorecardMetrics(prev => prev.map((item, i) => i === idx ? { ...item, weight: Math.max(0, item.weight - 1) } : item))}
+                        className="w-7 h-7 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg text-sm flex items-center justify-center text-gray-700 shadow-sm"
+                      >
+                        −
+                      </button>
+                      <div className="relative flex items-center">
                         <input
                           type="number"
+                          min={0}
+                          max={100}
                           value={m.weight}
-                          onChange={(e) => setScorecardMetrics(prev => prev.map((item, i) => i === idx ? { ...item, weight: Math.min(100, Math.max(0, Number(e.target.value) || 0)) } : item))}
-                          className="w-7 text-center bg-transparent focus:outline-none font-[700] text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          onChange={e => {
+                            const val = Math.max(0, Math.min(100, parseInt(e.target.value) || 0))
+                            setScorecardMetrics(prev => prev.map((item, i) => i === idx ? { ...item, weight: val } : item))
+                          }}
+                          className="w-14 h-7 bg-white border border-gray-300 rounded-lg text-center font-[800] text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none pr-3"
                         />
-                        <span className="font-[700] text-xs">%</span>
+                        <span className="absolute right-1.5 text-[10px] text-gray-500 font-bold pointer-events-none">%</span>
                       </div>
-                      <button type="button" onClick={() => setScorecardMetrics(prev => prev.map((item, i) => i === idx ? { ...item, weight: Math.min(100, item.weight + 1) } : item))} className="w-7 h-7 bg-white border border-gray-200 rounded-lg">+</button>
-                      <button type="button" onClick={() => setScorecardMetrics(prev => prev.filter((_, i) => i !== idx))} className="w-7 h-7 text-red-400 hover:bg-red-50 rounded-lg ml-1">×</button>
+                      <button
+                        type="button"
+                        title="Increase by 1%"
+                        onClick={() => setScorecardMetrics(prev => prev.map((item, i) => i === idx ? { ...item, weight: Math.min(100, item.weight + 1) } : item))}
+                        className="w-7 h-7 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg text-sm flex items-center justify-center text-gray-700 shadow-sm"
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        title="Remove criterion"
+                        onClick={() => setScorecardMetrics(prev => prev.filter((_, i) => i !== idx))}
+                        className="w-7 h-7 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg ml-1 text-base flex items-center justify-center"
+                      >
+                        ×
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
               <div className="pt-4 border-t border-gray-100 flex items-center gap-3">
                 <input type="text" value={newCustomMetric.name} onChange={e => setNewCustomMetric({ ...newCustomMetric, name: e.target.value })} placeholder="e.g. ROI Justification" className="flex-1 h-10 bg-gray-50 border border-gray-200 rounded-xl px-3 text-xs focus:outline-none" />
-                <input type="number" value={newCustomMetric.weight} onChange={e => setNewCustomMetric({ ...newCustomMetric, weight: Number(e.target.value) })} className="w-16 h-10 bg-gray-50 border border-gray-200 rounded-xl px-2 text-center text-xs font-[700]" />
+                <div className="relative flex items-center">
+                  <input type="number" min={0} max={100} value={newCustomMetric.weight} onChange={e => setNewCustomMetric({ ...newCustomMetric, weight: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} className="w-16 h-10 bg-gray-50 border border-gray-200 rounded-xl pl-2 pr-4 text-center text-xs font-[700]" />
+                  <span className="absolute right-2 text-[10px] text-gray-500 font-bold pointer-events-none">%</span>
+                </div>
                 <button type="button" onClick={() => { if (newCustomMetric.name) { setScorecardMetrics([...scorecardMetrics, { ...newCustomMetric, description: '' }]); setNewCustomMetric({ name: '', weight: 10 }) } }} className="px-4 py-2 bg-[#1E1B4B] text-white rounded-xl font-[700] text-xs">+ Add</button>
               </div>
             </>
@@ -649,13 +709,47 @@ function NewScenarioPageContent() {
 
       {/* ── Stepper Footer ───────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-        <button type="button" onClick={() => step > 1 && setStep(step - 1)} disabled={step === 1}
-          className="px-5 py-2.5 rounded-xl border border-gray-300 font-[700] hover:bg-gray-50 disabled:opacity-40">← Previous</button>
+        <button
+          type="button"
+          onClick={() => {
+            setError('')
+            if (step > 1) setStep(step - 1)
+          }}
+          disabled={step === 1}
+          className="px-5 py-2.5 rounded-xl border border-gray-300 font-[700] hover:bg-gray-50 disabled:opacity-40"
+        >
+          ← Previous
+        </button>
         {step < 5 ? (
-          <button type="button" onClick={() => setStep(step + 1)} disabled={step === 4 && questions.length === 0} className="px-6 py-2.5 rounded-xl bg-[#1E1B4B] text-white font-[700] shadow-md disabled:opacity-50">Next Step →</button>
+          <button
+            type="button"
+            onClick={() => {
+              setError('')
+              if (step === 1 && !formData.persona_name.trim()) {
+                setError('Please provide a persona name.')
+                return
+              }
+              if (step === 2 && !formData.context_text.trim()) {
+                setError('Please provide scenario context details.')
+                return
+              }
+              if (step === 3 && totalWeight !== 100) {
+                setError(`Scorecard weights must equal exactly 100% (currently ${totalWeight}%). Please adjust before continuing.`)
+                return
+              }
+              setStep(step + 1)
+            }}
+            className="px-6 py-2.5 rounded-xl bg-[#1E1B4B] text-white font-[700] shadow-md hover:bg-[#2E2A72] transition-colors"
+          >
+            Next Step →
+          </button>
         ) : (
-          <button type="button" onClick={handleSubmit} disabled={loading || !formData.persona_name}
-            className="px-7 py-2.5 rounded-xl bg-green-600 text-white font-[700] shadow-md disabled:opacity-50">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading || !formData.persona_name}
+            className="px-7 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-[700] shadow-md disabled:opacity-50 transition-colors"
+          >
             {loading ? 'Saving...' : (isEditMode ? '✓ Save Changes' : '✓ Publish Persona')}
           </button>
         )}

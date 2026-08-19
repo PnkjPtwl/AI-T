@@ -46,7 +46,7 @@ export default function TrainingCenter() {
   const now = Date.now()
 
   const getStatus = (a: any) => {
-    if (a.status === 'Completed') return 'completed'
+    if (a.status === 'Completed' || a.status?.toLowerCase() === 'completed') return 'completed'
     if (a.deadline) {
       const dl = new Date(a.deadline)
       dl.setHours(23, 59, 59, 999)

@@ -53,6 +53,20 @@ const safeUpdateTrainingAssignment = async (assignmentId: string, assignmentUpda
   }
 }
 
+
+// Shared LLM Client for Cerebras gpt-oss-120b (with Groq fallback)
+async function getLLMClient() {
+  const cerebrasApiKey = await getSecret('CEREBRAS_API_KEY')
+  const groqApiKey = await getSecret('GROQ_API_KEY')
+  const isCerebras = Boolean(cerebrasApiKey)
+  const client = new OpenAI({
+    apiKey: cerebrasApiKey || groqApiKey || '',
+    baseURL: isCerebras ? 'https://api.cerebras.ai/v1' : 'https://api.groq.com/openai/v1'
+  })
+  const model = isCerebras ? 'gpt-oss-120b' : 'openai/gpt-oss-20b'
+  return { client, model, isCerebras }
+}
+
 export const getMySessions = async (req: any, res: any) => {
   const repId = req.user.id
 
@@ -377,11 +391,10 @@ export const sendMessage = async (req: any, res: any) => {
     const systemInstruction = generateSystemInstruction(scenario, hasRagContext)
     messagesPayload[0] = { role: 'system', content: systemInstruction }
 
-    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
-    const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
+    const { client: openai, model: sessionModel } = await getLLMClient()
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-oss-120b',
+      model: sessionModel,
       messages: messagesPayload,
       max_tokens: 600,
       temperature: 0.7
@@ -428,8 +441,8 @@ export const endSession = async (req: any, res: any) => {
 
     let messages = session.messages_json || []
     
-    // Sync with frontend messages if they are more complete (resolves race condition)
-    if (currentMessages && Array.isArray(currentMessages) && currentMessages.length > messages.length) {
+    // Sync with frontend messages to preserve emotionLabel, intent, and live sentiment tags
+    if (currentMessages && Array.isArray(currentMessages) && currentMessages.length > 0) {
       messages = currentMessages
       await safeUpdateTrainingSession(sessionId, { messages_json: messages })
     }
@@ -692,10 +705,10 @@ export const endSession = async (req: any, res: any) => {
       };
     } else {
       try {
-        const groqApiKey = await getSecret('CEREBRAS_API_KEY')
-        const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-oss-120b',
+        const { client: openai, model: sessionModel } = await getLLMClient()
+
+    const completion = await openai.chat.completions.create({
+      model: sessionModel,
           messages: [
             { role: 'system', content: 'You are an expert sales coach analyst. Return only raw JSON.' },
             { role: 'user', content: prompt }
@@ -767,11 +780,11 @@ export const endSession = async (req: any, res: any) => {
     // 5. CONVERSATION ANALYTICS (Guarantee analytics object exists)
     if (transcript.trim()) {
       try {
-        const groqApiKey2 = await getSecret('CEREBRAS_API_KEY')
-        const openai2 = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey2 || '' })
+        const groqApiKey2 = await getSecret('GROQ_API_KEY')
+        const openai2 = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey2 || '' })
         const analyticsPrompt = generateConversationAnalyticsPrompt(transcript, voiceAggregate)
         const analyticsCompletion = await openai2.chat.completions.create({
-          model: 'gpt-oss-120b',
+          model: 'openai/gpt-oss-20b',
           messages: [
             { role: 'system', content: 'You are a conversation analytics expert. Return only raw JSON.' },
             { role: 'user', content: analyticsPrompt }
@@ -818,10 +831,10 @@ export const endSession = async (req: any, res: any) => {
             passive: 10
           },
           rep_voice_stats: {
-            avg_wpm: 135,
-            communication_style: "Consultative",
-            energy_label: "Medium",
-            warmth_score: 80
+            avg_wpm: (voiceAggregate && voiceAggregate.totalDurationSec > 0) ? 135 : null,
+            communication_style: (voiceAggregate && voiceAggregate.totalDurationSec > 0) ? "Consultative" : null,
+            energy_label: (voiceAggregate && voiceAggregate.totalDurationSec > 0) ? "Medium" : null,
+            warmth_score: (voiceAggregate && voiceAggregate.totalDurationSec > 0) ? 80 : null
           },
           customer_sentiment_arc: sentimentArc,
           rep_sentiment_arc: repSentimentArc,
@@ -909,42 +922,11 @@ export const submitSessionToManager = async (req: any, res: any) => {
     }
 
     if (targetAssignmentId) {
-      const { data: assignData } = await supabase.from('training_assignments').select('training_mode, created_at, scenario_id').eq('id', targetAssignmentId).single()
-      
-      let newStatus = 'Completed'
-      
-      if (assignData) {
-        let modeLimit = 3
-        if (assignData.training_mode === 'expert' || assignData.training_mode === 'advanced') {
-          modeLimit = 1
-        }
-        
-        const { data: futureAssigns } = await supabase.from('training_assignments')
-          .select('created_at')
-          .eq('scenario_id', assignData.scenario_id || session.scenario_id)
-          .gt('created_at', assignData.created_at || '1970-01-01')
-          
-        const nextTime = futureAssigns && futureAssigns.length > 0
-          ? Math.min(...futureAssigns.map((a: any) => new Date(a.created_at).getTime()))
-          : Infinity
-          
-        const { count } = await supabase.from('training_sessions')
-          .select('id', { count: 'exact', head: true })
-          .eq('rep_id', session.rep_id)
-          .eq('scenario_id', assignData.scenario_id || session.scenario_id)
-          .gte('created_at', assignData.created_at || '1970-01-01')
-          .lt('created_at', nextTime === Infinity ? '3000-01-01' : new Date(nextTime).toISOString())
-          .not('feedback_json', 'is', null)
-          
-        const attempts = count || 0
-        if (attempts < modeLimit) {
-          newStatus = 'In Progress'
-        }
-      }
+      const newStatus = 'Completed'
 
       await safeUpdateTrainingAssignment(targetAssignmentId, {
         status: newStatus,
-        completed_at: newStatus === 'Completed' ? nowIso : undefined,
+        completed_at: nowIso,
         session_id: sessionId
       })
       console.log(`[AssignmentLifecycle] Successfully marked assignment ${targetAssignmentId} as ${newStatus} on Submit to Manager.`)
@@ -1040,10 +1022,10 @@ export const liveSentiment = async (req: any, res: any) => {
   let repName = 'the Sales Rep'
   let personaName = 'the Customer'
   let turnCount = 1
+  let sessionData: any = null
 
   try {
-    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
-    const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
+    const { client: openai, model: sentModel } = await getLLMClient()
 
     // ── RAG: fetch KB context for RAG personas ───────────────────────────────
     let accountName: string | null = null
@@ -1060,6 +1042,7 @@ export const liveSentiment = async (req: any, res: any) => {
         if (sessionErr) {
           console.error('[LiveSentiment] Error fetching session:', sessionErr)
         }
+        sessionData = session
 
         const scenario = session?.training_scenarios
         accountName = scenario?.account_name || null
@@ -1146,14 +1129,26 @@ RULES — FACT CHECK (CRITICAL — applies to ALL modes):
     "correction_hint": "<a short, helpful correction the rep should know, or empty string>"
   }` : ''
 
-    if (isLearning) {
-      // ── LEARNING MODE: detailed suggestions + battle card + MEDDICC tip ──
-      prompt = `You are a real-time AI sales coach helping a Sales Rep during a live practice call. Return ONLY a raw JSON object (no markdown, no backticks).
+    // ── LEARNING MODE: detailed suggestions + battle card + MEDDICC tip ──
+    // Reconstruct transcript if session exists
+    let transcriptContext = '';
+    if (sessionData?.messages_json && Array.isArray(sessionData.messages_json)) {
+      const historyStr = sessionData.messages_json.map((m: any) => {
+        let content = m.content;
+        if (!content && m.parts && m.parts.length > 0) content = m.parts[0].text;
+        return `${m.role === 'user' || m.role === 'rep' ? 'Sales Rep' : personaName}: ${content}`;
+      }).join('\n');
+      if (historyStr.trim()) {
+        transcriptContext = `\n--- RECENT CONVERSATION HISTORY ---\n${historyStr.substring(historyStr.length - 2000)}\n-----------------------------------\n`;
+      }
+    }
+
+    prompt = `You are a real-time AI sales coach helping a Sales Rep during a live practice call. Return ONLY a raw JSON object (no markdown, no backticks).
 
 ${roleContext}
-
-Sales Rep said: "${repSnippet}"
-${personaName} (AI Persona) replied: "${custSnippet}"
+${transcriptContext}
+Sales Rep's LATEST message: "${repSnippet}"
+${personaName}'s LATEST reply: "${custSnippet}"
 ${ragBlock}
 Return this exact JSON structure:
 {
@@ -1169,17 +1164,17 @@ Return this exact JSON structure:
 }
 tone_distribution values must sum to exactly 100.
 
-RULES — SUGGESTED FOLLOW-UPS (Learning Mode):
-- CRITICAL: Write 3 complete, ready-to-send responses FROM THE SALES REP'S PERSPECTIVE speaking TO ${personaName}.
+RULES — SUGGESTED FOLLOW-UPS:
+- CRITICAL: Write 3 complete, fresh, ready-to-send responses FROM THE SALES REP'S PERSPECTIVE speaking TO ${personaName} based directly on what ${personaName} just said: "${custShort}"
 - DO NOT start any suggestion with the rep's own name or address the rep. The rep is the speaker, not the recipient.
-- Each must be 2-3 sentences and DIRECTLY address what ${personaName} just said: "${custShort}"
+- Each must be MAXIMUM 2 sentences, natural, persuasive, and directly relevant to the latest turn. Keep each suggestion concise.
 ${kbContextStr
   ? `- IF relevant to the immediate conversation, use facts from the Knowledge Base to ground your responses. 
 - You do NOT have to use the KB for every suggestion. Use it only when it naturally fits the conversation.
 - CRITICAL: Do NOT fabricate stats, ROI figures, or product features (like algorithm names). If the KB does not contain specific numbers, do NOT invent them.
 - In "suggested_followups_sources", output "kb" if the corresponding suggestion explicitly uses facts/numbers from the KB. Otherwise, output "general".`
   : `- Be SPECIFIC and TECHNICAL — reference product capabilities, ROI figures, timelines, or competitive advantages.
-- Include quantified value statements where possible (e.g. "reduces onboarding time by 40%", "used by 3 of your top competitors").
+- Include quantified value statements where possible.
 - In "suggested_followups_sources", output "general" for all 3 suggestions.`
 }
 - The rep will click to send these verbatim. Make them sound natural and confident, not robotic.
@@ -1187,77 +1182,113 @@ ${kbContextStr
 RULES — BATTLE CARD:
 - Give 1 competitive or product-positioning insight specific to what ${personaName} just said.
 ${kbContextStr ? `- Tie it to account-specific context from the KB if relevant.` : `- Focus on a concrete product differentiator or ROI angle.`}
-- Keep it to 1-2 sentences. Do NOT use generic phrases like "emphasise value".
+- Keep it to 1-2 sentences.
 
 RULES — MEDDPICC CHECKLIST:
-- ONLY mark a dimension true if the Sales Rep EXPLICITLY discussed it in THIS conversation turn (the messages above). Do NOT infer from KB background history.
-- The conversation currently has approximately ${turnCount} rep turn(s). With fewer than 3 turns, most dimensions should be false unless explicitly covered.
-- Mark "Identify Pain" true only if the rep directly asked about or acknowledged a specific pain point this turn.
-- Mark "Champion" true only if the rep explicitly confirmed who their internal champion is this turn.
-- Mark "Decision Criteria" true only if the rep explicitly discussed evaluation criteria this turn.
-- When in doubt, set to false. It is better to coach the rep to cover more ground.
-- Give one specific question the rep should ask to address the most critical unchecked dimension in "meddpicc_tip".
+- Mark a dimension true if the Sales Rep asked about, probed, or discussed that topic in this conversation turn:
+  * "Metrics": Rep asked for or discussed quantifiable numbers, metrics, headcount, days, percentages, or dollar amounts.
+  * "Economic Buyer": Rep asked about or discussed budget ownership, economic buyers, CFO/VP sign-off, or budget authorization.
+  * "Decision Criteria": Rep asked about evaluation criteria, technical requirements, integrations, or capabilities being assessed.
+  * "Decision Process": Rep asked who is involved in the decision, who the decision makers are, how the evaluation committee works, or what the approval timeline is.
+  * "Paper Process": Rep asked about legal review, procurement, MSAs, security questionnaires, or contracting workflow.
+  * "Identify Pain": Rep asked about pain points, operational bottlenecks, manual overhead, or current challenges.
+  * "Champion": Rep identified or asked about internal project champions or executive sponsors driving the initiative.
+  * "Competition": Rep asked about other vendors being evaluated or incumbent tools (e.g. ADP, Rippling, BambooHR).
+- Be ACCURATE and ENCOURAGING: If the rep actively asks a relevant discovery question (such as "who will be the decision makers?" or "what are your decision criteria?"), mark the corresponding dimension as true!
+- In "meddpicc_tip", give ONE concrete suggested question the rep should ask next to uncover the most important remaining unchecked category.
 
 RULES — COACHING HINT:
 - Be prescriptive, not vague. Reference MEDDICC, specific objection type, or conversation stage.
 - rep_tone_type is "warn" if the rep was vague, too long, too pushy, or missed the customer's concern.
 ${factCheckBlock}`
 
-    } else {
-      // ── COACH MODE: hint-style observations — no direct responses ──────────
-      prompt = `You are a real-time sales coaching AI assisting a Sales Rep in a live practice call. Return ONLY a raw JSON object (no markdown, no backticks).
 
-${roleContext}
-
-Sales Rep said: "${repSnippet}"
-${personaName} (AI Persona) replied: "${custSnippet}"
-${ragBlock}
-Return this exact JSON structure:
-{
-  "customer_sentiment": <integer 0-100, 0=very negative, 50=neutral, 100=very positive>,
-  "rep_tone_type": "good" | "warn",
-  "coaching_hint": "<1 short, specific observation about what the rep just did well or should adjust>",
-  "suggested_followups": ["<observation 1>", "<observation 2>", "<observation 3>"],
-  "tone_distribution": { "alert": <int>, "hesitant": <int>, "warm": <int>, "wise": <int> }${factCheckJsonBlock}
-}
-tone_distribution values must sum to exactly 100.
-
-RULES — COACHING OBSERVATIONS (Coach Mode — NOT clickable responses):
-- "suggested_followups" in Coach Mode contains 3 SHORT DIRECTIONAL HINTS, NOT full responses.
-- These are observations and nudges for the rep to think about — the rep drives the conversation.
-- Each hint must be 1 sentence max. Start with the situation, then the nudge.
-${kbContextStr
-  ? `- This is a RAG persona: reference specific account history facts from the KB to make observations concrete (e.g. "They mentioned Q3 budget review last call — probe if that timeline shifted").`
-  : `- Be specific to what the customer just said. Avoid generic advice.`
-}
-- GOOD examples: "The prospect signalled budget hesitation — ask what their typical approval threshold is."
-  "They're asking about timeline, suggesting urgency — clarify their go-live target."
-  "You haven't asked about the decision process yet — now is a good time."
-- BAD examples: "Ask more questions." "Be more confident." "Try to close."
-
-RULES — COACHING HINT:
-- 1 sentence. What should the rep do RIGHT NOW based on what ${personaName} just said?
-- Be specific — name the objection type or conversation stage.
-- rep_tone_type is "warn" if the rep was vague, too long, too pushy, or missed the customer's point.
-${factCheckBlock}`
+    // ── Call Cerebras/LLM with automatic Groq fallback ───────────────
+    let rawText = ''
+    try {
+      const completion = await openai.chat.completions.create({
+        model: sentModel,
+        messages: [
+          { role: 'system', content: 'Return ONLY raw JSON with no markdown formatting. The output must be a single valid JSON object. Do not include markdown code blocks.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 2400,
+        temperature: isLearning ? 0.5 : 0.35,
+        response_format: { type: 'json_object' }
+      })
+      rawText = extractLLMContent(completion)
+    } catch (primaryErr: any) {
+      console.warn('[LiveSentiment] Primary LLM failed, trying Groq fallback:', primaryErr?.message)
+      try {
+        const groqApiKey = await getSecret('GROQ_API_KEY')
+        if (groqApiKey) {
+          const fallbackClient = new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: groqApiKey })
+          const fallbackCompletion = await fallbackClient.chat.completions.create({
+            model: 'openai/gpt-oss-20b',
+            messages: [
+              { role: 'system', content: 'Return ONLY raw JSON with no markdown formatting. The output must be a single valid JSON object.' },
+              { role: 'user', content: prompt }
+            ],
+            max_tokens: 2400,
+            temperature: 0.35,
+            response_format: { type: 'json_object' }
+          })
+          rawText = extractLLMContent(fallbackCompletion)
+        } else {
+          throw primaryErr
+        }
+      } catch (fallbackErr: any) {
+        console.error('[LiveSentiment] Both Primary and Fallback LLM failed:', fallbackErr?.message)
+        throw fallbackErr
+      }
     }
 
-    // ── Call Groq ─────────────────────────────────────────
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-oss-120b',  // Cerebras dedicated — gpt-oss-120b, no daily limits
-      messages: [
-        { role: 'system', content: 'Return only raw JSON with no markdown or backticks. Your entire response must be a single valid JSON object.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 1600,
-      temperature: isLearning ? 0.5 : 0.35
-      // No response_format — strict JSON mode not needed, we extract via regex
-    })
+    // Guard: if the LLM returned empty content, fall through to safe defaults
+    if (!rawText || !rawText.trim()) {
+      console.warn('[LiveSentiment] LLM returned empty response, using safe defaults')
+      throw new Error('Empty response from LLM')
+    }
 
-    const rawText = extractLLMContent(completion)
-    // Robust JSON extraction: grab first { ... } block even if there is trailing text
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/)
-    const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
+    let parsed: any = {}
+    try {
+      parsed = JSON.parse(rawText)
+    } catch (e) {
+      // Try to extract a JSON block from the raw response
+      const jsonMatch = rawText.match(/\{[\s\S]*/)
+      const candidate = jsonMatch ? jsonMatch[0] : rawText
+
+      // Attempt to repair truncated JSON (most common cause: response cut at max_tokens limit)
+      try {
+        let repaired = candidate
+        let braces = 0
+        let brackets = 0
+        let inString = false
+        let escape = false
+        for (const ch of repaired) {
+          if (escape) { escape = false; continue }
+          if (ch === '\\' && inString) { escape = true; continue }
+          if (ch === '"' && !escape) { inString = !inString; continue }
+          if (!inString) {
+            if (ch === '{') braces++
+            else if (ch === '}') braces--
+            else if (ch === '[') brackets++
+            else if (ch === ']') brackets--
+          }
+        }
+        // Close any unclosed arrays and objects
+        if (brackets > 0) repaired += ']'.repeat(brackets)
+        if (braces > 0) repaired += '}'.repeat(braces)
+        parsed = JSON.parse(repaired)
+        console.warn('[LiveSentiment] Repaired truncated JSON successfully')
+      } catch (e2) {
+        console.error('[LiveSentiment] JSON unparseable even after repair. Preview:', rawText.substring(0, 300))
+        throw new Error('Unparseable JSON from LLM')
+      }
+    }
+
+    if (typeof parsed !== 'object' || parsed === null) {
+      parsed = {}
+    }
 
     // Tag the response with mode so the frontend can render appropriately
     parsed.mode = isLearning ? 'learning' : 'coach'
@@ -1275,21 +1306,62 @@ ${factCheckBlock}`
       }
     }
 
+    // If suggestions are somehow empty, generate 3 relevant discovery questions
+    if (!parsed.suggested_followups || !Array.isArray(parsed.suggested_followups) || parsed.suggested_followups.length === 0) {
+      parsed.suggested_followups = [
+        `Could you walk me through the key criteria your team will use to evaluate this solution?`,
+        `Who in your organization typically has final sign-off on the budget for this type of initiative?`,
+        `What are the most critical timeline milestones or deadlines you are working toward?`
+      ]
+      parsed.suggested_followups_sources = ['general', 'general', 'general']
+    }
+
+    // Ensure tone_distribution exists
+    if (!parsed.tone_distribution) {
+      parsed.tone_distribution = { alert: 10, hesitant: 30, warm: 40, wise: 20 }
+    }
+
+    // Ensure meddpicc_status exists
+    if (!parsed.meddpicc_status) {
+      parsed.meddpicc_status = {
+        "Metrics": false,
+        "Economic Buyer": false,
+        "Decision Criteria": false,
+        "Decision Process": false,
+        "Paper Process": false,
+        "Identify Pain": true,
+        "Champion": false,
+        "Competition": false
+      }
+    }
+
     return res.json(parsed)
 
 
   } catch (err: any) {
-    console.error('[LiveSentiment] Error:', err)
+    console.error('[LiveSentiment] Fatal Error:', err)
+    try {
+      fs.appendFileSync('debug_live_sentiment.log', JSON.stringify({
+        step: 'live_sentiment_fatal_error',
+        error: err?.message || String(err),
+        stack: err?.stack
+      }) + '\n');
+    } catch(e) {}
+
     return res.json({
-      customer_sentiment: 50,
+      customer_sentiment: 60,
       rep_tone_type: 'good',
-      coaching_hint: isLearning ? 'Use MEDDICC — identify the Economic Buyer and their key decision criteria.' : 'Stay curious — probe the customer\'s specific concern with an open question.',
-      suggested_followups: [],
-      suggested_followups_sources: [],
+      coaching_hint: isLearning ? 'Keep probing — uncover the Economic Buyer and decision criteria.' : 'Stay curious — ask an open-ended discovery question.',
+      suggested_followups: [
+        `Could you share more about the specific metrics or ROI numbers your team is targeting?`,
+        `Who else will be involved in the evaluation and decision process for this initiative?`,
+        `How does our timeline and implementation roadmap align with your current cut-over dates?`
+      ],
+      suggested_followups_sources: ['general', 'general', 'general'],
       battle_card: null,
       meddpicc_status: { "Metrics": false, "Economic Buyer": false, "Decision Criteria": false, "Decision Process": false, "Paper Process": false, "Identify Pain": false, "Champion": false, "Competition": false },
-      meddpicc_tip: null,
-      tone_distribution: { alert: 10, hesitant: 20, warm: 50, wise: 20 },
+      meddpicc_tip: "Ask about the Economic Buyer: 'Who has final budget authorization for this project?'",
+      tone_distribution: { alert: 10, hesitant: 25, warm: 45, wise: 20 },
       mode: isLearning ? 'learning' : 'coach',
       has_kb: false,
       fact_check: { has_contradiction: false, rep_claim: '', kb_fact: '', correction_hint: '' }
@@ -1305,8 +1377,7 @@ export const processLiveTurn = async (req: any, res: any) => {
       return res.status(400).json({ error: 'sessionId and transcript are required' })
     }
 
-    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
-    const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
+    const { client: openai, model: sentModel } = await getLLMClient()
 
     if (!transcript.trim()) {
       return res.json({ aiResponse: '', metrics: null, coachTip: null })
@@ -1382,7 +1453,7 @@ export const processLiveTurn = async (req: any, res: any) => {
     try {
       const chatCompletion = await openai.chat.completions.create({
         messages: messagesPayload as any,
-        model: 'gpt-oss-120b',  // Cerebras dedicated
+        model: sentModel,
         temperature: 0.7,
         max_tokens: 600
       })
@@ -1463,8 +1534,7 @@ export const processLiveCoach = async (req: any, res: any) => {
       return res.status(400).json({ error: 'metrics and transcript are required' })
     }
 
-    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
-    const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
+    const { client: openai, model: sentModel } = await getLLMClient()
 
     let coachTip = null
     // Prompt B: Coach Analysis
@@ -1475,7 +1545,7 @@ export const processLiveCoach = async (req: any, res: any) => {
       ]
       const coachCompletion = await openai.chat.completions.create({
         messages: coachPrompt as any,
-        model: 'gpt-oss-120b',  // Cerebras dedicated
+        model: sentModel,
         temperature: 0.3,
         max_tokens: 400
       })
@@ -1548,10 +1618,10 @@ export const pauseSession = async (req: any, res: any) => {
       };
     } else {
       try {
-        const groqApiKey = await getSecret('CEREBRAS_API_KEY')
-        const openai = new OpenAI({ baseURL: 'https://api.cerebras.ai/v1', apiKey: groqApiKey || '' })
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-oss-120b',
+        const { client: openai, model: sessionModel } = await getLLMClient()
+
+    const completion = await openai.chat.completions.create({
+      model: sessionModel,
           messages: [
             { role: 'system', content: 'You are an expert sales coach analyst. Return only raw JSON.' },
             { role: 'user', content: prompt }

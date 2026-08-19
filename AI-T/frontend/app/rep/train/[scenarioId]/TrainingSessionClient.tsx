@@ -122,6 +122,21 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     }
   }, [isExamMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const activeSessionIdRef = useRef<string | null>(paramSessionId)
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId
+  }, [activeSessionId])
+
+  const autoSendOnSilenceRef = useRef(autoSendOnSilence)
+  useEffect(() => {
+    autoSendOnSilenceRef.current = autoSendOnSilence
+  }, [autoSendOnSilence])
+
+  const isAiSpeakingRef = useRef(isAiSpeaking)
+  useEffect(() => {
+    isAiSpeakingRef.current = isAiSpeaking
+  }, [isAiSpeaking])
+
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const micActiveRef = useRef(false)
@@ -414,6 +429,9 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     }
 
     recognition.onresult = (event: any) => {
+      // Ignore mic audio while AI persona is speaking to prevent self-transcription loop
+      if (isAiSpeakingRef.current) return
+
       if (!speechStartTimeRef.current) {
         speechStartTimeRef.current = Date.now()
       }
@@ -434,8 +452,8 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
         setTextInput(combined)
         setSttStatus(`🎙️ Hearing: "${combined.slice(-35)}"`)
 
-        // Silence auto-send detection if enabled
-        if (autoSendOnSilence) {
+        // Silence auto-send detection if enabled (via live ref to prevent stale closures)
+        if (autoSendOnSilenceRef.current) {
           if (speechSilenceTimerRef.current) clearTimeout(speechSilenceTimerRef.current)
           speechSilenceTimerRef.current = setTimeout(() => {
             if (combined.trim().length > 3) {
@@ -530,6 +548,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
   }
 
   const playTTS = async (text: string) => {
+    isAiSpeakingRef.current = true
     setIsAiSpeaking(true)
     try {
       const token = localStorage.getItem('token')
@@ -544,7 +563,14 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
         if (audioRef.current) {
           audioRef.current.src = url
           audioRef.current.play()
-          audioRef.current.onended = () => setIsAiSpeaking(false)
+          audioRef.current.onended = () => {
+            isAiSpeakingRef.current = false
+            setIsAiSpeaking(false)
+          }
+          audioRef.current.onerror = () => {
+            isAiSpeakingRef.current = false
+            setIsAiSpeaking(false)
+          }
           return
         }
       }
@@ -557,10 +583,17 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       const utterance = new SpeechSynthesisUtterance(text)
       utterance.rate = 1.0
       utterance.pitch = 1.0
-      utterance.onend = () => setIsAiSpeaking(false)
-      utterance.onerror = () => setIsAiSpeaking(false)
+      utterance.onend = () => {
+        isAiSpeakingRef.current = false
+        setIsAiSpeaking(false)
+      }
+      utterance.onerror = () => {
+        isAiSpeakingRef.current = false
+        setIsAiSpeaking(false)
+      }
       window.speechSynthesis.speak(utterance)
     } else {
+      isAiSpeakingRef.current = false
       setIsAiSpeaking(false)
     }
   }
@@ -581,24 +614,25 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     let rawDurationMs = 0
     let calculatedWpm = metrics.wpm || 135
 
-    if (wasMicActive && speechStartTimeRef.current) {
-      const elapsedMs = Math.max(800, speechEndTime - speechStartTimeRef.current)
-      // Clamped realistic speaking duration (avoid silence skewing)
-      const maxSensibleMs = Math.max(1200, userWords * 750)
-      const effectiveMs = Math.min(elapsedMs, maxSensibleMs)
+    if (wasMicActive) {
+      let effectiveMs = 0
+      if (speechStartTimeRef.current) {
+        const elapsedMs = Math.max(800, speechEndTime - speechStartTimeRef.current)
+        const maxSensibleMs = Math.max(1200, userWords * 750)
+        effectiveMs = Math.min(elapsedMs, maxSensibleMs)
+      } else {
+        // Fallback realistic speech timing for voice mode when browser missed onspeechstart
+        effectiveMs = Math.max(1200, Math.round((userWords / 140) * 60000))
+      }
       calculatedWpm = Math.round((userWords / (effectiveMs / 60000))) || 135
-      // Clamp to realistic physical speaking pace bounds (90 - 210 WPM)
       calculatedWpm = Math.min(210, Math.max(90, calculatedWpm))
       rawDurationMs = effectiveMs
-      // Mark that the rep has spoken at least once this session
-      if (!hasEverSpokenRef.current) {
-        hasEverSpokenRef.current = true
-        setHasEverSpoken(true)
-      }
+      hasEverSpokenRef.current = true
+      setHasEverSpoken(true)
     } else {
-      // For typed messages (no mic): do NOT update WPM or fabricate talk-time duration
-      calculatedWpm = metrics.wpm  // keep existing value unchanged
-      rawDurationMs = 0            // typed turns don't count toward talk-time
+      // For typed messages (no mic): keep existing value unchanged, don't add to voice talk time
+      calculatedWpm = metrics.wpm || 135
+      rawDurationMs = 0
     }
     speechStartTimeRef.current = null
 
@@ -611,7 +645,21 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       recognitionRef.current = null
     }
 
-    const userMsg: ChatMessage = { role: 'user', content: messageText.trim() }
+    const userMsg: ChatMessage = {
+      role: 'user',
+      content: messageText.trim(),
+      ...(wasMicActive || rawDurationMs > 0 ? {
+        voiceMetrics: {
+          prosody: {
+            durationSec: Math.max(1, Math.round((rawDurationMs / 1000) * 100) / 100),
+            pitchMean: 0,
+            pitchStd: 0,
+            energyMean: 0,
+            pauseRatio: 0
+          }
+        }
+      } : {})
+    }
     setMessages(prev => [...prev, userMsg])
     setTextInput('')
 
@@ -620,23 +668,34 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     const fillerMatches = messageText.match(fillerRegex) || []
     const calculatedFillerRatio = Math.round((fillerMatches.length / userWords) * 1000) / 10
 
-    const updatedUserTalkMs = metrics.userTalkTimeMs + rawDurationMs
-    const currentAiTalkMs = metrics.aiTalkTimeMs || 4000
-    const totalTalkMs = updatedUserTalkMs + currentAiTalkMs
-    const calcTalkListenRatio = Math.round((updatedUserTalkMs / totalTalkMs) * 100)
+    setMetrics(prev => {
+      const newUserTalkMs = prev.userTalkTimeMs + rawDurationMs;
+      const currentAiTalkMs = prev.aiTalkTimeMs || 4000;
+      const totalTalkMs = newUserTalkMs + currentAiTalkMs;
+      const calcTalkListenRatio = Math.round((newUserTalkMs / totalTalkMs) * 100);
 
-    setMetrics(prev => ({
-      ...prev,
-      // Only update WPM and fillerRatio when the turn was delivered via microphone (spoken)
-      ...(wasMicActive ? { wpm: calculatedWpm, fillerRatio: calculatedFillerRatio } : {}),
-      userTalkTimeMs: updatedUserTalkMs,
-      talkListenRatio: calcTalkListenRatio,
-      questionCount: prev.questionCount + (messageText.includes('?') ? 1 : 0)
-    }))
+      // Only update WPM and fillerRatio when the turn was delivered via microphone
+      // Use the newly computed values, or fall back to prev values if not spoken
+      const finalWpm = wasMicActive ? calculatedWpm : prev.wpm;
+      const finalFillerRatio = wasMicActive ? calculatedFillerRatio : prev.fillerRatio;
+
+      return {
+        ...prev,
+        wpm: finalWpm,
+        fillerRatio: finalFillerRatio,
+        userTalkTimeMs: newUserTalkMs,
+        talkListenRatio: calcTalkListenRatio,
+        questionCount: prev.questionCount + (messageText.includes('?') ? 1 : 0)
+      };
+    })
+
+    // To pass correct cumulative values to the backend without waiting for React state:
+    const updatedUserTalkMs = metrics.userTalkTimeMs + rawDurationMs;
+    const currentAiTalkMs = metrics.aiTalkTimeMs || 4000;
 
     try {
       const token = localStorage.getItem('token')
-      let currentSessionId = activeSessionId || paramSessionId
+      let currentSessionId = activeSessionIdRef.current || activeSessionId || paramSessionId
 
       // Auto-start session if not initialized yet
       if (!currentSessionId) {
@@ -656,6 +715,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
               setAvatarType(startData.avatarType)
             }
             if (currentSessionId) {
+              activeSessionIdRef.current = currentSessionId
               setActiveSessionId(currentSessionId)
               const newUrl = window.location.pathname + `?sessionId=${currentSessionId}${assignmentId ? `&assignmentId=${assignmentId}` : ''}`
               window.history.replaceState(null, '', newUrl)
@@ -706,7 +766,8 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
             talkListenRatio: Math.round((prev.userTalkTimeMs / (prev.userTalkTimeMs + prev.aiTalkTimeMs + estAiDurationMs)) * 100)
           }))
 
-          await playTTS(aiRespText)
+          // Play TTS in background without blocking live-sentiment updates
+          playTTS(aiRespText).catch(err => console.warn('TTS error (non-fatal):', err))
         }
 
         if (data.inline_coach_note && !isExamMode) setInlineCoachNote(data.inline_coach_note)
@@ -786,28 +847,42 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
 
             if (prevTotal > 0) {
               for (const em of emotions) {
-                const diff = newToneDist[em] - prevToneDistributionRef.current[em];
-                if (Math.abs(diff) >= 20 && Math.abs(diff) > maxAbsChange) {
+                const diff = (newToneDist[em] || 0) - (prevToneDistributionRef.current[em] || 0);
+                if (Math.abs(diff) >= 5 && Math.abs(diff) > maxAbsChange) {
                   maxAbsChange = Math.abs(diff);
                   largestShiftEmotion = em;
                   actualDiff = diff;
                 }
               }
+            } else {
+              // First turn baseline: pick dominant emotion
+              let maxVal = 0;
+              for (const em of emotions) {
+                if ((newToneDist[em] || 0) > maxVal) {
+                  maxVal = newToneDist[em];
+                  largestShiftEmotion = em;
+                  actualDiff = maxVal;
+                }
+              }
             }
 
             if (largestShiftEmotion) {
-              const colorMap = {
+              const colorMap: Record<string, string> = {
                 alert: 'text-red-700 bg-red-100 border-red-300',
                 hesitant: 'text-orange-700 bg-orange-100 border-orange-300',
                 warm: 'text-yellow-700 bg-yellow-100 border-yellow-300',
                 wise: 'text-green-700 bg-green-100 border-green-300'
               };
-              const nameMap = {
+              const nameMap: Record<string, string> = {
                 alert: 'Alert',
                 hesitant: 'Hesitant',
                 warm: 'Warm',
                 wise: 'Wise'
               };
+
+              const shiftText = prevTotal > 0
+                ? (actualDiff > 0 ? `+${actualDiff}%` : `${actualDiff}%`)
+                : `${actualDiff}%`;
 
               setMessages(prevMsgs => {
                 const newMsgs = [...prevMsgs];
@@ -818,7 +893,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
                       emotionLabel: {
                         emotion: nameMap[largestShiftEmotion!],
                         colorClass: colorMap[largestShiftEmotion!],
-                        changeText: actualDiff > 0 ? `+${actualDiff}%` : `${actualDiff}%`
+                        changeText: shiftText
                       }
                     };
                     break;
@@ -840,22 +915,20 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
               setFactCheck(sentData.fact_check)
               setFactCheckDismissed(false)
             }
-            // Learning Mode extras
-            if (isLearningMode) {
-              setBattleCard(sentData.battle_card || null)
-              setMeddpiccTip(sentData.meddpicc_tip || null)
-              if (sentData.meddpicc_status) {
-                setMeddpiccStatus(prev => {
-                  const updated = { ...prev };
-                  for (const key in sentData.meddpicc_status) {
-                    // Only ever promote to true (progress is persistent); never regress
-                    if (sentData.meddpicc_status[key] === true) {
-                      updated[key] = true;
-                    }
+            // Real-time Battle Card, MEDDPICC status, and coaching tips
+            if (sentData.battle_card) setBattleCard(sentData.battle_card)
+            if (sentData.meddpicc_tip) setMeddpiccTip(sentData.meddpicc_tip)
+            if (sentData.meddpicc_status) {
+              setMeddpiccStatus(prev => {
+                const updated = { ...prev };
+                for (const key in sentData.meddpicc_status) {
+                  // Only ever promote to true (progress is persistent); never regress
+                  if (sentData.meddpicc_status[key] === true) {
+                    updated[key] = true;
                   }
-                  return updated;
-                });
-              }
+                }
+                return updated;
+              });
             }
           }
         } catch (sentErr) {
@@ -884,13 +957,18 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     }
     
     const currentSessionId = activeSessionId || paramSessionId
+    const hasVoiceActivity = hasEverSpokenRef.current || finalMessages.some((m: any) => m.voiceMetrics?.prosody?.durationSec > 0)
     try {
       const token = localStorage.getItem('token')
       if (currentSessionId) {
         await fetch(`${API}/api/sessions/end`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ sessionId: currentSessionId, currentMessages: finalMessages })
+          body: JSON.stringify({
+            sessionId: currentSessionId,
+            currentMessages: finalMessages,
+            hasVoice: hasVoiceActivity
+          })
         })
       }
     } catch (err) {
@@ -1385,23 +1463,42 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
                 )}
 
                 {/* MEDDPICC Checklist & Tip */}
-                {(meddpiccTip || Object.values(meddpiccStatus).some(Boolean)) && (
+                {isLearningMode && (
                   <div className="pt-3 border-t border-gray-100 space-y-2">
-                    <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">🎯 MEDDPICC COACHING</p>
-                    <div className="space-y-1 mt-2">
+                    <div className="flex items-center justify-between">
+                      <p className="font-[800] text-[#64748B] uppercase tracking-wider text-[10px]">🎯 MEDDPICC FRAMEWORK</p>
+                      <span className="text-[10px] font-[800] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                        {Object.values(meddpiccStatus).filter(Boolean).length} / 8 Covered
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 mt-2">
                       {['Metrics', 'Economic Buyer', 'Decision Criteria', 'Decision Process', 'Paper Process', 'Identify Pain', 'Champion', 'Competition'].map(stage => {
                         const isCompleted = meddpiccStatus[stage];
                         return (
-                          <div key={stage} className={`text-[10px] font-[700] flex items-center gap-2 ${isCompleted ? 'text-green-600' : 'text-gray-400'}`}>
-                            <span>{isCompleted ? '✓' : '○'}</span>
-                            <span>{stage} {isCompleted && <span className="text-[9px] uppercase">(Completed)</span>}</span>
+                          <div
+                            key={stage}
+                            className={`text-[10px] font-[700] flex items-center gap-1.5 p-1.5 rounded-lg border transition-all ${
+                              isCompleted
+                                ? 'bg-green-50/80 text-green-700 border-green-200 shadow-xs'
+                                : 'bg-gray-50/50 text-gray-400 border-gray-200/60'
+                            }`}
+                          >
+                            <span className={isCompleted ? 'text-green-600 font-black' : 'text-gray-300'}>
+                              {isCompleted ? '✓' : '○'}
+                            </span>
+                            <span className="truncate">{stage}</span>
                           </div>
                         )
                       })}
                     </div>
-                    {meddpiccTip && (
-                      <div className="p-3 mt-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                    {meddpiccTip ? (
+                      <div className="p-2.5 mt-2 bg-indigo-50/80 border border-indigo-200 rounded-xl">
+                        <p className="text-[9px] font-[800] text-indigo-700 uppercase tracking-wide mb-0.5">Next Recommended Probe:</p>
                         <p className="text-[11px] font-[600] text-indigo-900 leading-snug">{meddpiccTip}</p>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 mt-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-500 text-[10px]">
+                        💡 <em>Ask discovery questions about pain points, decision makers, and metrics to begin qualifying.</em>
                       </div>
                     )}
                   </div>

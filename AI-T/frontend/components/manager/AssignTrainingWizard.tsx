@@ -460,7 +460,15 @@ export default function AssignTrainingWizard({
                           <td className="p-4 text-[#64748B]">{r.team_name || 'Enterprise'}</td>
                           <td className="p-4 text-[#64748B]">Lokesh (Manager)</td>
                           <td className="p-4">{r.session_count || 0}</td>
-                          <td className="p-4 font-[700] text-green-600">{r.overall_score !== undefined && r.overall_score !== null ? `${r.overall_score}%` : 'N/A'}</td>
+                          <td className="p-4">
+                            {r.overall_score !== undefined && r.overall_score !== null ? (
+                              <span className={`font-[800] ${r.overall_score >= 70 ? 'text-green-600' : r.overall_score >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
+                                {r.overall_score}%
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 font-[500]">N/A</span>
+                            )}
+                          </td>
                           <td className="p-4">
                             <span className={`px-2.5 py-0.5 text-[10px] font-[700] rounded-full ${['Needs Coaching', 'High Risk'].includes(r.status) ? 'bg-red-50 text-red-700' : r.status === 'On Leave' ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
                               ● {r.status || 'Active'}

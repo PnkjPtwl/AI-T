@@ -226,7 +226,7 @@ export function generateConversationAnalyticsPrompt(transcript: string, voiceAgg
   })), null, 2)
 
   // Build voice context section if available
-  let voiceContext = ''
+  let voiceContext = '--- REP COMMUNICATION DATA ---\n- Mode: Pure Text Chat (No microphone audio recorded). You MUST set "avg_wpm": "N/A", "communication_style": "N/A", "energy_label": "N/A", "warmth_score": "N/A" in "rep_voice_stats".\n'
   if (voiceAggregate && voiceAggregate.totalDurationSec > 0) {
     const repWordCount = lines
       .filter((l: string) => l.startsWith('Human Sales Rep:'))
@@ -245,7 +245,7 @@ export function generateConversationAnalyticsPrompt(transcript: string, voiceAgg
 - Total Speaking Duration: ${voiceAggregate.totalDurationSec.toFixed(1)}s
 - Computed WPM: ${wpm}
 
-Use this to populate avg_wpm accurately.
+Use this to populate avg_wpm, communication_style, energy_label, and warmth_score accurately.
 `
   }
 
@@ -274,10 +274,10 @@ Return ONLY a raw JSON object (no markdown, no backticks):
     "passive": <0-100, too non-committal — ideally low>
   },
   "rep_voice_stats": {
-    "avg_wpm": <number or null if no voice data>,
-    "communication_style": "Consultative" | "Direct" | "Passive" | "Assertive" | "Enthusiastic" | "Analytical",
-    "energy_label": "High" | "Medium" | "Low",
-    "warmth_score": <0-100>
+    "avg_wpm": <number or "N/A" if no voice data>,
+    "communication_style": <"Consultative" | "Direct" | "Passive" | "Assertive" | "Enthusiastic" | "Analytical" or "N/A" if no voice data>,
+    "energy_label": <"High" | "Medium" | "Low" or "N/A" if no voice data>,
+    "warmth_score": <0-100 or "N/A" if no voice data>
   },
   "customer_sentiment_arc": [
     {

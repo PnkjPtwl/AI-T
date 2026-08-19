@@ -25,8 +25,14 @@ export const generateScorecardMetrics = async (req: any, res: any) => {
   }
 
   try {
-    const groqApiKey = await getSecret('CEREBRAS_API_KEY')
-    const openai = new OpenAI({ apiKey: groqApiKey || '', baseURL: 'https://api.cerebras.ai/v1' })
+    const cerebrasApiKey = await getSecret('CEREBRAS_API_KEY')
+    const groqApiKey = await getSecret('GROQ_API_KEY')
+    const isCerebras = Boolean(cerebrasApiKey)
+    const openai = new OpenAI({
+      apiKey: cerebrasApiKey || groqApiKey || '',
+      baseURL: isCerebras ? 'https://api.cerebras.ai/v1' : 'https://api.groq.com/openai/v1'
+    })
+    const modelName = isCerebras ? 'gpt-oss-120b' : 'openai/gpt-oss-20b'
 
     // Infer account_name if not provided directly
     let targetAccount = account_name
@@ -81,7 +87,7 @@ INSTRUCTIONS:
 Generate between 5 and 7 criteria. Make them precise and grounded in the Knowledge Base.`
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-oss-120b',
+      model: modelName,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.5,
       max_tokens: 1200,

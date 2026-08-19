@@ -1115,7 +1115,7 @@ export const getMyAssignments = async (req: any, res: any) => {
 
     const { data: repSessionsData } = await supabase
       .from('training_sessions')
-      .select('id, rep_id, scenario_id, created_at, completed_at, feedback_json')
+      .select('id, rep_id, scenario_id, created_at, completed_at, status, feedback_json')
       .eq('rep_id', repId);
 
     const now = new Date();
@@ -1153,7 +1153,9 @@ export const getMyAssignments = async (req: any, res: any) => {
         a.session_id = latestSession.id;
       }
 
-      if (status !== 'Completed' && deadlineDate && deadlineDate < now) {
+      if (a.status === 'Completed' || (latestSession && latestSession.status === 'Completed')) {
+        status = 'Completed';
+      } else if (deadlineDate && deadlineDate < now) {
         status = 'Overdue';
       }
 

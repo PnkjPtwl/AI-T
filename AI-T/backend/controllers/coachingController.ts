@@ -34,11 +34,17 @@ export const getMySignals = async (req: any, res: any) => {
 
 export const generateStudyGuide = async (req: any, res: any) => {
   const { repName, weakestSkill, strongestSkill } = req.body
-  const apiKey = await getSecret('CEREBRAS_API_KEY')
+  const cerebrasApiKey = await getSecret('CEREBRAS_API_KEY')
+  const groqApiKey = await getSecret('GROQ_API_KEY')
+  const apiKey = cerebrasApiKey || groqApiKey
 
   if (!apiKey) {
     return res.status(500).json({ error: 'AI Service not configured' })
   }
+
+  const isCerebras = Boolean(cerebrasApiKey)
+  const baseUrl = isCerebras ? 'https://api.cerebras.ai/v1/chat/completions' : 'https://api.groq.com/openai/v1/chat/completions'
+  const model = isCerebras ? 'gpt-oss-120b' : 'openai/gpt-oss-20b'
 
   try {
     const prompt = `Act as a World-Class Sales Coach. 
@@ -57,14 +63,14 @@ Include:
 
 Format the response in professional Markdown.`
 
-    const response = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+    const response = await fetch(baseUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-oss-120b',
+        model,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7
       })
