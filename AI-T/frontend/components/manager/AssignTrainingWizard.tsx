@@ -156,7 +156,7 @@ export default function AssignTrainingWizard({
         {/* Header */}
         <div className="bg-[#1E1B4B] text-white px-8 py-6 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-[800]">Assign Training</h2>
+            <h2 className="text-2xl font-[900] text-white tracking-wide">Assign Training</h2>
             <p className="text-xs text-purple-200 mt-0.5">Configure and assign a training scenario to your sales representatives</p>
           </div>
           <button

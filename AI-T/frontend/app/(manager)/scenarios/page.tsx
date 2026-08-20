@@ -117,7 +117,7 @@ export default function ManagerScenariosPage() {
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-[700] text-[#64748B]">Difficulty:</span>
-          {(['All', 'Beginner', 'Intermediate', 'Advanced', 'Expert'] as const).map(diff => (
+          {(['All', 'Beginner', 'Intermediate', 'Advanced'] as const).map(diff => (
             <button
               key={diff}
               onClick={() => setDifficultyFilter(diff)}

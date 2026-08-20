@@ -133,7 +133,7 @@ export const getScenarios = async (req: any, res: any) => {
     }
 
     const [{ data, error }, { data: assignments }] = await Promise.all([
-      query.order('id', { ascending: true }),
+      query.order('created_at', { ascending: false }),
       supabase.from('training_assignments').select('scenario_id')
     ]);
 

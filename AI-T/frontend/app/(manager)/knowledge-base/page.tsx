@@ -97,65 +97,71 @@ export default function KnowledgeBasePage() {
         </button>
       </div>
 
-      {/* Phoenix Automotive System Card */}
+      {/* Knowledge Bases */}
       <div className="mb-4">
-        <p className="text-[10px] font-[800] text-[#94A3B8] uppercase tracking-widest mb-3">System Knowledge Bases</p>
-        <div className="bg-gradient-to-br from-[#1E1B4B] to-[#312E81] rounded-2xl p-5 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center text-xl">🚗</div>
-              <div>
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="font-[800] text-base">Phoenix Automotive</span>
-                  <span className="text-[9px] font-[700] bg-white/20 px-2 py-0.5 rounded-full tracking-wider">SYSTEM</span>
+        <p className="text-[10px] font-[800] text-[#94A3B8] uppercase tracking-widest mb-3">
+          Knowledge Bases <span className="ml-2 text-[#CBD5E1]">({kbs.length + 1})</span>
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="group bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md hover:border-[#1E1B4B]/10 transition-all duration-200">
+            {/* KB Header */}
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#EEF2FF] to-[#E0E7FF] flex items-center justify-center text-lg flex-shrink-0">
+                  🚗
                 </div>
-                <p className="text-white/60 text-xs font-[500]">Static knowledge base</p>
+                <div className="min-w-0">
+                  <h3 className="font-[800] text-[#1E293B] text-sm truncate" title="Phoenix Automotive">Phoenix Automotive</h3>
+                  <p className="text-[10px] text-[#94A3B8] font-[600] font-mono">phoenix_automotive</p>
+                </div>
+              </div>
+              <StatusBadge status="active" />
+            </div>
+
+            {/* Description */}
+            <p className="text-xs text-[#64748B] font-[500] mb-3 line-clamp-2">Static knowledge base</p>
+
+            {/* Stats */}
+            <div className="flex gap-4 mb-4 py-3 border-y border-gray-50">
+              <div className="text-center">
+                <div className="text-lg font-[900] text-[#1E293B]">10+</div>
+                <div className="text-[10px] text-[#94A3B8] font-[700] uppercase tracking-wide">Docs</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-[900] text-[#1E293B]">124</div>
+                <div className="text-[10px] text-[#94A3B8] font-[700] uppercase tracking-wide">Chunks</div>
+              </div>
+              <div className="text-center ml-auto">
+                <div className="text-xs font-[700] text-[#64748B]">System</div>
+                <div className="text-[10px] text-[#94A3B8] font-[600] uppercase tracking-wide">Created</div>
               </div>
             </div>
-            <div className="flex items-center gap-6 text-right">
-              <div>
-                <div className="text-lg font-[900]">10+</div>
-                <div className="text-[10px] text-white/50 font-[600] uppercase tracking-wide">Documents</div>
-              </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              <button
+                disabled
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#F1F5F9] text-[#94A3B8] text-[11px] font-[700] rounded-lg cursor-not-allowed"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                System Defined
+              </button>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Custom KBs */}
-      <div className="mt-8">
-        <p className="text-[10px] font-[800] text-[#94A3B8] uppercase tracking-widest mb-3">
-          Custom Knowledge Bases
-          <span className="ml-2 text-[#CBD5E1]">({kbs.length})</span>
-        </p>
-
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {[1,2,3].map(i => (
+          {/* Custom KBs */}
+          {loading ? (
+            [1,2].map(i => (
               <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 animate-pulse">
                 <div className="h-4 bg-gray-100 rounded w-2/3 mb-3" />
                 <div className="h-3 bg-gray-100 rounded w-full mb-2" />
                 <div className="h-3 bg-gray-100 rounded w-1/2" />
               </div>
-            ))}
-          </div>
-        ) : kbs.length === 0 ? (
-          <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center py-16 px-8 text-center">
-            <div className="w-14 h-14 bg-[#F1F5F9] rounded-2xl flex items-center justify-center mb-4 text-2xl">📚</div>
-            <h3 className="font-[800] text-[#1E293B] text-base mb-1">No knowledge bases yet</h3>
-            <p className="text-sm text-[#64748B] font-[500] max-w-sm mb-5">
-              Create a KB to upload company documents. They'll be embedded and used to ground your AI personas.
-            </p>
-            <button
-              onClick={() => setIsCreateOpen(true)}
-              className="px-5 py-2.5 bg-[#1E1B4B] text-white text-xs font-[700] rounded-xl hover:bg-[#2d2a6a] transition-all"
-            >
-              Create your first Knowledge Base
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {kbs.map(kb => (
+            ))
+          ) : (
+            kbs.map(kb => (
               <div
                 key={kb.id}
                 className="group bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md hover:border-[#1E1B4B]/10 transition-all duration-200"
@@ -225,9 +231,9 @@ export default function KnowledgeBasePage() {
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
       </div>
 
       {/* Modals */}

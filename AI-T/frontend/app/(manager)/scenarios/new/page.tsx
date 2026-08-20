@@ -137,6 +137,35 @@ function NewScenarioPageContent() {
 
   const totalWeight = scorecardMetrics.reduce((sum, m) => sum + (m.weight || 0), 0)
 
+  const handleStepClick = (targetStep: number) => {
+    setError('')
+    if (targetStep <= step) {
+      setStep(targetStep)
+      return
+    }
+    
+    let current = step;
+    while (current < targetStep) {
+      let err = null
+      if (current === 1 && !formData.persona_name.trim()) err = 'Please provide a persona name.'
+      if (current === 2) {
+        if (!formData.target_skills.trim()) err = 'Please provide Target Skills.'
+        else if (!formData.personality_traits.trim()) err = 'Please provide Personality Traits.'
+        else if (!formData.objection_style.trim()) err = 'Please provide an Objection Protocol.'
+        else if (!formData.context_text.trim()) err = 'Please provide scenario context details.'
+      }
+      if (current === 3 && totalWeight !== 100) err = `Scorecard weights must equal exactly 100% (currently ${totalWeight}%). Please adjust before continuing.`
+      
+      if (err) {
+        setError(err)
+        setStep(current)
+        return
+      }
+      current++
+    }
+    setStep(targetStep)
+  }
+
   // ── Auto-generate on step entry ──────────────────────────────────────────────
   useEffect(() => {
     if (step === 3 && !scorecardGenerated && formData.context_text) {
@@ -396,12 +425,18 @@ function NewScenarioPageContent() {
           { num: 5, label: 'Review' }
         ].map((s, idx) => (
           <div key={s.num} className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center font-[800] ${
-              step > s.num ? 'bg-green-600 text-white' : step === s.num ? 'bg-[#1E1B4B] text-white' : 'bg-gray-200 text-gray-500'
-            }`}>
-              {step > s.num ? '✓' : s.num}
-            </div>
-            <span className={`font-[700] ${step === s.num ? 'text-[#1E1B4B]' : 'text-gray-400'}`}>{s.label}</span>
+            <button
+              type="button"
+              onClick={() => handleStepClick(s.num)}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity focus:outline-none"
+            >
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center font-[800] ${
+                step > s.num ? 'bg-green-600 text-white' : step === s.num ? 'bg-[#1E1B4B] text-white' : 'bg-gray-200 text-gray-500'
+              }`}>
+                {step > s.num ? '✓' : s.num}
+              </div>
+              <span className={`font-[700] ${step === s.num ? 'text-[#1E1B4B]' : 'text-gray-400'}`}>{s.label}</span>
+            </button>
             {idx < 4 && <div className={`w-6 h-0.5 ${step > s.num + 1 ? 'bg-green-600' : 'bg-gray-200'}`}></div>}
           </div>
         ))}
@@ -453,7 +488,6 @@ function NewScenarioPageContent() {
                   <option value="Beginner">Beginner</option>
                   <option value="Intermediate">Intermediate</option>
                   <option value="Advanced">Advanced</option>
-                  <option value="Expert">Expert</option>
                 </select>
               </div>
             </div>
@@ -723,22 +757,7 @@ function NewScenarioPageContent() {
         {step < 5 ? (
           <button
             type="button"
-            onClick={() => {
-              setError('')
-              if (step === 1 && !formData.persona_name.trim()) {
-                setError('Please provide a persona name.')
-                return
-              }
-              if (step === 2 && !formData.context_text.trim()) {
-                setError('Please provide scenario context details.')
-                return
-              }
-              if (step === 3 && totalWeight !== 100) {
-                setError(`Scorecard weights must equal exactly 100% (currently ${totalWeight}%). Please adjust before continuing.`)
-                return
-              }
-              setStep(step + 1)
-            }}
+            onClick={() => handleStepClick(step + 1)}
             className="px-6 py-2.5 rounded-xl bg-[#1E1B4B] text-white font-[700] shadow-md hover:bg-[#2E2A72] transition-colors"
           >
             Next Step →

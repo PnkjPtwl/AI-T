@@ -44,7 +44,7 @@ export default function Sidebar() {
             </div>
             <div>
               <span className="text-base font-[800] text-[#1E293B] tracking-tight">R-SalesCoach</span>
-              <span className="block text-[9px] font-[700] text-purple-600 uppercase tracking-widest leading-none mt-0.5">{userName ? `${userName} (Manager)` : 'Manager View'}</span>
+              <span className="hidden text-[9px] font-[700] text-purple-600 uppercase tracking-widest leading-none mt-0.5">{userName ? `${userName} (Manager)` : 'Manager View'}</span>
             </div>
           </div>
         )}
