@@ -275,3 +275,105 @@ def health():
         "status": "ok",
         "model_loaded": _retriever is not None,
     }
+
+
+# ─── HubSpot Routes ───────────────────────────────────────────────────────────
+
+class HubSpotFetchRequest(BaseModel):
+    account_name: str
+    account_slug: Optional[str] = None
+
+@app.get("/hubspot/accounts")
+async def get_hubspot_accounts():
+    """
+    Returns all companies from HubSpot CRM to populate the UI dropdown.
+    """
+    try:
+        from rag.connectors.hubspot.service import HubSpotService
+        service = HubSpotService()
+        accounts = service.list_companies()
+        return {"accounts": accounts}
+    except Exception as e:
+        logger.exception("Failed to fetch hubspot accounts")
+        return {"accounts": [], "error": str(e)}
+
+@app.post("/hubspot/fetch")
+async def fetch_hubspot(req: HubSpotFetchRequest):
+    """
+    Fetches raw CRM context from HubSpot for the given account name.
+    Returns structured data for the UI preview.
+    """
+    try:
+        from rag.connectors.hubspot.loader import HubSpotLoader
+        loader = HubSpotLoader(target_company=req.account_name)
+        docs = loader.load()
+        
+        # Structure the response for UI
+        company = None
+        contacts = []
+        deals = []
+        notes = []
+        calls = []
+        documents = []
+
+        for d in docs:
+            documents.append({
+                "page_content": d.page_content,
+                "metadata": d.metadata
+            })
+            
+            doc_type = d.metadata.get("document_type")
+            if doc_type == "crm_company":
+                company = {"content": d.page_content, "metadata": d.metadata}
+            elif doc_type == "crm_contact":
+                contacts.append({"content": d.page_content, "metadata": d.metadata})
+            elif doc_type == "crm_deal":
+                deals.append({"content": d.page_content, "metadata": d.metadata})
+            elif doc_type == "crm_note":
+                notes.append({"content": d.page_content, "metadata": d.metadata})
+            elif doc_type == "crm_call":
+                calls.append({"content": d.page_content, "metadata": d.metadata})
+            
+        return {
+            "success": True, 
+            "company": company,
+            "contacts": contacts,
+            "deals": deals,
+            "notes": notes,
+            "calls": calls,
+            "documents": documents
+        }
+    except Exception as e:
+        logger.exception("Failed to fetch hubspot data")
+        return {"success": False, "error": str(e), "documents": []}
+
+
+class HubSpotIngestRequest(BaseModel):
+    account_name: str
+    account_slug: str
+
+@app.post("/hubspot/ingest")
+async def ingest_hubspot(req: HubSpotIngestRequest):
+    """
+    Fetches CRM data from HubSpot and ingests it into the knowledge base.
+    """
+    try:
+        from rag.connectors.hubspot.loader import HubSpotLoader
+        loader = HubSpotLoader(target_company=req.account_name)
+        docs = loader.load()
+        
+        if not docs:
+            return {"success": False, "error": "No documents found to ingest"}
+
+        pipeline = get_upload_pipeline()
+        result = pipeline.run_from_documents(
+            documents=docs,
+            account_slug=req.account_slug,
+            account_name=req.account_name,
+            document_category="crm"
+        )
+        return result
+    except Exception as e:
+        logger.exception(f"Failed to ingest hubspot data for {req.account_name}")
+        return {"success": False, "error": str(e)}
+

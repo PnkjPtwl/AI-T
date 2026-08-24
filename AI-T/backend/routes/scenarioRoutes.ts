@@ -11,7 +11,8 @@ import {
   deleteScenario, 
   assignRepsToScenario, 
   getScenarioAssignments, 
-  generateScorecardMetrics 
+  generateScorecardMetrics,
+  fetchHubspotData
 } from '../controllers/scenarioController'
 import { uploadAvatarMiddleware, handleAvatarUpload } from '../controllers/avatarController'
 import { listKbAccounts } from '../utils/ragClient'
@@ -35,6 +36,9 @@ router.get('/kb-accounts', authenticate, managerOnly, async (_req, res) => {
   const accounts = await listKbAccounts()
   res.json({ accounts })
 })
+
+// POST /api/scenarios/fetch-hubspot — Fetch and synthesize HubSpot CRM data
+router.post('/fetch-hubspot', authenticate, managerOnly, fetchHubspotData)
 
 // GET /api/scenarios/:scenarioId (fetch single scenario details for briefing / slideover)
 router.get('/:scenarioId', authenticate, getScenarioById)

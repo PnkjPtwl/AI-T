@@ -372,9 +372,46 @@ function NewScenarioPageContent() {
     }
   }
 
+  const fetchHubspotData = async (accountName: string) => {
+    setLoading(true)
+    setError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API}/api/scenarios/fetch-hubspot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ account_name: accountName })
+      })
+      if (res.ok) {
+        const result = await res.json()
+        if (result.success && result.data) {
+          setFormData(prev => ({
+            ...prev,
+            persona_name: result.data.persona_name || prev.persona_name,
+            contact_title: result.data.contact_title || prev.contact_title,
+            contact_company: result.data.contact_company || prev.contact_company,
+            context_text: result.data.context_text || prev.context_text,
+            target_skills: result.data.target_skills || prev.target_skills,
+            personality_traits: result.data.personality_traits || prev.personality_traits,
+            objection_style: result.data.objection_style || prev.objection_style
+          }))
+        }
+      } else {
+        console.warn('Failed to fetch hubspot data', await res.text())
+      }
+    } catch (err) {
+      console.error('Connection error while fetching hubspot data', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleAccountSelect = (accId: string) => {
     setSelectedAccount(accId)
     if (accId) {
+      // UNCOMMENT the below line to dynamically fetch live HubSpot data instead of using KB defaults
+      // fetchHubspotData(accId)
+
       if (accId === 'phoenix_automotive' || accId.includes('phoenix')) {
         setFormData(prev => ({
           ...prev,

@@ -1,4 +1,13 @@
+import re
+import html
 from langchain_core.documents import Document
+
+def clean_html(text: str) -> str:
+    if not text:
+        return ""
+    clean = re.sub(r'<[^>]+>', ' ', text)
+    clean = html.unescape(clean)
+    return ' '.join(clean.split())
 
 class HubSpotMapper:
     @staticmethod
@@ -22,7 +31,7 @@ Location
 {props.get('city', '')}, {props.get('state', '')}, {props.get('country', '')}
 
 Description
-{props.get('description', 'No description available')}
+{clean_html(props.get('description', 'No description available'))}
 
 Lifecycle Stage
 {props.get('lifecyclestage', 'Unknown')}
@@ -99,7 +108,7 @@ Expected Close
 {props.get('closedate', 'Unknown')}
 
 Summary
-{props.get('description', 'No description available')}
+{clean_html(props.get('description', 'No description available'))}
 
 CRM Source
 HubSpot
@@ -116,7 +125,7 @@ HubSpot
     @staticmethod
     def map_note(note_data: dict, company_name: str) -> Document:
         props = note_data.get("properties", {})
-        body = props.get("hs_note_body", "No note content")
+        body = clean_html(props.get("hs_note_body", "No note content"))
         timestamp = props.get("hs_timestamp", "")
         md = f"""# CRM Account Note — {company_name}
 
@@ -142,7 +151,7 @@ HubSpot
     def map_call(call_data: dict, company_name: str) -> Document:
         props = call_data.get("properties", {})
         title = props.get("hs_call_title", "Call Log")
-        body = props.get("hs_call_body", "No call notes available")
+        body = clean_html(props.get("hs_call_body", "No call notes available"))
         duration = props.get("hs_call_duration", "")
         md = f"""# CRM Sales Call Log — {company_name}
 

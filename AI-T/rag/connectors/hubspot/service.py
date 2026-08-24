@@ -4,6 +4,16 @@ class HubSpotService:
     def __init__(self):
         self.client = HubSpotClient()
 
+    def list_companies(self):
+        endpoint = "/crm/v3/objects/companies"
+        res = self.client.request("GET", endpoint, params={"properties": "name", "limit": 100})
+        companies = []
+        if res and res.get("results"):
+            for comp in res["results"]:
+                name = comp.get("properties", {}).get("name", "Unknown Company")
+                companies.append({"id": comp["id"], "name": name})
+        return companies
+
     def find_company(self, name: str):
         endpoint = "/crm/v3/objects/companies/search"
         payload = {

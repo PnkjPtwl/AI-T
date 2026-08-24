@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import CreateKnowledgeBaseModal from '@/components/manager/CreateKnowledgeBaseModal'
 import UploadDocumentsModal from '@/components/manager/UploadDocumentsModal'
+import HubSpotCRMPanel from '@/components/manager/HubSpotCRMPanel'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
@@ -41,6 +42,8 @@ export default function KnowledgeBasePage() {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([])
   const [loading, setLoading] = useState(true)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
+  const [isCrmPanelOpen, setIsCrmPanelOpen] = useState(false)
   const [uploadTarget, setUploadTarget] = useState<KnowledgeBase | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<KnowledgeBase | null>(null)
@@ -86,15 +89,34 @@ export default function KnowledgeBasePage() {
             Create and manage document repositories that ground your AI personas with real account knowledge.
           </p>
         </div>
-        <button
-          onClick={() => setIsCreateOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#1E1B4B] text-white text-xs font-[700] rounded-xl hover:bg-[#2d2a6a] transition-all shadow-md hover:shadow-lg active:scale-95"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-          </svg>
-          Create Knowledge Base
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setIsCreateMenuOpen(!isCreateMenuOpen)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#1E1B4B] text-white text-xs font-[700] rounded-xl hover:bg-[#2d2a6a] transition-all shadow-md hover:shadow-lg active:scale-95"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+            Create Knowledge Base
+          </button>
+          
+          {isCreateMenuOpen && (
+            <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-10 animate-fade-in">
+              <button 
+                onClick={() => { setIsCreateOpen(true); setIsCreateMenuOpen(false) }}
+                className="w-full text-left px-4 py-3 text-sm font-[600] text-[#1E293B] hover:bg-gray-50 transition-colors border-b border-gray-50 flex items-center gap-2"
+              >
+                📄 Upload Documents
+              </button>
+              <button 
+                onClick={() => { setIsCrmPanelOpen(true); setIsCreateMenuOpen(false) }}
+                className="w-full text-left px-4 py-3 text-sm font-[600] text-[#1E293B] hover:bg-[#FFF7ED] text-[#EA580C] transition-colors flex items-center gap-2"
+              >
+                🟠 Fetch from CRM
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Knowledge Bases */}
@@ -102,8 +124,8 @@ export default function KnowledgeBasePage() {
         <p className="text-[10px] font-[800] text-[#94A3B8] uppercase tracking-widest mb-3">
           Knowledge Bases <span className="ml-2 text-[#CBD5E1]">({kbs.length + 1})</span>
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <div className="group bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md hover:border-[#1E1B4B]/10 transition-all duration-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
+          <div className="group bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md hover:border-[#1E1B4B]/10 transition-all duration-200 flex flex-col">
             {/* KB Header */}
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3">
@@ -119,10 +141,10 @@ export default function KnowledgeBasePage() {
             </div>
 
             {/* Description */}
-            <p className="text-xs text-[#64748B] font-[500] mb-3 line-clamp-2">Static knowledge base</p>
+            <p className="text-xs text-[#64748B] font-[500] mb-3 line-clamp-2 min-h-[32px]">Static knowledge base</p>
 
             {/* Stats */}
-            <div className="flex gap-4 mb-4 py-3 border-y border-gray-50">
+            <div className="flex gap-4 mb-4 py-3 border-y border-gray-50 mt-auto">
               <div className="text-center">
                 <div className="text-lg font-[900] text-[#1E293B]">10+</div>
                 <div className="text-[10px] text-[#94A3B8] font-[700] uppercase tracking-wide">Docs</div>
@@ -164,7 +186,7 @@ export default function KnowledgeBasePage() {
             kbs.map(kb => (
               <div
                 key={kb.id}
-                className="group bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md hover:border-[#1E1B4B]/10 transition-all duration-200"
+                className="group bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md hover:border-[#1E1B4B]/10 transition-all duration-200 flex flex-col"
               >
                 {/* KB Header */}
                 <div className="flex items-start justify-between mb-3">
@@ -181,12 +203,12 @@ export default function KnowledgeBasePage() {
                 </div>
 
                 {/* Description */}
-                {kb.description && (
-                  <p className="text-xs text-[#64748B] font-[500] mb-3 line-clamp-2">{kb.description}</p>
-                )}
+                <p className="text-xs text-[#64748B] font-[500] mb-3 line-clamp-2 min-h-[32px]">
+                  {kb.description || ''}
+                </p>
 
                 {/* Stats */}
-                <div className="flex gap-4 mb-4 py-3 border-y border-gray-50">
+                <div className="flex gap-4 mb-4 py-3 border-y border-gray-50 mt-auto">
                   <div className="text-center">
                     <div className="text-lg font-[900] text-[#1E293B]">{kb.document_count}</div>
                     <div className="text-[10px] text-[#94A3B8] font-[700] uppercase tracking-wide">Docs</div>
@@ -237,6 +259,12 @@ export default function KnowledgeBasePage() {
       </div>
 
       {/* Modals */}
+      <HubSpotCRMPanel
+        open={isCrmPanelOpen}
+        onClose={() => setIsCrmPanelOpen(false)}
+        onIngested={() => { fetchKbs(); setIsCrmPanelOpen(false) }}
+      />
+
       <CreateKnowledgeBaseModal
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}

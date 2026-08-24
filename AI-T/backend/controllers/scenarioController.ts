@@ -783,3 +783,88 @@ export const getManagerScenarios = async (req: any, res: any) => {
   }
 }
 
+export const fetchHubspotData = async (req: any, res: any) => {
+  const { account_name } = req.body;
+  if (!account_name) {
+    return res.status(400).json({ error: 'account_name is required' });
+  }
+
+  try {
+    const ragApiUrl = process.env.RAG_API_URL || 'http://localhost:8001';
+    // 1. Fetch raw documents from RAG API's new hubspot endpoint
+    const response = await fetch(`${ragApiUrl}/hubspot/fetch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_name })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch from RAG API: ${response.statusText}`);
+    }
+
+    const result = (await response.json()) as any;
+    if (!result.success || !result.documents) {
+      throw new Error(result.error || 'Failed to fetch HubSpot documents');
+    }
+
+    // 2. Format documents into a single text block for LLM synthesis
+    let rawContext = '';
+    result.documents.forEach((doc: any) => {
+      rawContext += `\n--- CRM Object: ${doc.metadata?.crm_object || 'unknown'} ---\n`;
+      rawContext += doc.page_content + '\n';
+    });
+
+    if (!rawContext.trim()) {
+      return res.status(404).json({ error: 'No data found in HubSpot for this account' });
+    }
+
+    // 3. Synthesize the raw data using LLM to match the frontend form schema
+    const cerebrasApiKey = await getSecret('CEREBRAS_API_KEY');
+    const groqApiKey = await getSecret('GROQ_API_KEY');
+    const isCerebras = Boolean(cerebrasApiKey);
+    const openai = new OpenAI({
+      apiKey: cerebrasApiKey || groqApiKey || '',
+      baseURL: isCerebras ? 'https://api.cerebras.ai/v1' : 'https://api.groq.com/openai/v1'
+    });
+    const modelName = isCerebras ? 'gpt-oss-120b' : 'openai/gpt-oss-20b';
+
+    const prompt = `You are an expert sales enablement AI. Parse the following raw HubSpot CRM data for an account and synthesize a realistic roleplay training persona.
+    
+Raw CRM Data:
+${rawContext}
+
+Return ONLY a valid JSON object matching this structure:
+{
+  "persona_name": "string (the primary contact's name, or a realistic name if none found)",
+  "contact_title": "string (the primary contact's job title)",
+  "contact_company": "string (the company name)",
+  "context_text": "string (a 3-5 sentence summary of the company, their pain points, goals, active deals, and recent engagement notes)",
+  "target_skills": "string (comma separated list of 3-4 sales skills the rep should practice, e.g. Discovery, Objection Handling, ROI Justification)",
+  "personality_traits": "string (a short sentence describing their traits based on notes/titles)",
+  "objection_style": "string (a short sentence explaining how they might object based on their context)"
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: modelName,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_tokens: 1000,
+      response_format: { type: 'json_object' }
+    });
+
+    let rawJson = completion.choices[0]?.message?.content || '{}';
+    rawJson = rawJson.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+    const match = rawJson.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('LLM did not return valid JSON');
+
+    const parsedPersona = JSON.parse(match[0]);
+
+    return res.json({ success: true, data: parsedPersona });
+  } catch (err: any) {
+    console.error('Error fetching/synthesizing HubSpot data:', err);
+    return res.status(500).json({ error: err.message || 'Internal error while processing HubSpot data' });
+  }
+}
+
+

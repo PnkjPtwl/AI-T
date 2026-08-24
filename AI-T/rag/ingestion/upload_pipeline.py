@@ -116,6 +116,71 @@ class UploadPipeline:
                 "chunk_count": 0
             }
 
+    def run_from_documents(
+        self,
+        documents: List[Any],
+        account_slug: str,
+        account_name: str,
+        document_category: str = 'crm',
+    ) -> Dict[str, Any]:
+        """
+        Process pre-loaded documents and upsert embeddings into Supabase.
+        """
+        print(f"[UploadPipeline] Starting from documents for KB: '{account_name}' (slug: {account_slug}, category: {document_category})")
+
+        try:
+            if not documents:
+                return {
+                    "success": False,
+                    "error": "No readable content found in the provided documents.",
+                    "doc_count": 0,
+                    "chunk_count": 0
+                }
+
+            print(f"[UploadPipeline] Loaded {len(documents)} document(s).")
+
+            # 2. Normalize
+            normalized = self.normalizer.normalize(documents)
+
+            # 3. Chunk
+            chunks = self.chunker.chunk(normalized)
+            print(f"[UploadPipeline] Created {len(chunks)} chunk(s).")
+
+            # 4. Build metadata
+            enriched_chunks = self.metadata_builder.build(chunks)
+
+            # 5. Explicitly ensure account + category tag on every chunk
+            for chunk in enriched_chunks:
+                chunk.metadata["account"] = account_slug
+                chunk.metadata["company"] = account_slug
+                chunk.metadata["account_name"] = account_name
+                chunk.metadata["folder"] = document_category
+                chunk.metadata["document_category"] = document_category
+                chunk.metadata["upload_source"] = "hubspot_crm"
+
+            # 6. Embed & upload (append — no wipe)
+            print(f"[UploadPipeline] Embedding and uploading {len(enriched_chunks)} chunks...")
+            self.vector_store.add_documents(enriched_chunks, batch_size=50)
+
+            print(f"[UploadPipeline] Complete! {len(documents)} docs -> {len(enriched_chunks)} chunks for '{account_name}'.")
+
+            return {
+                "success": True,
+                "doc_count": len(documents),
+                "chunk_count": len(enriched_chunks),
+                "account_slug": account_slug,
+                "account_name": account_name
+            }
+
+        except Exception as e:
+            print(f"[UploadPipeline] ERROR: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "doc_count": 0,
+                "chunk_count": 0
+            }
+
     def delete_account_embeddings(self, account_slug: str) -> Dict[str, Any]:
         """
         Removes all document_embeddings rows where metadata.account = account_slug.
