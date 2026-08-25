@@ -1,5 +1,6 @@
 import { supabase } from '../db/supabase'
 import { getModeLimit } from '../utils/modeHelper'
+import { getManagerRepIds } from '../utils/getManagerRepIds'
 
 export const getMe = async (req: any, res: any) => {
   // req.user is attached by the authenticate middleware
@@ -8,14 +9,17 @@ export const getMe = async (req: any, res: any) => {
 }
 
 export const getReps = async (req: any, res: any) => {
-  const orgId = req.user.org_id
+  const managerId = req.user.id
 
   try {
+    // Only return reps assigned to this manager
+    const managerRepIds = await getManagerRepIds(managerId)
+    if (managerRepIds.length === 0) return res.json([])
+
     const { data: reps, error: repsError } = await supabase
       .from('users')
       .select('id, name, email')
-      .eq('org_id', orgId)
-      .eq('role', 'rep')
+      .in('id', managerRepIds)
       .order('name', { ascending: true })
 
     if (repsError) throw repsError
@@ -118,19 +122,23 @@ export const getOrganizationDetails = async (req: any, res: any) => {
 }
 
 export const getRepSessions = async (req: any, res: any) => {
-  const orgId = req.user.org_id
+  const managerId = req.user.id
   const { repId } = req.params
 
-  // Verify the rep belongs to the manager's organization
+  // Verify the rep belongs to this manager
+  const managerRepIds = await getManagerRepIds(managerId)
+  if (!managerRepIds.includes(repId)) {
+    return res.status(403).json({ error: 'This rep is not assigned to you' })
+  }
+
   const { data: rep, error: repError } = await supabase
     .from('users')
     .select('id, name')
     .eq('id', repId)
-    .eq('org_id', orgId)
     .single()
 
   if (repError || !rep) {
-    return res.status(404).json({ error: 'Rep not found in your organization' })
+    return res.status(404).json({ error: 'Rep not found' })
   }
 
   // Fetch the sessions
@@ -283,6 +291,14 @@ export const getMyAnalytics = async (req: any, res: any) => {
     return res.status(403).json({ error: 'Unauthorized' })
   }
 
+  // Managers can only see analytics for their own reps
+  if (isManager && repId !== req.user.id) {
+    const managerRepIds = await getManagerRepIds(req.user.id)
+    if (!managerRepIds.includes(repId as string)) {
+      return res.status(403).json({ error: 'This rep is not assigned to you' })
+    }
+  }
+
   try {
     const { data: sessions, error: sessionsError } = await supabase
       .from('training_sessions')
@@ -426,47 +442,45 @@ export const getMyAnalytics = async (req: any, res: any) => {
 }
 
 export const getDashboardStats = async (req: any, res: any) => {
-  const orgId = req.user.org_id
+  const managerId = req.user.id
   const now = new Date()
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
 
   try {
-    // 1. Total Sales Reps
-    const { count: totalReps } = await supabase
-      .from('users')
-      .select('id', { count: 'exact', head: true })
-      .eq('org_id', orgId)
-      .eq('role', 'rep')
+    // 1. Total Sales Reps (only this manager's reps)
+    const managerRepIds = await getManagerRepIds(managerId)
+    const totalReps = managerRepIds.length
 
     // 2. Active Training Sessions (started but not completed in last 2 hours)
     const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString()
-    const { data: activeSessionsData } = await supabase
-      .from('training_sessions')
-      .select('id, created_at, users!inner(name, org_id), training_scenarios(persona_name)')
-      .eq('users.org_id', orgId)
-      .is('completed_at', null)
-      .gt('created_at', twoHoursAgo)
+    let activeSessionsList: any[] = []
+    if (managerRepIds.length > 0) {
+      const { data: activeSessionsData } = await supabase
+        .from('training_sessions')
+        .select('id, created_at, rep_id, users!inner(name), training_scenarios(persona_name)')
+        .in('rep_id', managerRepIds)
+        .is('completed_at', null)
+        .gt('created_at', twoHoursAgo)
 
-    const activeSessionsList = (activeSessionsData || []).map((s: any) => ({
-      id: s.id,
-      rep_name: s.users?.name,
-      scenario_name: s.training_scenarios?.persona_name,
-      started_at: s.created_at
-    }))
+      activeSessionsList = (activeSessionsData || []).map((s: any) => ({
+        id: s.id,
+        rep_name: s.users?.name,
+        scenario_name: s.training_scenarios?.persona_name,
+        started_at: s.created_at
+      }))
+    }
 
-    // 3. Performance Metrics
-    const { data: allSessions } = await supabase
-      .from('training_sessions')
-      .select(`
-        id, 
-        completed_at, 
-        feedback_json, 
-        rep_id,
-        users!inner(org_id)
-      `)
-      .eq('users.org_id', orgId)
-      .not('feedback_json', 'is', null)
+    // 3. Performance Metrics (only for this manager's reps)
+    let allSessions: any[] = []
+    if (managerRepIds.length > 0) {
+      const { data: sessData } = await supabase
+        .from('training_sessions')
+        .select('id, completed_at, feedback_json, rep_id')
+        .in('rep_id', managerRepIds)
+        .not('feedback_json', 'is', null)
+      allSessions = sessData || []
+    }
 
     const sessions = allSessions || []
     const thisWeekSessions = sessions.filter(s => new Date(s.completed_at) >= oneWeekAgo)
@@ -497,10 +511,14 @@ export const getDashboardStats = async (req: any, res: any) => {
     const avgEngagementScore = engScores.length ? Math.round(engScores.reduce((a, b) => a + b, 0) / engScores.length) : 0
 
     // Completion Rate (Total completed vs total attempts)
-    const { count: totalAttempts } = await supabase
-      .from('training_sessions')
-      .select('id', { count: 'exact', head: true })
-      .eq('users.org_id', orgId)
+    let totalAttempts = 0
+    if (managerRepIds.length > 0) {
+      const { count } = await supabase
+        .from('training_sessions')
+        .select('id', { count: 'exact', head: true })
+        .in('rep_id', managerRepIds)
+      totalAttempts = count || 0
+    }
     const completionRate = totalAttempts ? Math.round((sessions.length / totalAttempts) * 100) : 0
 
     res.json({
@@ -524,14 +542,17 @@ export const getDashboardStats = async (req: any, res: any) => {
 }
 
 export const getCoachingAlerts = async (req: any, res: any) => {
-  const orgId = req.user.org_id
+  const managerId = req.user.id
 
   try {
+    // Only get alerts for this manager's reps
+    const managerRepIds = await getManagerRepIds(managerId)
+    if (managerRepIds.length === 0) return res.json([])
+
     const { data: reps, error: repsError } = await supabase
       .from('users')
       .select('id, name')
-      .eq('org_id', orgId)
-      .eq('role', 'rep')
+      .in('id', managerRepIds)
 
     if (repsError) throw repsError
     if (!reps || reps.length === 0) return res.json([])
@@ -625,7 +646,7 @@ export const getCoachingAlerts = async (req: any, res: any) => {
         rep:users!training_assignments_rep_id_fkey (name),
         scenario:training_scenarios!training_assignments_scenario_id_fkey (persona_name)
       `)
-      .eq('manager_id', req.user.id)
+      .eq('manager_id', managerId)
       .eq('status', 'Completed')
       .order('completed_at', { ascending: false })
       .limit(10)
@@ -662,30 +683,36 @@ export const getCoachingAlerts = async (req: any, res: any) => {
 }
 
 export const getTeamAnalytics = async (req: any, res: any) => {
-  const orgId = req.user.org_id
   const managerId = req.user.id
 
   try {
-    // Fix: use explicit FK hint rep_id to avoid ambiguous join
-    const { data: sessions, error: sessionsError } = await supabase
-      .from('training_sessions')
-      .select(`
-        id, 
-        rep_id,
-        completed_at, 
-        feedback_json, 
-        training_scenarios (
-          persona_name,
-          persona_type,
-          difficulty
-        ),
-        rep:users!rep_id(name, org_id)
-      `)
-      .order('completed_at', { ascending: true })
+    // Only get data for this manager's reps
+    const managerRepIds = await getManagerRepIds(managerId)
 
-    if (sessionsError) throw sessionsError
+    let sessions: any[] = []
+    if (managerRepIds.length > 0) {
+      const { data: sessData, error: sessionsError } = await supabase
+        .from('training_sessions')
+        .select(`
+          id, 
+          rep_id,
+          completed_at, 
+          feedback_json, 
+          training_scenarios (
+            persona_name,
+            persona_type,
+            difficulty
+          ),
+          rep:users!rep_id(name, org_id)
+        `)
+        .in('rep_id', managerRepIds)
+        .order('completed_at', { ascending: true })
 
-    // Also pull assignments for this manager to get rep activity
+      if (sessionsError) throw sessionsError
+      sessions = sessData || []
+    }
+
+    // Pull assignments for this manager
     const { data: assignments } = await supabase
       .from('training_assignments')
       .select(`
@@ -695,16 +722,19 @@ export const getTeamAnalytics = async (req: any, res: any) => {
       `)
       .eq('manager_id', managerId)
 
-    // Get all reps in this org
-    const { data: allReps } = await supabase
-      .from('users')
-      .select('id, name, org_id')
-      .eq('org_id', orgId)
-      .eq('role', 'rep')
+    // Get only this manager's reps
+    let allReps: any[] = []
+    if (managerRepIds.length > 0) {
+      const { data: repsData } = await supabase
+        .from('users')
+        .select('id, name, org_id')
+        .in('id', managerRepIds)
+      allReps = repsData || []
+    }
 
-    // Filter to org's sessions
+    // All sessions are already manager-scoped from the query above
     const orgSessions = (sessions || []).filter((s: any) =>
-      (s.rep as any)?.org_id === orgId && !s.feedback_json?.is_note
+      !s.feedback_json?.is_note
     )
 
     // Build rep assignment stats (works even without feedback_json)
@@ -982,25 +1012,12 @@ export const assignTraining = async (req: any, res: any) => {
     // 2. Filter / resolve valid rep UUIDs
     let validRepIds: string[] = Array.isArray(repIds) ? repIds.filter((id: string) => isUuid(id)) : [];
 
+    // Validate that all rep IDs belong to this manager
+    const managerRepIds = await getManagerRepIds(managerId);
+    validRepIds = validRepIds.filter(id => managerRepIds.includes(id));
+
     if (validRepIds.length === 0) {
-      const { data: dbReps } = await supabase
-        .from('users')
-        .select('id')
-        .eq('role', 'sales_rep')
-        .limit(10);
-      
-      if (dbReps && dbReps.length > 0) {
-        validRepIds = dbReps.map(r => r.id);
-      } else {
-        const { data: anyReps } = await supabase
-          .from('users')
-          .select('id')
-          .neq('id', managerId)
-          .limit(5);
-        if (anyReps && anyReps.length > 0) {
-          validRepIds = anyReps.map(u => u.id);
-        }
-      }
+      return res.status(400).json({ error: 'No valid sales representatives found. Ensure reps are assigned to you by the admin.' });
     }
 
     if (validRepIds.length === 0) {
@@ -1210,9 +1227,11 @@ export const getTeamAssignments = async (req: any, res: any) => {
   console.log(`[getTeamAssignments] Fetching for manager_id: ${managerId}`);
 
   try {
+    // CRITICAL FIX: Only fetch assignments created by THIS manager
     const { data: rawAssignments, error: fetchErr } = await supabase
       .from('training_assignments')
       .select('*')
+      .eq('manager_id', managerId)
       .order('created_at', { ascending: false });
 
     if (fetchErr) {
@@ -1434,6 +1453,12 @@ export const addNote = async (req: any, res: any) => {
   const managerId = req.user.id
 
   try {
+    // Verify rep belongs to this manager
+    const managerRepIds = await getManagerRepIds(managerId)
+    if (!managerRepIds.includes(repId)) {
+      return res.status(403).json({ error: 'This rep is not assigned to you' })
+    }
+
     // Fetch a placeholder scenario ID to satisfy DB constraints
     const { data: scenarios } = await supabase.from('training_scenarios').select('id').limit(1)
     const placeholderScenarioId = scenarios?.[0]?.id
@@ -1462,6 +1487,13 @@ export const addNote = async (req: any, res: any) => {
 
 export const getRepNotes = async (req: any, res: any) => {
   const { repId } = req.params
+  const managerId = req.user.id
+
+  // Verify rep belongs to this manager
+  const managerRepIds = await getManagerRepIds(managerId)
+  if (!managerRepIds.includes(repId)) {
+    return res.status(403).json({ error: 'This rep is not assigned to you' })
+  }
 
   try {
     const { data, error } = await supabase

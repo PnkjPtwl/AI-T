@@ -1,5 +1,6 @@
 import { supabase } from '../db/supabase'
 import { getModeLimit, normalizeModeDisplay } from '../utils/modeHelper'
+import { getManagerRepIds } from '../utils/getManagerRepIds'
 
 /**
  * GET /api/reps/me/dashboard
@@ -290,17 +291,22 @@ export const getRepDashboard = async (req: any, res: any) => {
  * Executive Team Analytics Dashboard for Managers
  */
 export const getManagerAnalytics = async (req: any, res: any) => {
-  const orgId = req.user.org_id
+  const managerId = req.user.id
   const experienceParam = (req.query.experience || 'all').toString().trim()
 
   try {
-    // 1. Fetch Reps in Org
-    const { data: reps, error: repError } = await supabase
-      .from('users')
-      .select('id, name, role, org_id')
-      .eq('org_id', orgId)
+    // 1. Fetch only this manager's reps
+    const managerRepIds = await getManagerRepIds(managerId)
 
-    if (repError) throw repError
+    let reps: any[] = []
+    if (managerRepIds.length > 0) {
+      const { data: repsData, error: repError } = await supabase
+        .from('users')
+        .select('id, name, role, org_id')
+        .in('id', managerRepIds)
+      if (repError) throw repError
+      reps = repsData || []
+    }
 
     // 2. Fetch User Experience table data
     const { data: userExpList } = await supabase
@@ -314,9 +320,8 @@ export const getManagerAnalytics = async (req: any, res: any) => {
       })
     }
 
-    // Filter reps by role, exclusion rules, and selected experience range
+    // Filter reps by exclusion rules and selected experience range
     const filteredReps = (reps || []).filter(r => {
-      if (r.role === 'manager' || r.name?.toLowerCase().includes('lokesh')) return false
 
       if (!experienceParam || experienceParam === 'all') return true
 

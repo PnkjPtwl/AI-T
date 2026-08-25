@@ -12,6 +12,7 @@ export default function RepSignupPage() {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [orgName, setOrgName]   = useState('')
+  const [experience, setExperience] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [success, setSuccess]   = useState('')
@@ -26,7 +27,7 @@ export default function RepSignupPage() {
       const res = await fetch(`${API}/api/auth/signup/rep`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, orgName }),
+        body: JSON.stringify({ name, email, password, orgName, experience: Number(experience) || 0 }),
       })
 
       const data = await res.json()
@@ -103,6 +104,23 @@ export default function RepSignupPage() {
                 />
               </div>
 
+              {/* Experience */}
+              <div className="space-y-3">
+                <label className="text-[11px] font-black uppercase text-[#64748B] tracking-[0.3em] ml-1">Experience (Years)</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  max="50"
+                  placeholder="e.g. 3" 
+                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl py-3.5 px-6 text-base font-bold text-[#1A2A3A] focus:border-[#2C5282] outline-none transition-all placeholder:text-[#64748B]/30"
+                  value={experience}
+                  onChange={(e) => setExperience(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
               {/* Work Email */}
               <div className="space-y-3">
                 <label className="text-[11px] font-black uppercase text-[#64748B] tracking-[0.3em] ml-1">Work Email</label>

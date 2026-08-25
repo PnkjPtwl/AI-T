@@ -1,4 +1,5 @@
 import { supabase } from '../db/supabase'
+import { getRepManagerId } from '../utils/getManagerRepIds'
 import fs from 'fs'
 import path from 'path'
 import { DynamicMetric } from '../utils/evaluationGenerator'
@@ -119,16 +120,98 @@ export const getScenarios = async (req: any, res: any) => {
 
   try {
     const orgId = req.user?.org_id;
-
-    if (!orgId) {
-      console.warn("WARNING: No orgId found for user. Fetching global scenarios.");
-    }
+    const userId = req.user?.id;
+    const role = req.user?.role;
 
     let query = supabase
       .from('training_scenarios')
       .select('*');
 
-    if (orgId) {
+    if (role === 'manager') {
+      // Managers see scenarios they created + scenarios shared with them
+      // First get owned scenarios
+      const { data: ownedData, error: ownedError } = await supabase
+        .from('training_scenarios')
+        .select('*')
+        .eq('created_by', userId)
+        .order('created_at', { ascending: false });
+
+      if (ownedError) throw ownedError;
+
+      // Then get shared scenario IDs
+      const { data: sharedRows } = await supabase
+        .from('scenario_shares')
+        .select('scenario_id, shared_by_manager_id')
+        .eq('shared_with_manager_id', userId);
+
+      let sharedData: any[] = [];
+      if (sharedRows && sharedRows.length > 0) {
+        const sharedIds = sharedRows.map((r: any) => r.scenario_id);
+        const sharedByMap: Record<string, string> = {};
+        sharedRows.forEach((r: any) => { sharedByMap[r.scenario_id] = r.shared_by_manager_id; });
+
+        const { data: sharedScenarios } = await supabase
+          .from('training_scenarios')
+          .select('*')
+          .in('id', sharedIds)
+          .order('created_at', { ascending: false });
+
+        sharedData = (sharedScenarios || []).map((s: any) => ({
+          ...s,
+          is_shared: true,
+          shared_by_manager_id: sharedByMap[s.id] || null
+        }));
+      }
+
+      // Combine: owned first, then shared (deduplicated)
+      const ownedIds = new Set((ownedData || []).map((s: any) => s.id));
+      const uniqueShared = sharedData.filter((s: any) => !ownedIds.has(s.id));
+      const allScenarios = [...(ownedData || []), ...uniqueShared];
+
+      // Continue with assignment counts and formatting using allScenarios
+      // We'll store them in a variable and skip the normal query path
+      const { data: assignments } = await supabase.from('training_assignments').select('scenario_id');
+
+      const assignmentCountMap: Record<string, number> = {};
+      for (const a of (assignments || [])) {
+        if (a.scenario_id) {
+          assignmentCountMap[a.scenario_id] = (assignmentCountMap[a.scenario_id] || 0) + 1;
+        }
+      }
+
+      const relativeTime = (ts: string | null): string => {
+        if (!ts) return 'Recently';
+        const diffMs = Date.now() - new Date(ts).getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays === 0) return 'Today';
+        if (diffDays === 1) return 'Yesterday';
+        if (diffDays < 7) return `${diffDays} days ago`;
+        if (diffDays < 14) return '1 week ago';
+        if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+        if (diffDays < 60) return '1 month ago';
+        return `${Math.floor(diffDays / 30)} months ago`;
+      };
+
+      const formatted = allScenarios.map((s: any) => ({
+        ...s,
+        assigned_count: assignmentCountMap[s.id] || 0,
+        updated_ago: relativeTime(s.updated_at || s.created_at),
+        is_shared: s.is_shared || false,
+        shared_by_manager_id: s.shared_by_manager_id || null
+      }));
+
+      return res.json(formatted);
+    } else if (role === 'rep') {
+      // Reps see scenarios from their assigned manager
+      const repManagerId = await getRepManagerId(userId);
+      if (repManagerId) {
+        query = query.eq('created_by', repManagerId);
+      } else {
+        // Unassigned rep — no scenarios visible
+        return res.json([]);
+      }
+    } else if (orgId) {
+      // Fallback: org-scoped
       query = query.eq('org_id', orgId);
     }
 
@@ -300,6 +383,7 @@ export const createScenario = async (req: any, res: any) => {
 
   const payload: any = {
     org_id: orgId,
+    created_by: req.user.id,
     persona_name,
     persona_type: contact_title || persona_name,
     context_text,
@@ -470,15 +554,17 @@ export const getScenario = async (req: any, res: any) => {
 
 export const updateScenario = async (req: any, res: any) => {
   const { scenarioId } = req.params
+  const managerId = req.user.id
   const orgId = req.user.org_id
   const updates = req.body
 
   try {
+    // Verify ownership: scenario must be created by this manager
     const { data: existing, error: fetchError } = await supabase
       .from('training_scenarios')
       .select('*')
       .eq('id', scenarioId)
-      .eq('org_id', orgId)
+      .eq('created_by', managerId)
       .single()
 
     if (fetchError || !existing) {
@@ -509,7 +595,7 @@ export const updateScenario = async (req: any, res: any) => {
       .from('training_scenarios')
       .update(updatePayload)
       .eq('id', scenarioId)
-      .eq('org_id', orgId)
+      .eq('created_by', managerId)
       .select()
       .single()
 
@@ -519,7 +605,7 @@ export const updateScenario = async (req: any, res: any) => {
         .from('training_scenarios')
         .update(updatePayload)
         .eq('id', scenarioId)
-        .eq('org_id', orgId)
+        .eq('created_by', managerId)
         .select()
         .single()
       data = retry.data
@@ -536,7 +622,7 @@ export const updateScenario = async (req: any, res: any) => {
 
 export const deleteScenario = async (req: any, res: any) => {
   const { scenarioId } = req.params
-  const orgId = req.user.org_id
+  const managerId = req.user.id
 
   try {
     // 1. Check for active assignments
@@ -555,12 +641,12 @@ export const deleteScenario = async (req: any, res: any) => {
       })
     }
 
-    // 2. Perform deletion
+    // 2. Perform deletion (only if created by this manager)
     const { error: deleteError } = await supabase
       .from('training_scenarios')
       .delete()
       .eq('id', scenarioId)
-      .eq('org_id', orgId)
+      .eq('created_by', managerId)
 
     if (deleteError) throw deleteError
 
@@ -725,12 +811,14 @@ export const getScenarioById = async (req: any, res: any) => {
  * Persona Library Grid & Slide-over for Manager
  */
 export const getManagerScenarios = async (req: any, res: any) => {
-  const orgId = req.user.org_id
+  const managerId = req.user.id
 
   try {
+    // Only return scenarios created by this manager
     const { data: scenarios, error } = await supabase
       .from('training_scenarios')
       .select('*')
+      .eq('created_by', managerId)
       .order('created_at', { ascending: false })
 
     if (error) throw error
@@ -868,3 +956,187 @@ Return ONLY a valid JSON object matching this structure:
 }
 
 
+/**
+ * GET /api/scenarios/:scenarioId/shares
+ * Get all managers this scenario is shared with
+ */
+export const getScenarioShares = async (req: any, res: any) => {
+  const { scenarioId } = req.params
+  const managerId = req.user.id
+
+  try {
+    // Verify this manager owns the scenario
+    const { data: scenario } = await supabase
+      .from('training_scenarios')
+      .select('id, created_by')
+      .eq('id', scenarioId)
+      .single()
+
+    if (!scenario || scenario.created_by !== managerId) {
+      return res.status(403).json({ error: 'You can only view shares of scenarios you own' })
+    }
+
+    const { data: shares, error } = await supabase
+      .from('scenario_shares')
+      .select('id, shared_with_manager_id, created_at')
+      .eq('scenario_id', scenarioId)
+
+    if (error) throw error
+
+    // Resolve manager names
+    const managerIds = (shares || []).map((s: any) => s.shared_with_manager_id)
+    let managerMap: Record<string, any> = {}
+    if (managerIds.length > 0) {
+      const { data: managers } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .in('id', managerIds)
+      if (managers) {
+        managers.forEach((m: any) => { managerMap[m.id] = m })
+      }
+    }
+
+    const result = (shares || []).map((s: any) => ({
+      ...s,
+      manager_name: managerMap[s.shared_with_manager_id]?.name || 'Unknown',
+      manager_email: managerMap[s.shared_with_manager_id]?.email || ''
+    }))
+
+    res.json(result)
+  } catch (err: any) {
+    console.error('Error fetching scenario shares:', err)
+    res.status(500).json({ error: err.message })
+  }
+}
+
+
+/**
+ * POST /api/scenarios/:scenarioId/share
+ * Share a scenario with one or more managers
+ * Body: { managerIds: string[] }
+ */
+export const shareScenario = async (req: any, res: any) => {
+  const { scenarioId } = req.params
+  const managerId = req.user.id
+  const { managerIds } = req.body
+
+  if (!Array.isArray(managerIds) || managerIds.length === 0) {
+    return res.status(400).json({ error: 'managerIds array is required' })
+  }
+
+  try {
+    // Verify this manager owns the scenario
+    const { data: scenario } = await supabase
+      .from('training_scenarios')
+      .select('id, created_by')
+      .eq('id', scenarioId)
+      .single()
+
+    if (!scenario || scenario.created_by !== managerId) {
+      return res.status(403).json({ error: 'You can only share scenarios you own' })
+    }
+
+    // Prevent sharing with self
+    const filteredIds = managerIds.filter((id: string) => id !== managerId)
+    if (filteredIds.length === 0) {
+      return res.status(400).json({ error: 'Cannot share a scenario with yourself' })
+    }
+
+    // Verify all target users are managers
+    const { data: targetUsers } = await supabase
+      .from('users')
+      .select('id, role')
+      .in('id', filteredIds)
+
+    const validManagerIds = (targetUsers || [])
+      .filter((u: any) => u.role === 'manager')
+      .map((u: any) => u.id)
+
+    if (validManagerIds.length === 0) {
+      return res.status(400).json({ error: 'No valid managers found in the provided IDs' })
+    }
+
+    // Insert shares (upsert to handle duplicates gracefully)
+    const rows = validManagerIds.map((mId: string) => ({
+      scenario_id: scenarioId,
+      shared_with_manager_id: mId,
+      shared_by_manager_id: managerId
+    }))
+
+    const { data: inserted, error } = await supabase
+      .from('scenario_shares')
+      .upsert(rows, { onConflict: 'scenario_id,shared_with_manager_id', ignoreDuplicates: true })
+      .select()
+
+    if (error) throw error
+
+    res.json({
+      message: `Shared with ${validManagerIds.length} manager(s)`,
+      shared: inserted || [],
+      skippedSelf: managerIds.length !== filteredIds.length
+    })
+  } catch (err: any) {
+    console.error('Error sharing scenario:', err)
+    res.status(500).json({ error: err.message })
+  }
+}
+
+
+/**
+ * DELETE /api/scenarios/:scenarioId/share/:targetManagerId
+ * Unshare a scenario from a specific manager
+ */
+export const unshareScenario = async (req: any, res: any) => {
+  const { scenarioId, targetManagerId } = req.params
+  const managerId = req.user.id
+
+  try {
+    // Verify ownership
+    const { data: scenario } = await supabase
+      .from('training_scenarios')
+      .select('id, created_by')
+      .eq('id', scenarioId)
+      .single()
+
+    if (!scenario || scenario.created_by !== managerId) {
+      return res.status(403).json({ error: 'You can only unshare scenarios you own' })
+    }
+
+    const { error } = await supabase
+      .from('scenario_shares')
+      .delete()
+      .eq('scenario_id', scenarioId)
+      .eq('shared_with_manager_id', targetManagerId)
+
+    if (error) throw error
+
+    res.json({ message: 'Share removed' })
+  } catch (err: any) {
+    console.error('Error unsharing scenario:', err)
+    res.status(500).json({ error: err.message })
+  }
+}
+
+
+/**
+ * GET /api/scenarios/shareable-managers
+ * List all managers (excluding self) that this manager can share personas with
+ */
+export const getShareableManagers = async (req: any, res: any) => {
+  const managerId = req.user.id
+
+  try {
+    const { data: managers, error } = await supabase
+      .from('users')
+      .select('id, name, email')
+      .eq('role', 'manager')
+      .neq('id', managerId)
+      .order('name')
+
+    if (error) throw error
+    res.json(managers || [])
+  } catch (err: any) {
+    console.error('Error fetching shareable managers:', err)
+    res.status(500).json({ error: err.message })
+  }
+}

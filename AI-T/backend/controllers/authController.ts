@@ -4,7 +4,7 @@ import { getSecret } from '../lib/secrets'
 export const managerSignup = async (req, res) => {
   const email = req.body.email?.trim().toLowerCase()
   const password = req.body.password?.trim()
-  const { name, orgName } = req.body
+  const { name, orgName, experience } = req.body
 
   if (!name || !email || !password || !orgName) {
     return res.status(400).json({ error: 'All fields are required' })
@@ -53,6 +53,16 @@ export const managerSignup = async (req, res) => {
 
     if (userError) throw userError
 
+    if (experience !== undefined) {
+      const expYears = parseInt(experience, 10);
+      if (!isNaN(expYears)) {
+        await supabase.from('user_experience').upsert({
+          user_id: authData.user.id,
+          experience_years: expYears
+        }, { onConflict: 'user_id' });
+      }
+    }
+
     return res.json({
       message: 'Manager account created',
       orgId: org.id
@@ -66,7 +76,7 @@ export const managerSignup = async (req, res) => {
 export const repSignup = async (req, res) => {
   const email = req.body.email?.trim().toLowerCase()
   const password = req.body.password?.trim()
-  const { name, orgName } = req.body
+  const { name, orgName, experience } = req.body
 
   if (!name || !email || !password || !orgName) {
     return res.status(400).json({ error: 'All fields are required' })
@@ -114,6 +124,16 @@ export const repSignup = async (req, res) => {
     }, { onConflict: 'id' })
 
     if (userError) throw userError
+
+    if (experience !== undefined) {
+      const expYears = parseInt(experience, 10);
+      if (!isNaN(expYears)) {
+        await supabase.from('user_experience').upsert({
+          user_id: authData.user.id,
+          experience_years: expYears
+        }, { onConflict: 'user_id' });
+      }
+    }
 
     return res.json({ message: 'Rep account created' })
   } catch (err: any) {

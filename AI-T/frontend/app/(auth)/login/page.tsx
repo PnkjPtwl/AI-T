@@ -36,7 +36,9 @@ export default function LoginPage() {
         localStorage.setItem('orgId', data.orgId)
         
         console.log(`--- [AUTH] Login successful. Redirecting as ${data.role}... ---`)
-        if (data.role === 'manager') {
+        if (data.role === 'admin') {
+          router.push('/admin/dashboard')
+        } else if (data.role === 'manager') {
           router.push('/dashboard')
         } else {
           router.push('/rep/dashboard')

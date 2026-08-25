@@ -1,6 +1,7 @@
 import { supabase } from '../db/supabase'
 import { getModeLimit, normalizeModeDisplay } from '../utils/modeHelper'
 import { createNotification } from './notificationController'
+import { getManagerRepIds } from '../utils/getManagerRepIds'
 
 /**
  * POST /api/manager/assignments
@@ -30,6 +31,13 @@ export const createAssignments = async (req: any, res: any) => {
 
     if (validRepIds.length === 0) {
       return res.status(400).json({ error: 'No valid sales representatives specified.' });
+    }
+
+    // Validate all reps belong to this manager
+    const managerRepIds = await getManagerRepIds(managerId);
+    const unauthorizedReps = validRepIds.filter((id: string) => !managerRepIds.includes(id));
+    if (unauthorizedReps.length > 0) {
+      return res.status(403).json({ error: 'Some selected reps are not assigned to you. Contact admin.' });
     }
 
     // Check for existing active assignments for the selected reps and scenario
@@ -135,10 +143,13 @@ export const createAssignments = async (req: any, res: any) => {
  * Training Management Table for Manager
  */
 export const getManagerAssignments = async (req: any, res: any) => {
+  const managerId = req.user.id
+
   try {
     const { data: rawAssignments, error: fetchErr } = await supabase
       .from('training_assignments')
       .select('*')
+      .eq('manager_id', managerId)
       .order('created_at', { ascending: false });
 
     if (fetchErr) throw fetchErr;

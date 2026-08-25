@@ -18,6 +18,7 @@ import assignmentRoutes from './routes/assignmentRoutes'
 import notificationRoutes from './routes/notificationRoutes'
 import knowledgeBaseRoutes from './routes/knowledgeBaseRoutes'
 import hubspotRoutes from './routes/hubspotRoutes'
+import adminRoutes from './routes/adminRoutes'
 
 const app = express()
 const PORT = process.env.PORT || 4000
@@ -50,6 +51,7 @@ app.use('/api',           assignmentRoutes)
 app.use('/api/manager/notifications', notificationRoutes)
 app.use('/api/knowledge-base', knowledgeBaseRoutes)
 app.use('/api/hubspot', hubspotRoutes)
+app.use('/api/admin', adminRoutes)
 
 
 app.get('/health', (req, res) => {

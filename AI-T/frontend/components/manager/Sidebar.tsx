@@ -38,14 +38,13 @@ export default function Sidebar() {
       {/* Brand */}
       <div className={`flex items-center gap-3 px-5 py-5 border-b border-gray-100 ${collapsed ? 'justify-center' : 'justify-between'}`}>
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#1E1B4B] text-white flex items-center justify-center font-[800] text-sm shadow-sm">
-              R
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-0">
+              <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain border-none outline-none" />
+              <img src="/dash.png" alt="-" className="w-3 h-3 object-contain border-none outline-none -ml-0.5 mr-0.5" />
+              <span className="text-xl font-semibold text-gray-900 tracking-tight">SalesCoach</span>
             </div>
-            <div>
-              <span className="text-base font-[800] text-[#1E293B] tracking-tight">R-SalesCoach</span>
-              <span className="hidden text-[9px] font-[700] text-purple-600 uppercase tracking-widest leading-none mt-0.5">{userName ? `${userName} (Manager)` : 'Manager View'}</span>
-            </div>
+            <span className="hidden text-[9px] font-[700] text-purple-600 uppercase tracking-widest leading-none ml-[34px]">{userName ? `${userName} (Manager)` : 'Manager View'}</span>
           </div>
         )}
         <button

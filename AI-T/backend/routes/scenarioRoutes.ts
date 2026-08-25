@@ -12,7 +12,11 @@ import {
   assignRepsToScenario, 
   getScenarioAssignments, 
   generateScorecardMetrics,
-  fetchHubspotData
+  fetchHubspotData,
+  shareScenario,
+  getScenarioShares,
+  unshareScenario,
+  getShareableManagers
 } from '../controllers/scenarioController'
 import { uploadAvatarMiddleware, handleAvatarUpload } from '../controllers/avatarController'
 import { listKbAccounts } from '../utils/ragClient'
@@ -40,8 +44,16 @@ router.get('/kb-accounts', authenticate, managerOnly, async (_req, res) => {
 // POST /api/scenarios/fetch-hubspot — Fetch and synthesize HubSpot CRM data
 router.post('/fetch-hubspot', authenticate, managerOnly, fetchHubspotData)
 
+// GET /api/scenarios/shareable-managers — list managers to share with (must be before :scenarioId)
+router.get('/shareable-managers', authenticate, managerOnly, getShareableManagers)
+
 // GET /api/scenarios/:scenarioId (fetch single scenario details for briefing / slideover)
 router.get('/:scenarioId', authenticate, getScenarioById)
+
+// Scenario sharing routes
+router.post('/:scenarioId/share', authenticate, managerOnly, shareScenario)
+router.get('/:scenarioId/shares', authenticate, managerOnly, getScenarioShares)
+router.delete('/:scenarioId/share/:targetManagerId', authenticate, managerOnly, unshareScenario)
 
 // POST /api/scenarios (managers only can create)
 router.post('/', authenticate, managerOnly, createScenario)

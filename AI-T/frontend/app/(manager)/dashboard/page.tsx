@@ -41,11 +41,11 @@ export default function ManagerDashboardPage() {
           const completionRatePct = total > 0 ? Math.round((completed / total) * 100) : 0
 
           setStats({
-            totalAssignments: total || 39,
+            totalAssignments: total,
             pending,
             inProgress,
-            completed: completed || 34,
-            completionRatePct: completionRatePct || 87,
+            completed,
+            completionRatePct,
             overdue
           })
         }
@@ -76,63 +76,7 @@ export default function ManagerDashboardPage() {
     )
   }
 
-  // Fallback top 6 personas from real DB scenarios if list is empty
-  const displayPersonas = personas.length > 0 ? personas : [
-    {
-      id: '1',
-      persona_name: 'Rajesh Menon',
-      contact_title: 'Senior Manager',
-      contact_company: 'Salesforce',
-      assigned_count: 2,
-      active_count: 1,
-      completed_count: 1
-    },
-    {
-      id: '2',
-      persona_name: 'Ananya Sharma',
-      contact_title: 'SVP',
-      contact_company: 'Elily Pharmaceuticals',
-      assigned_count: 4,
-      active_count: 2,
-      completed_count: 2
-    },
-    {
-      id: '3',
-      persona_name: 'Priya Nair',
-      contact_title: 'Plant Operations Manager',
-      contact_company: 'MetroPack Industries',
-      assigned_count: 13,
-      active_count: 3,
-      completed_count: 10
-    },
-    {
-      id: '4',
-      persona_name: 'Arvind Rao',
-      contact_title: 'vp',
-      contact_company: 'Uber',
-      assigned_count: 1,
-      active_count: 0,
-      completed_count: 1
-    },
-    {
-      id: '5',
-      persona_name: 'Matei',
-      contact_title: 'Head of Digital Manufacturing',
-      contact_company: 'Siemens',
-      assigned_count: 7,
-      active_count: 1,
-      completed_count: 6
-    },
-    {
-      id: '6',
-      persona_name: 'John1',
-      contact_title: 'IT head',
-      contact_company: 'Coco cola',
-      assigned_count: 1,
-      active_count: 0,
-      completed_count: 1
-    }
-  ]
+  const displayPersonas = personas
 
   return (
     <div className="space-y-8 pb-12 font-sans max-w-[1360px] mx-auto text-xs">
@@ -246,52 +190,39 @@ export default function ManagerDashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 font-[600] text-[#334155]">
-              {displayPersonas.map((p: any, idx: number) => {
-                const title = p.contact_title || p.persona_name || 'Persona'
-                const company = p.contact_company ? ` - ${p.contact_company}` : ''
-                const displayName = `${title}${company}`
+              {displayPersonas.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-gray-400">
+                    No scenarios found. Create your first persona to get started.
+                  </td>
+                </tr>
+              ) : (
+                displayPersonas.map((p: any, idx: number) => {
+                  const title = p.contact_title || p.persona_name || 'Persona'
+                  const company = p.contact_company ? ` - ${p.contact_company}` : ''
+                  const displayName = `${title}${company}`
 
-                const assignedCount = p.assigned_count || p.assignments_count || (idx === 0 ? 2 : idx === 1 ? 4 : idx === 2 ? 13 : idx === 3 ? 1 : idx === 4 ? 7 : 1)
-                const activeCount = p.active_count !== undefined ? p.active_count : (idx === 0 ? 1 : idx === 1 ? 2 : idx === 2 ? 3 : idx === 4 ? 1 : 0)
-                const completedCount = p.completed_count !== undefined ? p.completed_count : (assignedCount - activeCount)
-
-                return (
-                  <tr key={p.id || idx} className="hover:bg-gray-50/60 transition-colors">
-                    {/* Persona Name */}
-                    <td className="p-4 font-[700] text-[#1E293B]">
-                      {displayName}
-                    </td>
-
-                    {/* Assigned Count */}
-                    <td className="p-4 font-[800] text-[#1E293B]">
-                      {assignedCount}
-                    </td>
-
-                    {/* Status Badge */}
-                    <td className="p-4">
-                      {activeCount > 0 ? (
-                        <span className="inline-flex items-center px-3 py-1 bg-amber-50 text-amber-700 font-[700] text-[11px] rounded-full border border-amber-200/60">
-                          {activeCount} Active • {completedCount} Completed
+                  return (
+                    <tr key={p.id || idx} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4">
+                        <span className="text-[#1E293B] font-[800]">{title}</span>
+                        {p.contact_company && <span className="text-[#64748B] font-[600]"> - {p.contact_company}</span>}
+                      </td>
+                      <td className="p-4 text-[#1E293B] font-[800]">{p.assigned_count || 0}</td>
+                      <td className="p-4">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 text-[10px] font-[800] uppercase tracking-wider rounded-lg border border-amber-100">
+                          {p.active_count || 0} Active • {p.completed_count || 0} Completed
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center px-3 py-1 bg-emerald-50 text-emerald-700 font-[700] text-[11px] rounded-full border border-emerald-200/60">
-                          All done
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Review Button */}
-                    <td className="p-4 text-right">
-                      <button
-                        onClick={() => router.push(`/scenarios`)}
-                        className="px-3.5 py-1.5 bg-white border border-gray-200 hover:border-purple-300 text-[#475569] hover:text-purple-700 font-[700] text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5 ml-auto"
-                      >
-                        <span>👁️</span> Review
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
+                      </td>
+                      <td className="p-4 text-right">
+                        <Link href={`/scenarios/${p.id}`} className="inline-flex items-center gap-1 text-[10px] font-[800] uppercase tracking-wider text-[#64748B] hover:text-[#1E293B] hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-all">
+                          <span className="text-red-500">●</span> Review
+                        </Link>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>

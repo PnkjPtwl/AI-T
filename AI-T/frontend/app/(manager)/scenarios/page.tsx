@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import PersonaDetailsSidebar from '@/components/manager/PersonaDetailsSidebar'
 import AssignTrainingWizard from '@/components/manager/AssignTrainingWizard'
+import SharePersonaModal from '@/components/manager/SharePersonaModal'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
@@ -22,6 +23,10 @@ export default function ManagerScenariosPage() {
 
   const [searchTerm, setSearchTerm] = useState('')
   const [difficultyFilter, setDifficultyFilter] = useState('All')
+
+  // Share modal state
+  const [isShareOpen, setIsShareOpen] = useState(false)
+  const [shareScenario, setShareScenario] = useState<any>(null)
 
   const fetchScenariosAndReps = async () => {
     try {
@@ -72,6 +77,11 @@ export default function ManagerScenariosPage() {
   const handleAssignClick = (scenarioId: string) => {
     setWizardScenarioId(scenarioId)
     setIsWizardOpen(true)
+  }
+
+  const handleShareClick = (scenario: any) => {
+    setShareScenario(scenario)
+    setIsShareOpen(true)
   }
 
   if (loading) {
@@ -175,6 +185,11 @@ export default function ManagerScenariosPage() {
                     {sc.persona_name?.substring(0, 2).toUpperCase() || 'SC'}
                   </div>
                   <span>{sc.persona_name || sc.contact_title || 'Unnamed'}</span>
+                  {sc.is_shared && (
+                    <span className="ml-2 px-2 py-0.5 bg-purple-50 text-purple-600 text-[9px] font-[800] uppercase tracking-wider rounded-md border border-purple-100">
+                      Shared
+                    </span>
+                  )}
                 </td>
                 <td className="p-4">
                   <p className="font-[700] text-[#1E293B]">{sc.contact_title || '—'}</p>
@@ -198,12 +213,23 @@ export default function ManagerScenariosPage() {
                 </td>
                 <td className="p-4 text-[#64748B]">{updatedAgo}</td>
                 <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
-                  <button
-                    onClick={() => handleAssignClick(sc.id)}
-                    className="px-3.5 py-1.5 bg-[#1E1B4B] hover:bg-[#2E2A72] text-white font-[700] text-xs rounded-xl shadow-xs transition-colors"
-                  >
-                    Assign Persona
-                  </button>
+                  <div className="flex items-center gap-2 justify-end">
+                    {!sc.is_shared && (
+                      <button
+                        onClick={() => handleShareClick(sc)}
+                        className="px-3 py-1.5 bg-white hover:bg-purple-50 text-[#64748B] hover:text-purple-700 font-[700] text-xs rounded-xl border border-gray-200 hover:border-purple-300 shadow-xs transition-all"
+                        title="Share with other managers"
+                      >
+                        📤 Share
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleAssignClick(sc.id)}
+                      className="px-3.5 py-1.5 bg-[#1E1B4B] hover:bg-[#2E2A72] text-white font-[700] text-xs rounded-xl shadow-xs transition-colors"
+                    >
+                      Assign Persona
+                    </button>
+                  </div>
                 </td>
               </tr>
             )})}
@@ -232,6 +258,16 @@ export default function ManagerScenariosPage() {
         reps={reps}
         initialScenarioId={wizardScenarioId}
         onSuccess={() => fetchScenariosAndReps()}
+      />
+
+      {/* Share Persona Modal */}
+      <SharePersonaModal
+        isOpen={isShareOpen}
+        onClose={() => {
+          setIsShareOpen(false)
+          fetchScenariosAndReps()
+        }}
+        scenario={shareScenario}
       />
     </div>
   )
