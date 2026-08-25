@@ -441,7 +441,7 @@ export default function Topbar() {
           {/* ── User Menu ── */}
           <div className="relative group">
             <button className="flex items-center gap-3 px-4 py-2.5 hover:bg-[#F8FAFC] rounded-xl transition-all border border-transparent hover:border-[#E2E8F0]">
-              {userName && ['barani', 'lokesh', 'pankaj', 'reddy', 'sujeevan'].includes(userName.toLowerCase()) ? (
+              {userName && ['barani', 'lokesh', 'pankaj', 'reddy', 'sujeevan', 'sridhar'].includes(userName.toLowerCase()) ? (
                 <img
                   src={`/avatars/${userName.toLowerCase()}${userName.toLowerCase() === 'pankaj' ? '.jpeg' : '.jpg'}`}
                   alt={userName}

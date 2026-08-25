@@ -105,3 +105,15 @@
 {"step":"rag_called","accountName":"spark_solutions","searchTarget":"The CFO at Spark Solutions is Peter Parker. He’s the primary financial stakeholder we’ve been coordinating with. who is this CFO of sparse solutions spark_solutions deal history specs requirements pain points","ragChunksLength":4}
 {"step":"rag_called","accountName":"spark_solutions","searchTarget":"Peter Parker’s email is peter.parker@relanto.com. can you share Peter Parker email ID spark_solutions deal history specs requirements pain points","ragChunksLength":4}
 {"step":"rag_called","accountName":"spark_solutions","searchTarget":"Peter Parker, our CFO, oversees budgeting, financial planning and ensures tax‑compliance accuracy across complex states such as California, New York and Illinois. water is respon se what are his responsibilities spark_solutions deal history specs requirements pain points","ragChunksLength":4}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}
+{"step":"accountName_null","scenario":true,"personaName":"Nikhil Varma","contactCompany":"Umbrella Industries"}

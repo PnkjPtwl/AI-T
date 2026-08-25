@@ -45,7 +45,7 @@ export default function RepTopbar() {
       <div className="flex items-center gap-4">
         <div className="relative group">
           <button className="flex items-center gap-3 px-3 py-2 hover:bg-[#F8FAFC] rounded-xl transition-all">
-            {userName && ['barani', 'lokesh', 'pankaj', 'reddy', 'sujeevan'].includes(userName.toLowerCase()) ? (
+            {userName && ['barani', 'lokesh', 'pankaj', 'reddy', 'sujeevan', 'sridhar'].includes(userName.toLowerCase()) ? (
               <img 
                 src={`/avatars/${userName.toLowerCase()}${userName.toLowerCase() === 'pankaj' ? '.jpeg' : '.jpg'}`} 
                 alt={userName} 
