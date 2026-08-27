@@ -245,7 +245,7 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
                   SC
                 </div>
                 <div>
-                  <h2 className="text-lg font-[800]">{personaName}</h2>
+                  <h2 className="text-lg font-[800] text-white">{personaName}</h2>
                   <p className="text-xs text-purple-200">{roleTitle}</p>
                   <p className="text-xs text-purple-300 font-[600]">{company}</p>
                 </div>

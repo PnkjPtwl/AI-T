@@ -9,10 +9,10 @@ import {
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 const scoreColor = (score: number) =>
-  score >= 80 ? 'text-green-600' : score >= 60 ? 'text-amber-600' : 'text-red-500'
+  score >= 80 ? 'text-emerald-700' : score >= 60 ? 'text-amber-700' : 'text-[#ba1a1a]'
 
 const scoreBg = (score: number) =>
-  score >= 80 ? 'bg-green-50 border-green-200' : score >= 60 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
+  score >= 80 ? 'bg-emerald-50 border-emerald-200' : score >= 60 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-[#ffdad6]'
 
 export default function PerformancePage() {
   const router = useRouter()
@@ -85,10 +85,10 @@ export default function PerformancePage() {
     if (active && payload && payload.length) {
       const item = payload[0].payload
       return (
-        <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-lg text-sm">
-          <p className="text-gray-400 text-xs mb-1">{item.date}</p>
+        <div className="bg-white border border-slate-200 rounded-md px-4 py-3 shadow-sm text-[13px]">
+          <p className="text-slate-500 text-[11px] mb-1 font-semibold tracking-wider uppercase">{item.date}</p>
           <p className={`font-bold text-lg ${scoreColor(item.score)}`}>{item.score}%</p>
-          {item.scenario && <p className="text-gray-400 text-xs mt-1 truncate max-w-[160px]">{item.scenario}</p>}
+          {item.scenario && <p className="text-slate-600 font-medium text-[12px] mt-1 truncate max-w-[160px]">{item.scenario}</p>}
         </div>
       )
     }
@@ -96,42 +96,42 @@ export default function PerformancePage() {
   }
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12 font-['Inter'] max-w-[1360px] mx-auto text-[#0b1c30]">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">My Stats</h1>
-        <p className="text-base text-gray-500 mt-1">Your training performance over time.</p>
+        <h1 className="text-2xl font-bold font-['Plus_Jakarta_Sans'] text-[#1E293B] tracking-tight">My Stats</h1>
+        <p className="text-[14px] text-slate-500 mt-1">Your training performance over time.</p>
       </div>
 
       {/* KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions Completed</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{analytics?.sessionsCount ?? recentSessions.length}</p>
+        <div className="bg-white border border-slate-200 rounded-lg p-6 flex flex-col justify-between">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Sessions Completed</p>
+          <p className="text-3xl font-bold font-['Plus_Jakarta_Sans'] text-[#1E293B] mt-2">{analytics?.sessionsCount ?? recentSessions.length}</p>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Average Score</p>
-          <p className={`text-3xl font-bold mt-2 ${scoreColor(analytics?.avgScore ?? avgScore)}`}>{analytics?.avgScore ?? avgScore}%</p>
+        <div className="bg-white border border-slate-200 rounded-lg p-6 flex flex-col justify-between">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Average Score</p>
+          <p className={`text-3xl font-bold font-['Plus_Jakarta_Sans'] mt-2 ${scoreColor(analytics?.avgScore ?? avgScore)}`}>{analytics?.avgScore ?? avgScore}%</p>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Best Score</p>
-          <p className={`text-3xl font-bold mt-2 ${scoreColor(analytics?.bestScore ?? best)}`}>{analytics?.bestScore ?? best}%</p>
+        <div className="bg-white border border-slate-200 rounded-lg p-6 flex flex-col justify-between">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Best Score</p>
+          <p className={`text-3xl font-bold font-['Plus_Jakarta_Sans'] mt-2 ${scoreColor(analytics?.bestScore ?? best)}`}>{analytics?.bestScore ?? best}%</p>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Practice Time</p>
-          <p className="text-3xl font-bold text-[#1E1B4B] mt-2">{analytics?.totalPracticeTimeHrs ?? 0} hrs</p>
+        <div className="bg-white border border-slate-200 rounded-lg p-6 flex flex-col justify-between">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Practice Time</p>
+          <p className="text-3xl font-bold font-['Plus_Jakarta_Sans'] text-[#1E293B] mt-2">{analytics?.totalPracticeTimeHrs ?? 0} hrs</p>
         </div>
       </div>
 
       {/* Chart — full width */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-base font-semibold text-gray-900">Score Over Time</h2>
+      <div className="bg-white border border-slate-200 rounded-lg p-6">
+        <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+          <h2 className="text-[15px] font-bold font-['Plus_Jakarta_Sans'] text-[#1E293B]">Score Over Time</h2>
           {uniquePersonas.length > 0 && (
             <select
               value={selectedPersona}
               onChange={(e) => setSelectedPersona(e.target.value)}
-              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-gray-700 outline-none focus:ring-2 focus:ring-[#2C5282]"
+              className="text-[13px] font-medium border border-slate-200 rounded-md px-3 py-1.5 bg-white text-slate-700 outline-none focus:ring-2 focus:ring-[#4b41e1]"
             >
               <option value="All">All Personas</option>
               {uniquePersonas.map((p: any) => (
@@ -141,7 +141,7 @@ export default function PerformancePage() {
           )}
         </div>
         {chartData.length === 0 ? (
-          <div className="h-[300px] flex items-center justify-center text-gray-400 text-sm">No session data yet.</div>
+          <div className="h-[300px] flex items-center justify-center text-slate-400 text-[13px]">No session data yet.</div>
         ) : (
           <div className="h-[300px]">
             <ResponsiveContainer width="99%" height="100%" minHeight={300}>
@@ -153,10 +153,10 @@ export default function PerformancePage() {
                 <Line
                   type="monotone"
                   dataKey="score"
-                  stroke="#2C5282"
+                  stroke="#4b41e1"
                   strokeWidth={2.5}
-                  dot={{ r: 4, fill: '#2C5282', stroke: '#fff', strokeWidth: 2 }}
-                  activeDot={{ r: 6, stroke: '#2C5282', strokeWidth: 2, fill: '#fff' }}
+                  dot={{ r: 4, fill: '#4b41e1', stroke: '#fff', strokeWidth: 2 }}
+                  activeDot={{ r: 6, stroke: '#4b41e1', strokeWidth: 2, fill: '#fff' }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -166,19 +166,19 @@ export default function PerformancePage() {
 
       {/* Skill Breakdown */}
       {analytics?.radarData?.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <h2 className="text-base font-semibold text-gray-900 mb-5">Skill Breakdown</h2>
-          <div className="space-y-3">
+        <div className="bg-white border border-slate-200 rounded-lg p-6">
+          <h2 className="text-[15px] font-bold font-['Plus_Jakarta_Sans'] text-[#1E293B] mb-5 border-b border-slate-100 pb-4">Skill Breakdown</h2>
+          <div className="space-y-4">
             {[...(analytics.radarData as any[])].sort((a: any, b: any) => b.A - a.A).map((skill: any, idx: number) => (
               <div key={idx} className="flex items-center gap-4">
-                <span className="text-xs font-semibold text-gray-600 w-44 shrink-0 truncate">{skill.subject}</span>
-                <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                <span className="text-[13px] font-semibold text-slate-700 w-44 shrink-0 truncate">{skill.subject}</span>
+                <div className="flex-1 h-2 bg-slate-100 rounded-md overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-500 ${skill.A >= 80 ? 'bg-green-500' : skill.A >= 60 ? 'bg-amber-400' : 'bg-red-400'}`}
+                    className={`h-full rounded-md transition-all duration-500 ${skill.A >= 80 ? 'bg-emerald-500' : skill.A >= 60 ? 'bg-amber-500' : 'bg-[#ba1a1a]'}`}
                     style={{ width: `${skill.A}%` }}
                   />
                 </div>
-                <span className={`text-xs font-bold w-10 text-right ${scoreColor(skill.A)}`}>{skill.A}%</span>
+                <span className={`text-[12px] font-bold w-10 text-right ${scoreColor(skill.A)}`}>{skill.A}%</span>
               </div>
             ))}
           </div>
@@ -188,16 +188,22 @@ export default function PerformancePage() {
       {/* AI Insights Cards */}
       {analytics?.strongestSkill && analytics.strongestSkill !== 'N/A' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-green-50 border border-green-200 rounded-xl p-5">
-            <p className="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">🏆 Strongest Skill</p>
-            <p className="text-sm font-bold text-gray-900">{analytics.strongestSkill}</p>
-            <p className="text-xs text-gray-600 mt-1">Keep leveraging this strength in complex sales scenarios.</p>
+          <div className="bg-white border border-slate-200 rounded-lg p-5 relative overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+              <span className="text-emerald-500">🏆</span> Strongest Skill
+            </p>
+            <p className="text-[14px] font-bold text-[#1E293B]">{analytics.strongestSkill}</p>
+            <p className="text-[13px] text-slate-500 mt-1">Keep leveraging this strength in complex sales scenarios.</p>
           </div>
           {analytics?.weakestSkill && analytics.weakestSkill !== 'N/A' && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-              <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-2">📈 Growth Area</p>
-              <p className="text-sm font-bold text-gray-900">{analytics.weakestSkill}</p>
-              <p className="text-xs text-gray-600 mt-1">Focus your next practice sessions on improving this skill.</p>
+            <div className="bg-white border border-slate-200 rounded-lg p-5 relative overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                <span className="text-amber-500">📈</span> Growth Area
+              </p>
+              <p className="text-[14px] font-bold text-[#1E293B]">{analytics.weakestSkill}</p>
+              <p className="text-[13px] text-slate-500 mt-1">Focus your next practice sessions on improving this skill.</p>
             </div>
           )}
         </div>
@@ -205,31 +211,31 @@ export default function PerformancePage() {
 
       {/* Persona Breakdown */}
       {analytics?.personaPerformanceData?.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-900">Performance by Persona</h2>
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 bg-white">
+            <h2 className="text-[15px] font-bold font-['Plus_Jakarta_Sans'] text-[#1E293B]">Performance by Persona</h2>
           </div>
-          <table className="w-full text-sm">
+          <table className="w-full text-[13px]">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Persona</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
-                <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Peak Strength</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Growth Area</th>
-                <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Avg Score</th>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="text-left px-6 py-3 text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Persona</th>
+                <th className="text-left px-6 py-3 text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+                <th className="text-right px-6 py-3 text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Sessions</th>
+                <th className="text-left px-6 py-3 text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Peak Strength</th>
+                <th className="text-left px-6 py-3 text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Growth Area</th>
+                <th className="text-right px-6 py-3 text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Avg Score</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-100">
               {analytics.personaPerformanceData.map((p: any, idx: number) => (
-                <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-gray-900">{p.persona_name}</td>
-                  <td className="px-6 py-4 text-gray-500">{p.type}</td>
-                  <td className="px-6 py-4 text-right text-gray-700 font-semibold">{p.sessionsCompleted}</td>
-                  <td className="px-6 py-4 text-[#2C5282] text-xs font-semibold uppercase tracking-wide">{p.strongestSkill}</td>
-                  <td className="px-6 py-4 text-gray-500 text-xs uppercase tracking-wide">{p.weakestSkill}</td>
+                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 font-semibold text-[#1E293B]">{p.persona_name}</td>
+                  <td className="px-6 py-4 text-slate-500">{p.type}</td>
+                  <td className="px-6 py-4 text-right text-slate-700 font-semibold">{p.sessionsCompleted}</td>
+                  <td className="px-6 py-4 text-[#4b41e1] text-[11px] font-bold uppercase tracking-wide">{p.strongestSkill}</td>
+                  <td className="px-6 py-4 text-slate-500 text-[11px] font-semibold uppercase tracking-wide">{p.weakestSkill}</td>
                   <td className="px-6 py-4 text-right">
-                    <span className={`font-bold text-base ${scoreColor(p.avgScore)}`}>{p.avgScore}%</span>
+                    <span className={`font-bold text-[14px] ${scoreColor(p.avgScore)}`}>{p.avgScore}%</span>
                   </td>
                 </tr>
               ))}

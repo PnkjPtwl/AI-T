@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { Check, X, ArrowLeft } from 'lucide-react'
 
 interface AssignTrainingWizardProps {
   isOpen: boolean
@@ -154,55 +155,55 @@ export default function AssignTrainingWizard({
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
       <div className="bg-white w-full max-w-[900px] rounded-[24px] shadow-2xl overflow-hidden border border-gray-100 my-6">
         {/* Header */}
-        <div className="bg-[#1E1B4B] text-white px-8 py-6 flex items-center justify-between">
+        <div className="bg-[#1E293B] text-white px-8 py-6 flex items-center justify-between rounded-t-[24px]">
           <div>
-            <h2 className="text-2xl font-[900] text-white tracking-wide">Assign Training</h2>
-            <p className="text-xs text-purple-200 mt-0.5">Configure and assign a training scenario to your sales representatives</p>
+            <h2 className="text-xl font-bold text-white tracking-wide">Assign Training</h2>
+            <p className="text-sm text-gray-300 mt-1">Configure and assign a training scenario to your sales representatives</p>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors text-lg"
+            className="text-gray-400 hover:text-white transition-colors"
           >
-            ×
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* 4-Step Progress Indicator */}
-        <div className="px-8 py-5 border-b border-gray-100 bg-gray-50/50">
-          <div className="flex items-center justify-between max-w-2xl mx-auto">
+        <div className="px-8 py-6 border-b border-gray-100 bg-white">
+          <div className="flex items-center justify-center max-w-3xl mx-auto">
             {/* Step 1 */}
             <div className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-[800] ${step > 1 ? 'bg-green-600 text-white' : step === 1 ? 'bg-[#1E1B4B] text-white' : 'bg-gray-200 text-gray-500'}`}>
-                {step > 1 ? '✓' : '1'}
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step > 1 ? 'bg-[#6366F1] text-white' : step === 1 ? 'bg-[#1E293B] text-white' : 'bg-gray-200 text-gray-500'}`}>
+                {step > 1 ? <Check className="w-3.5 h-3.5" /> : '1'}
               </div>
-              <span className={`text-xs font-[700] ${step === 1 ? 'text-[#1E1B4B]' : 'text-gray-500'}`}>Training Mode</span>
+              <span className={`text-xs font-bold ${step === 1 ? 'text-[#1E293B]' : step > 1 ? 'text-[#1E293B]' : 'text-gray-500'}`}>Training Mode</span>
             </div>
-            <div className={`h-0.5 flex-1 mx-3 ${step > 1 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
+            <div className={`h-[1px] w-8 mx-4 ${step > 1 ? 'bg-[#6366F1]' : 'bg-gray-300'}`}></div>
 
             {/* Step 2 */}
             <div className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-[800] ${step > 2 ? 'bg-green-600 text-white' : step === 2 ? 'bg-[#1E1B4B] text-white' : 'bg-gray-200 text-gray-500'}`}>
-                {step > 2 ? '✓' : '2'}
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step > 2 ? 'bg-[#6366F1] text-white' : step === 2 ? 'bg-[#1E293B] text-white' : 'bg-gray-200 text-gray-500'}`}>
+                {step > 2 ? <Check className="w-3.5 h-3.5" /> : '2'}
               </div>
-              <span className={`text-xs font-[700] ${step === 2 ? 'text-[#1E1B4B]' : 'text-gray-500'}`}>Select Training</span>
+              <span className={`text-xs font-bold ${step === 2 ? 'text-[#1E293B]' : step > 2 ? 'text-[#1E293B]' : 'text-gray-500'}`}>Select Training</span>
             </div>
-            <div className={`h-0.5 flex-1 mx-3 ${step > 2 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
+            <div className={`h-[1px] w-8 mx-4 ${step > 2 ? 'bg-[#6366F1]' : 'bg-gray-300'}`}></div>
 
             {/* Step 3 */}
             <div className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-[800] ${step > 3 ? 'bg-green-600 text-white' : step === 3 ? 'bg-[#1E1B4B] text-white' : 'bg-gray-200 text-gray-500'}`}>
-                {step > 3 ? '✓' : '3'}
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step > 3 ? 'bg-[#6366F1] text-white' : step === 3 ? 'bg-[#1E293B] text-white' : 'bg-gray-200 text-gray-500'}`}>
+                {step > 3 ? <Check className="w-3.5 h-3.5" /> : '3'}
               </div>
-              <span className={`text-xs font-[700] ${step === 3 ? 'text-[#1E1B4B]' : 'text-gray-500'}`}>Assign Representatives</span>
+              <span className={`text-xs font-bold ${step === 3 ? 'text-[#1E293B]' : step > 3 ? 'text-[#1E293B]' : 'text-gray-500'}`}>Assign Representatives</span>
             </div>
-            <div className={`h-0.5 flex-1 mx-3 ${step > 3 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
+            <div className={`h-[1px] w-8 mx-4 ${step > 3 ? 'bg-[#6366F1]' : 'bg-gray-300'}`}></div>
 
             {/* Step 4 */}
             <div className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-[800] ${step === 4 ? 'bg-[#1E1B4B] text-white' : 'bg-gray-200 text-gray-500'}`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === 4 ? 'bg-[#1E293B] text-white' : 'bg-gray-200 text-gray-500'}`}>
                 4
               </div>
-              <span className={`text-xs font-[700] ${step === 4 ? 'text-[#1E1B4B]' : 'text-gray-500'}`}>Review & Confirm</span>
+              <span className={`text-xs font-bold ${step === 4 ? 'text-[#1E293B]' : 'text-gray-500'}`}>Review & Confirm</span>
             </div>
           </div>
         </div>
@@ -488,34 +489,34 @@ export default function AssignTrainingWizard({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Left Details Column */}
               <div className="lg:col-span-7 space-y-6">
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-5">
-                  <h3 className="text-xs font-[800] text-[#64748B] tracking-wider uppercase">ASSIGNMENT DETAILS</h3>
+                <div className="space-y-5 mt-2">
+                  <h3 className="text-[11px] font-bold text-[#64748B] tracking-wider uppercase">ASSIGNMENT DETAILS</h3>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-[700] text-[#1E293B]">Deadline*</label>
+                    <label className="text-sm font-semibold text-[#1E293B]">Deadline*</label>
                     <input
                       type="date"
                       min={new Date().toISOString().split('T')[0]}
                       value={deadline}
                       onChange={e => setDeadline(e.target.value)}
-                      className="w-full h-11 bg-gray-50 border border-gray-200 rounded-xl px-3.5 text-xs text-[#1E293B] focus:outline-none"
+                      className="w-full h-11 bg-white border border-gray-300 rounded-lg px-3.5 text-sm text-[#1E293B] focus:outline-none focus:ring-1 focus:ring-[#1E293B]"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-[700] text-[#1E293B]">Priority</label>
+                    <label className="text-sm font-semibold text-[#1E293B]">Priority</label>
                     <div className="grid grid-cols-3 gap-3">
                       {(['Low', 'Medium', 'High'] as const).map(p => (
                         <button
                           key={p}
                           type="button"
                           onClick={() => setPriority(p)}
-                          className={`py-2.5 rounded-xl border text-xs font-[700] transition-colors ${
+                          className={`py-2 rounded-lg border text-sm font-semibold transition-colors ${
                             priority === p
                               ? p === 'High'
                                 ? 'bg-red-50 border-red-500 text-red-600'
-                                : 'bg-purple-50 border-purple-600 text-purple-700'
-                              : 'bg-white border-gray-200 text-[#64748B]'
+                                : 'bg-gray-50 border-gray-400 text-[#1E293B]'
+                              : 'bg-white border-gray-200 text-[#64748B] hover:border-gray-300'
                           }`}
                         >
                           {p}
@@ -525,70 +526,70 @@ export default function AssignTrainingWizard({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-[700] text-[#1E293B]">Assignment Notes (optional)</label>
+                    <label className="text-sm font-semibold text-[#1E293B]">Assignment Notes (optional)</label>
                     <textarea
-                      rows={3}
+                      rows={5}
                       value={notes}
                       onChange={e => setNotes(e.target.value)}
                       placeholder="Add any context or instructions for the representatives..."
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-[#1E293B] focus:outline-none"
+                      className="w-full p-3 bg-white border border-gray-300 rounded-lg text-sm text-[#1E293B] focus:outline-none focus:ring-1 focus:ring-[#1E293B]"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Right Assignment Preview Column */}
-              <div className="lg:col-span-5 bg-[#1E1B4B] text-white rounded-2xl p-6 space-y-5 shadow-lg">
+              <div className="lg:col-span-5 bg-[#F8FAFC] border border-gray-200 text-[#1E293B] rounded-xl p-6 shadow-sm">
                 <div>
-                  <p className="text-[10px] font-[800] text-purple-300 uppercase tracking-wider">ASSIGNMENT PREVIEW</p>
-                  <h3 className="text-xl font-[800] mt-1">{selectedScenario?.persona_name || 'Technical Discovery'}</h3>
+                  <p className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">ASSIGNMENT PREVIEW</p>
+                  <h3 className="text-xl font-bold mt-2">{selectedScenario?.persona_name || 'Technical Discovery'}</h3>
                 </div>
 
-                <div className="space-y-3 text-xs border-t border-purple-900/50 pt-4">
-                  <div className="flex justify-between text-purple-200">
-                    <span>Training Mode</span>
-                    <span className="font-[700] text-white">{trainingMode}</span>
+                <div className="space-y-3.5 text-sm border-t border-gray-200 pt-5 mt-5">
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Training Mode</span>
+                    <span className="font-semibold">{trainingMode}</span>
                   </div>
-                  <div className="flex justify-between text-purple-200">
-                    <span>Training</span>
-                    <span className="font-[700] text-white">{selectedScenario?.persona_name || 'Technical Discovery'}</span>
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Training</span>
+                    <span className="font-semibold">{selectedScenario?.persona_name || 'Technical Discovery'}</span>
                   </div>
-                  <div className="flex justify-between text-purple-200">
-                    <span>Type</span>
-                    <span className="font-[700] text-white">Voice Call</span>
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Type</span>
+                    <span className="font-semibold">Voice Call</span>
                   </div>
-                  <div className="flex justify-between text-purple-200">
-                    <span>AI Voice</span>
-                    <span className="font-[700] text-white capitalize">{avatarType}</span>
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">AI Voice</span>
+                    <span className="font-semibold capitalize">{avatarType}</span>
                   </div>
-                  <div className="flex justify-between text-purple-200">
-                    <span>Difficulty</span>
-                    <span className="font-[700] text-white">{selectedScenario?.difficulty || 'Advanced'}</span>
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Difficulty</span>
+                    <span className="font-semibold">{selectedScenario?.difficulty || 'Advanced'}</span>
                   </div>
-                  <div className="flex justify-between text-purple-200">
-                    <span>Assigned To</span>
-                    <span className="font-[700] text-white">{selectedRepIds.length || 1} Representative</span>
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Assigned To</span>
+                    <span className="font-semibold">{selectedRepIds.length || 1} Representative</span>
                   </div>
-                  <div className="flex justify-between text-purple-200">
-                    <span>Deadline</span>
-                    <span className="font-[700] text-white">{deadline}</span>
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Deadline</span>
+                    <span className="font-semibold">{deadline}</span>
                   </div>
-                  <div className="flex justify-between text-purple-200">
-                    <span>Priority</span>
-                    <span className="font-[700] text-red-300">{priority}</span>
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Priority</span>
+                    <span className="font-semibold text-red-600">{priority}</span>
                   </div>
-                  <div className="flex justify-between text-purple-200">
-                    <span>Est. Duration</span>
-                    <span className="font-[700] text-white">30 mins</span>
+                  <div className="flex justify-between">
+                    <span className="text-[#64748B]">Est. Duration</span>
+                    <span className="font-semibold">30 mins</span>
                   </div>
                 </div>
 
                 {/* Representatives */}
-                <div className="pt-3 border-t border-purple-900/50 space-y-2">
-                  <p className="text-[10px] font-[800] text-purple-300 uppercase">Representatives</p>
-                  <div className="flex flex-wrap gap-1.5">
+                <div className="pt-5 mt-5 border-t border-gray-200 space-y-3">
+                  <p className="text-[10px] font-bold text-[#64748B] uppercase">Representatives</p>
+                  <div className="flex flex-wrap gap-2">
                     {(selectedRepsList.length > 0 ? selectedRepsList : []).map((r: any, idx: number) => (
-                      <span key={idx} className="px-2.5 py-1 bg-white/10 text-white text-[11px] font-[600] rounded-md border border-white/10">
+                      <span key={idx} className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-md border border-blue-200">
                         {r.name?.split(' ')[0] || 'Unknown'}
                       </span>
                     ))}
@@ -596,11 +597,11 @@ export default function AssignTrainingWizard({
                 </div>
 
                 {/* Skills Covered */}
-                <div className="pt-3 border-t border-purple-900/50 space-y-2">
-                  <p className="text-[10px] font-[800] text-purple-300 uppercase">Skills Covered</p>
+                <div className="pt-5 mt-5 border-t border-gray-200 space-y-3 hidden">
+                  <p className="text-[10px] font-[800] text-[#64748B] uppercase">Skills Covered</p>
                   <div className="flex flex-wrap gap-1.5">
                     {getSkillsList(selectedScenario).map((skill: string, idx: number) => (
-                      <span key={idx} className="px-2.5 py-1 bg-red-500/20 text-red-200 text-[10px] font-[700] rounded-full border border-red-400/30">
+                      <span key={idx} className="px-2.5 py-1 bg-gray-100 text-gray-700 text-[10px] font-[700] rounded-md border border-gray-200">
                         {skill}
                       </span>
                     ))}
@@ -612,21 +613,21 @@ export default function AssignTrainingWizard({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-8 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+        <div className="px-8 py-5 bg-white border-t border-gray-200 flex items-center justify-between rounded-b-[24px]">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 rounded-xl border border-gray-300 text-xs font-[700] text-[#334155] hover:bg-white transition-colors"
+            className="px-5 py-2.5 rounded-lg border border-gray-300 text-sm font-semibold text-[#334155] hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             {step > 1 && (
               <button
                 onClick={() => setStep((step - 1) as any)}
-                className="px-5 py-2.5 rounded-xl border border-gray-300 text-xs font-[700] text-[#334155] hover:bg-white transition-colors"
+                className="px-5 py-2.5 rounded-lg border border-gray-300 text-sm font-semibold text-[#334155] hover:bg-gray-50 transition-colors flex items-center gap-2"
               >
-                ← Back
+                <ArrowLeft className="w-4 h-4" /> Back
               </button>
             )}
 
@@ -639,20 +640,22 @@ export default function AssignTrainingWizard({
                   }
                   setStep((step + 1) as any)
                 }}
-                className="px-6 py-2.5 rounded-xl bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] shadow-md transition-colors"
+                className="px-6 py-2.5 rounded-lg bg-[#1E293B] hover:bg-[#0F172A] text-white text-sm font-semibold shadow-sm transition-colors"
               >
-                Next →
+                Next Step
               </button>
             ) : (
               <button
                 onClick={handleFinishAssignment}
                 disabled={assigning}
-                className="px-6 py-2.5 rounded-xl bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] shadow-md transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="px-6 py-2.5 rounded-lg bg-[#1E293B] hover:bg-[#0F172A] text-white text-sm font-semibold shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 {assigning ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
-                  <span>✓ Assign Training</span>
+                  <>
+                    <Check className="w-4 h-4" /> Assign Training
+                  </>
                 )}
               </button>
             )}

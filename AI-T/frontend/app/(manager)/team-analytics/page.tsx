@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Target, Printer, Download } from 'lucide-react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
@@ -118,12 +119,12 @@ export default function TeamAnalyticsPage() {
   ]
 
   return (
-    <div className="space-y-8 pb-12 font-sans max-w-[1360px] mx-auto text-xs print:p-0 print:m-0">
+    <div className="space-y-8 pb-12 font-['Plus_Jakarta_Sans'] max-w-[1360px] mx-auto text-sm print:p-0 print:m-0">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-[800] text-[#1E293B] tracking-tight">Team Analytics</h1>
-          <p className="text-xs text-[#64748B] font-[500] mt-0.5">
+          <h1 className="text-2xl font-bold text-[#1E293B] tracking-tight">Team Analytics</h1>
+          <p className="text-sm text-[#64748B] font-medium mt-0.5">
             Measure practice performance, score components, and training ROI across reps, managers, and product lines.
           </p>
         </div>
@@ -131,13 +132,13 @@ export default function TeamAnalyticsPage() {
         <div className="flex items-center gap-3 print:hidden">
           {/* Experience Filter Selector */}
           <div className="flex items-center gap-2 bg-white border border-gray-200/90 rounded-xl px-3 py-2 shadow-xs hover:border-indigo-300 transition-colors">
-            <span className="text-[11px] font-[700] text-[#64748B] flex items-center gap-1">
-              <span>🎯</span> Experience:
+            <span className="text-xs font-semibold text-[#64748B] flex items-center gap-1.5">
+              <Target className="w-4 h-4 text-indigo-500" /> Experience:
             </span>
             <select
               value={selectedExperience}
               onChange={(e) => setSelectedExperience(e.target.value)}
-              className="bg-transparent font-[800] text-[#1E293B] text-xs focus:outline-none cursor-pointer"
+              className="bg-transparent font-bold text-[#1E293B] text-sm focus:outline-none cursor-pointer"
             >
               <option value="all">All Experience</option>
               <option value="<1">&lt; 1 Year</option>
@@ -148,15 +149,15 @@ export default function TeamAnalyticsPage() {
 
           <button 
             onClick={handleExportPDF}
-            className="px-4 py-2 bg-white border border-gray-200 rounded-xl font-[700] text-[#334155] shadow-xs hover:bg-gray-50 flex items-center gap-1.5 cursor-pointer"
+            className="px-4 py-2 bg-white border border-gray-200 rounded-xl font-semibold text-[#334155] shadow-xs hover:bg-gray-50 flex items-center gap-2 cursor-pointer"
           >
-            <span>📥</span> Export PDF
+            <Printer className="w-4 h-4 text-gray-500" /> Export PDF
           </button>
           <button 
             onClick={handleExportCSV}
-            className="px-4 py-2 bg-white border border-gray-200 rounded-xl font-[700] text-[#334155] shadow-xs hover:bg-gray-50 flex items-center gap-1.5 cursor-pointer"
+            className="px-4 py-2 bg-white border border-gray-200 rounded-xl font-semibold text-[#334155] shadow-xs hover:bg-gray-50 flex items-center gap-2 cursor-pointer"
           >
-            <span>📊</span> Download CSV
+            <Download className="w-4 h-4 text-gray-500" /> Download CSV
           </button>
         </div>
       </div>
@@ -164,23 +165,23 @@ export default function TeamAnalyticsPage() {
       {/* Top 4 KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <p className="text-[10px] font-[800] text-[#64748B] uppercase">TEAM AVG SCORE</p>
-          <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{summary.teamAvgScore}%</h3>
+          <p className="text-[10px] font-bold text-[#64748B] uppercase">TEAM AVG SCORE</p>
+          <h3 className="text-3xl font-bold text-[#1E293B] mt-2">{summary.teamAvgScore}%</h3>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <p className="text-[10px] font-[800] text-[#64748B] uppercase">COMPLETION RATE</p>
-          <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{summary.completionRatePct}%</h3>
+          <p className="text-[10px] font-bold text-[#64748B] uppercase">COMPLETION RATE</p>
+          <h3 className="text-3xl font-bold text-[#1E293B] mt-2">{summary.completionRatePct}%</h3>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <p className="text-[10px] font-[800] text-[#64748B] uppercase">TOTAL SESSIONS</p>
-          <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{summary.totalSessionsCount}</h3>
+          <p className="text-[10px] font-bold text-[#64748B] uppercase">TOTAL SESSIONS</p>
+          <h3 className="text-3xl font-bold text-[#1E293B] mt-2">{summary.totalSessionsCount}</h3>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm">
-          <p className="text-[10px] font-[800] text-[#64748B] uppercase">ACTIVE REPS</p>
-          <h3 className="text-3xl font-[800] text-[#1E293B] mt-2">{summary.activeRepsCount}</h3>
+          <p className="text-[10px] font-bold text-[#64748B] uppercase">ACTIVE REPS</p>
+          <h3 className="text-3xl font-bold text-[#1E293B] mt-2">{summary.activeRepsCount}</h3>
         </div>
       </div>
 
@@ -189,8 +190,8 @@ export default function TeamAnalyticsPage() {
         {/* Performance Over Time Bar Chart Column */}
         <div className="lg:col-span-7 bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm space-y-6">
           <div>
-            <h2 className="font-[800] text-sm text-[#1E293B]">Performance Over Time</h2>
-            <p className="text-[11px] text-[#64748B]">Average team score progression over 12 weeks</p>
+            <h2 className="font-bold text-sm text-[#1E293B]">Performance Over Time</h2>
+            <p className="text-xs text-[#64748B]">Average team score progression over 12 weeks</p>
           </div>
 
           <div className="h-60 flex items-end justify-between px-2 pb-2 border-b border-l border-gray-200 gap-2 pt-6">
@@ -200,7 +201,7 @@ export default function TeamAnalyticsPage() {
 
               return (
                 <div key={idx} className="flex flex-col items-center justify-end h-full flex-1 group">
-                  <div className="text-[10px] font-[800] text-purple-700 mb-1">
+                  <div className="text-xs font-bold text-purple-700 mb-1">
                     {scoreVal > 0 ? `${scoreVal}%` : '-'}
                   </div>
                   
@@ -216,13 +217,13 @@ export default function TeamAnalyticsPage() {
                     ></div>
                   </div>
 
-                  <span className="text-[10px] font-[600] text-[#64748B] mt-2">{pt.week}</span>
+                  <span className="text-xs font-medium text-[#64748B] mt-2">{pt.week}</span>
                 </div>
               )
             })}
           </div>
 
-          <p className="text-[10px] text-[#64748B] italic bg-gray-50 p-3 rounded-xl border border-gray-100">
+          <p className="text-xs text-[#64748B] italic bg-gray-50 p-3 rounded-xl border border-gray-100">
             Use this chart to verify that reps are improving over time and identifying training plateaus before they impact sales performance.
           </p>
         </div>
@@ -230,8 +231,8 @@ export default function TeamAnalyticsPage() {
         {/* Completion Funnel Column */}
         <div className="lg:col-span-5 bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm space-y-6">
           <div>
-            <h2 className="font-[800] text-sm text-[#1E293B]">Completion Funnel</h2>
-            <p className="text-[11px] text-[#64748B]">Assignment drop-off rate from assigned to passed</p>
+            <h2 className="font-bold text-sm text-[#1E293B]">Completion Funnel</h2>
+            <p className="text-xs text-[#64748B]">Assignment drop-off rate from assigned to passed</p>
           </div>
 
           <div className="space-y-4 pt-2">
@@ -241,7 +242,7 @@ export default function TeamAnalyticsPage() {
 
               return (
                 <div key={idx} className="space-y-1.5">
-                  <div className="flex justify-between text-xs font-[700] text-[#1E293B]">
+                  <div className="flex justify-between text-sm font-semibold text-[#1E293B]">
                     <span>{fn.stage}</span>
                     <span>{fn.count}</span>
                   </div>
@@ -260,8 +261,8 @@ export default function TeamAnalyticsPage() {
         {/* Score Distribution Histogram */}
         <div className="lg:col-span-6 bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm space-y-6">
           <div>
-            <h2 className="font-[800] text-sm text-[#1E293B]">Score Distribution</h2>
-            <p className="text-[11px] text-[#64748B]">Bell curve of completed session scores</p>
+            <h2 className="font-bold text-sm text-[#1E293B]">Score Distribution</h2>
+            <p className="text-xs text-[#64748B]">Bell curve of completed session scores</p>
           </div>
 
           <div className="h-56 flex items-end justify-between px-2 pb-2 border-b border-l border-gray-200 gap-3 pt-6">
@@ -272,7 +273,7 @@ export default function TeamAnalyticsPage() {
 
               return (
                 <div key={idx} className="flex flex-col items-center justify-end h-full flex-1 group">
-                  <span className="text-[10px] font-[800] text-[#1E293B] mb-1">{countVal}</span>
+                  <span className="text-xs font-bold text-[#1E293B] mb-1">{countVal}</span>
                   
                   {/* Explicit Flex Track for Bar */}
                   <div className="w-full flex-1 flex items-end justify-center">
@@ -286,7 +287,7 @@ export default function TeamAnalyticsPage() {
                     ></div>
                   </div>
 
-                  <span className="text-[10px] font-[600] text-[#64748B] mt-2">{sb.range}</span>
+                  <span className="text-xs font-medium text-[#64748B] mt-2">{sb.range}</span>
                 </div>
               )
             })}
@@ -296,13 +297,13 @@ export default function TeamAnalyticsPage() {
         {/* Cohort Comparison Table */}
         <div className="lg:col-span-6 bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm space-y-6">
           <div>
-            <h2 className="font-[800] text-sm text-[#1E293B]">Rep Performance Cohorts</h2>
-            <p className="text-[11px] text-[#64748B]">Performance breakdown by sales representative</p>
+            <h2 className="font-bold text-sm text-[#1E293B]">Rep Performance Cohorts</h2>
+            <p className="text-xs text-[#64748B]">Performance breakdown by sales representative</p>
           </div>
 
           <div className="border border-gray-200/80 rounded-xl overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-gray-50 text-[10px] font-[800] text-[#64748B] uppercase">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50 text-xs font-semibold text-[#64748B] uppercase">
                 <tr>
                   <th className="p-3">REPRESENTATIVE</th>
                   <th className="p-3">AVG SCORE</th>
@@ -310,7 +311,7 @@ export default function TeamAnalyticsPage() {
                   <th className="p-3">GROWTH</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 font-[600] text-[#334155]">
+              <tbody className="divide-y divide-gray-100 font-medium text-[#334155]">
                 {(analytics?.cohortComparison || cohortComparison)
                   .filter((ch: any) => {
                     const name = (ch.cohort || ch.name || '').toLowerCase()
@@ -318,10 +319,10 @@ export default function TeamAnalyticsPage() {
                   })
                   .map((ch: any, idx: number) => (
                     <tr key={idx} className="hover:bg-gray-50">
-                      <td className="p-3 font-[800] text-[#1E293B]">{ch.cohort}</td>
-                      <td className="p-3 font-[700] text-purple-700">{ch.avgScore}%</td>
+                      <td className="p-3 font-semibold text-[#1E293B]">{ch.cohort}</td>
+                      <td className="p-3 font-medium text-purple-700">{ch.avgScore}%</td>
                       <td className="p-3 text-green-600">{ch.completionRate}</td>
-                      <td className={`p-3 font-[800] ${ch.trend.startsWith('+') ? 'text-green-600' : ch.trend.startsWith('-') && ch.trend !== '-' ? 'text-red-500' : 'text-gray-400'}`}>
+                      <td className={`p-3 font-semibold ${ch.trend.startsWith('+') ? 'text-green-600' : ch.trend.startsWith('-') && ch.trend !== '-' ? 'text-red-500' : 'text-gray-400'}`}>
                         {ch.trend}
                       </td>
                     </tr>

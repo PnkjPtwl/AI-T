@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { BarChart2, Clock, Zap, CheckCircle2, TrendingUp, AlertTriangle, Plus, ArrowRight } from 'lucide-react'
+import PersonaDetailsSidebar from '@/components/manager/PersonaDetailsSidebar'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
@@ -18,6 +20,14 @@ export default function ManagerDashboardPage() {
     overdue: 0
   })
   const [personas, setPersonas] = useState<any[]>([])
+
+  const [selectedPersona, setSelectedPersona] = useState<any>(null)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+
+  const handleOpenDetails = (persona: any) => {
+    setSelectedPersona(persona)
+    setIsSidebarOpen(true)
+  }
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,21 +89,21 @@ export default function ManagerDashboardPage() {
   const displayPersonas = personas
 
   return (
-    <div className="space-y-8 pb-12 font-sans max-w-[1360px] mx-auto text-xs">
+    <div className="space-y-8 pb-12 font-['Plus_Jakarta_Sans'] max-w-[1360px] mx-auto text-sm">
       {/* Header with Title & "+ New Persona" Action Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-[800] text-[#1E293B] tracking-tight">Team Performance</h1>
-          <p className="text-xs text-[#64748B] font-[500] mt-0.5">
+          <h1 className="text-2xl font-bold text-[#1E293B] tracking-tight">Team Performance</h1>
+          <p className="text-sm text-[#64748B] mt-0.5">
             Monitor your team's AI training progress and identify coaching opportunities.
           </p>
         </div>
 
         <Link
           href="/scenarios/new"
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#1E1B4B] hover:bg-[#2A2467] text-white rounded-xl font-[700] text-xs shadow-md transition-all self-start sm:self-auto group"
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#1E1B4B] hover:bg-[#2A2467] text-white rounded-xl font-medium text-sm shadow-md transition-all self-start sm:self-auto group"
         >
-          <span className="text-sm font-bold group-hover:scale-110 transition-transform">➕</span>
+          <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
           <span>New Persona</span>
         </Link>
       </div>
@@ -103,93 +113,105 @@ export default function ManagerDashboardPage() {
         {/* Total Assignments */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">Total Assignments</span>
-            <div className="w-7 h-7 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs">📊</div>
+            <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Total Assignments</span>
+            <div className="w-7 h-7 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+              <BarChart2 className="w-4 h-4" />
+            </div>
           </div>
           <div>
-            <h3 className="text-2xl font-[800] text-[#1E293B]">{stats.totalAssignments}</h3>
-            <p className="text-[10px] font-[600] text-[#94A3B8] mt-0.5">All time</p>
+            <h3 className="text-2xl font-bold text-[#1E293B]">{stats.totalAssignments}</h3>
+            <p className="text-xs text-[#94A3B8] mt-0.5">All time</p>
           </div>
         </div>
 
         {/* Pending */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">Pending</span>
-            <div className="w-7 h-7 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center text-xs">⏱️</div>
+            <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Pending</span>
+            <div className="w-7 h-7 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
           </div>
           <div>
-            <h3 className="text-2xl font-[800] text-[#1E293B]">{stats.pending}</h3>
-            <p className="text-[10px] font-[600] text-[#94A3B8] mt-0.5">Not yet started</p>
+            <h3 className="text-2xl font-bold text-[#1E293B]">{stats.pending}</h3>
+            <p className="text-xs text-[#94A3B8] mt-0.5">Not yet started</p>
           </div>
         </div>
 
         {/* In-Progress */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">In-Progress</span>
-            <div className="w-7 h-7 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-xs">⚡</div>
+            <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">In-Progress</span>
+            <div className="w-7 h-7 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center">
+              <Zap className="w-4 h-4" />
+            </div>
           </div>
           <div>
-            <h3 className="text-2xl font-[800] text-[#1E293B]">{stats.inProgress}</h3>
-            <p className="text-[10px] font-[600] text-[#94A3B8] mt-0.5">Currently active</p>
+            <h3 className="text-2xl font-bold text-[#1E293B]">{stats.inProgress}</h3>
+            <p className="text-xs text-[#94A3B8] mt-0.5">Currently active</p>
           </div>
         </div>
 
         {/* Completed */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">Completed</span>
-            <div className="w-7 h-7 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs">✓</div>
+            <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Completed</span>
+            <div className="w-7 h-7 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
           </div>
           <div>
-            <h3 className="text-2xl font-[800] text-[#1E293B]">{stats.completed}</h3>
-            <p className="text-[10px] font-[600] text-[#94A3B8] mt-0.5">Successfully done</p>
+            <h3 className="text-2xl font-bold text-[#1E293B]">{stats.completed}</h3>
+            <p className="text-xs text-[#94A3B8] mt-0.5">Successfully done</p>
           </div>
         </div>
 
         {/* Completion Rate */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">Completion Rate</span>
-            <div className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs">📈</div>
+            <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Completion Rate</span>
+            <div className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4" />
+            </div>
           </div>
           <div>
-            <h3 className="text-2xl font-[800] text-[#1E293B]">{stats.completionRatePct}%</h3>
-            <p className="text-[10px] font-[600] text-[#94A3B8] mt-0.5">Of all assignments</p>
+            <h3 className="text-2xl font-bold text-[#1E293B]">{stats.completionRatePct}%</h3>
+            <p className="text-xs text-[#94A3B8] mt-0.5">Of all assignments</p>
           </div>
         </div>
 
         {/* Overdue */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">Overdue</span>
-            <div className="w-7 h-7 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-xs">⚠️</div>
+            <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Overdue</span>
+            <div className="w-7 h-7 rounded-full bg-red-50 text-red-600 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
           </div>
           <div>
-            <h3 className="text-2xl font-[800] text-[#1E293B]">{stats.overdue}</h3>
-            <p className="text-[10px] font-[600] text-[#94A3B8] mt-0.5">Needs attention</p>
+            <h3 className="text-2xl font-bold text-[#1E293B]">{stats.overdue}</h3>
+            <p className="text-xs text-[#94A3B8] mt-0.5">Needs attention</p>
           </div>
         </div>
       </div>
 
-      {/* Training Analytics Card (Top / Recent Personas Table) */}
+      {/* Recent Personas Table */}
       <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6 space-y-5">
         <div>
-          <h2 className="font-[800] text-sm text-[#1E293B]">Training Analytics</h2>
+          <h2 className="font-semibold text-base text-[#1E293B]">Recent Personas</h2>
         </div>
 
         <div className="border border-gray-200/80 rounded-xl overflow-hidden">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-gray-50/80 text-[10px] font-[800] text-[#64748B] uppercase border-b border-gray-200/60">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50/80 text-xs font-semibold text-[#64748B] uppercase border-b border-gray-200/60">
               <tr>
-                <th className="p-4">PERSONA</th>
-                <th className="p-4">ASSIGNED</th>
-                <th className="p-4">STATUS</th>
-                <th className="p-4 text-right">REVIEW</th>
+                <th className="p-4 font-semibold">PERSONA</th>
+                <th className="p-4 font-semibold">ASSIGNED</th>
+                <th className="p-4 font-semibold">STATUS</th>
+                <th className="p-4 font-semibold text-right">REVIEW</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 font-[600] text-[#334155]">
+            <tbody className="divide-y divide-gray-100 text-[#334155]">
               {displayPersonas.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="p-8 text-center text-gray-400">
@@ -200,24 +222,23 @@ export default function ManagerDashboardPage() {
                 displayPersonas.map((p: any, idx: number) => {
                   const title = p.contact_title || p.persona_name || 'Persona'
                   const company = p.contact_company ? ` - ${p.contact_company}` : ''
-                  const displayName = `${title}${company}`
 
                   return (
                     <tr key={p.id || idx} className="hover:bg-gray-50/50 transition-colors">
                       <td className="p-4">
-                        <span className="text-[#1E293B] font-[800]">{title}</span>
-                        {p.contact_company && <span className="text-[#64748B] font-[600]"> - {p.contact_company}</span>}
+                        <span className="text-[#1E293B] font-medium">{title}</span>
+                        {p.contact_company && <span className="text-[#64748B]"> - {p.contact_company}</span>}
                       </td>
-                      <td className="p-4 text-[#1E293B] font-[800]">{p.assigned_count || 0}</td>
+                      <td className="p-4 text-[#1E293B]">{p.assigned_count || 0}</td>
                       <td className="p-4">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 text-[10px] font-[800] uppercase tracking-wider rounded-lg border border-amber-100">
+                        <span className="text-[#64748B]">
                           {p.active_count || 0} Active • {p.completed_count || 0} Completed
                         </span>
                       </td>
                       <td className="p-4 text-right">
-                        <Link href={`/scenarios/${p.id}`} className="inline-flex items-center gap-1 text-[10px] font-[800] uppercase tracking-wider text-[#64748B] hover:text-[#1E293B] hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-all">
-                          <span className="text-red-500">●</span> Review
-                        </Link>
+                        <button onClick={() => handleOpenDetails(p)} className="inline-flex items-center justify-center text-[#64748B] hover:text-[#1E293B] hover:bg-gray-100 p-2 rounded-lg transition-all" title="Review Persona">
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   )
@@ -227,6 +248,18 @@ export default function ManagerDashboardPage() {
           </table>
         </div>
       </div>
+
+      <PersonaDetailsSidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        persona={selectedPersona}
+        onAssign={() => {
+          setIsSidebarOpen(false)
+          router.push('/scenarios')
+        }}
+        onEdit={scenarioId => router.push(`/scenarios/new?edit=${scenarioId}`)}
+        onDuplicate={scenarioId => router.push(`/scenarios/new?duplicate=${scenarioId}`)}
+      />
     </div>
   )
 }

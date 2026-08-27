@@ -34,6 +34,7 @@
 
 html, body {
   height: 100%;
+  font-size: 80%; /* Scales the entire Tailwind UI down to emulate an 80% browser zoom */
   font-family: 'Plus Jakarta Sans', sans-serif !important;
   background: var(--bg);
   color: var(--text);

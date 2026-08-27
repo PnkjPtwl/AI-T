@@ -3,41 +3,36 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
+import { LayoutDashboard, ClipboardList, BarChart2, ListChecks } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { name: 'Dashboard', href: '/rep/dashboard' },
-  { name: 'Assignments', href: '/rep/train' },
-  { name: 'My Stats', href: '/rep/my-stats' },
+  { name: 'Dashboard', href: '/rep/dashboard', icon: LayoutDashboard },
+  { name: 'Training Queue', href: '/rep/training-queue', icon: ListChecks },
+  { name: 'Assignments', href: '/rep/train', icon: ClipboardList },
+  { name: 'My Stats', href: '/rep/my-stats', icon: BarChart2 },
 ]
 
 export default function RepSidebar() {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
 
   return (
     <aside
-      className={`sticky top-0 h-screen bg-white border-r border-gray-100 transition-all duration-300 z-50 flex flex-col flex-shrink-0 ${collapsed ? 'w-[64px]' : 'w-[220px]'}`}
+      onMouseEnter={() => setCollapsed(false)}
+      onMouseLeave={() => setCollapsed(true)}
+      className={`sticky top-0 h-screen bg-white border-r border-gray-100 transition-all duration-300 z-50 flex flex-col flex-shrink-0 overflow-hidden ${collapsed ? 'w-[72px]' : 'w-[230px]'}`}
     >
       {/* Brand */}
-      <div className={`flex items-center gap-3 px-4 py-5 border-b border-gray-100 ${collapsed ? 'justify-center' : 'justify-between'}`}>
-        {!collapsed && (
-          <div className="flex items-center gap-0">
-            <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain border-none outline-none" />
-            <img src="/dash.png" alt="-" className="w-3 h-3 object-contain border-none outline-none -ml-0.5 mr-0.5" />
-            <span className="text-xl font-semibold text-gray-900 tracking-tight">SalesCoach</span>
+      <div className={`flex items-center px-5 py-5 border-b border-gray-100 h-[72px] transition-all duration-300 ${collapsed ? 'justify-center' : 'justify-start gap-3'}`}>
+        <div className="flex items-center gap-0">
+          <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain border-none outline-none flex-shrink-0" />
+          <div className={`flex flex-col gap-0.5 ml-0 overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'w-[130px] opacity-100'}`}>
+            <div className="flex items-center gap-0 whitespace-nowrap">
+              <img src="/dash.png" alt="-" className="w-3 h-3 object-contain border-none outline-none -ml-0.5 mr-0.5" />
+              <span className="text-xl font-semibold text-gray-900 tracking-tight">SalesCoach</span>
+            </div>
           </div>
-        )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            {collapsed
-              ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            }
-          </svg>
-        </button>
+        </div>
       </div>
 
       {/* Navigation */}
@@ -49,16 +44,15 @@ export default function RepSidebar() {
               key={item.href}
               href={item.href}
               title={collapsed ? item.name : undefined}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm font-medium ${isActive
-                ? 'bg-[#EBF8FF] text-[#2C5282]'
-                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+              className={`flex items-center gap-4 px-4 py-3 transition-all font-['Plus_Jakarta_Sans'] text-[15px] font-medium ${isActive
+                ? 'bg-[#EEF2FF] text-[#4338CA] border-r-[4px] border-[#4338CA] rounded-xl'
+                : 'text-[#475569] hover:bg-gray-50 hover:text-gray-900 border-r-[4px] border-transparent rounded-xl'
                 }`}
             >
-              {collapsed ? (
-                <span className="text-xs font-bold">{item.name.charAt(0)}</span>
-              ) : (
-                <span>{item.name}</span>
-              )}
+              <item.icon className="w-5 h-5 flex-shrink-0" strokeWidth={2} />
+              <span className={`whitespace-nowrap transition-all duration-300 ${collapsed ? 'w-0 opacity-0 overflow-hidden' : 'opacity-100'}`}>
+                {item.name}
+              </span>
             </Link>
           )
         })}

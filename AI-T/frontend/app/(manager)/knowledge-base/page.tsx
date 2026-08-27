@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { Plus, FileText, Database, Folder, Upload, Trash2, AlertTriangle, Loader2, ChevronDown } from 'lucide-react'
 import CreateKnowledgeBaseModal from '@/components/manager/CreateKnowledgeBaseModal'
 import UploadDocumentsModal from '@/components/manager/UploadDocumentsModal'
 import HubSpotCRMPanel from '@/components/manager/HubSpotCRMPanel'
@@ -21,13 +22,13 @@ interface KnowledgeBase {
 
 function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { label: string; cls: string; dot: string }> = {
-    active:     { label: 'Active',     cls: 'bg-emerald-50 text-emerald-700 border-emerald-200',    dot: 'bg-emerald-500' },
-    processing: { label: 'Processing', cls: 'bg-amber-50 text-amber-700 border-amber-200',          dot: 'bg-amber-500 animate-pulse' },
-    error:      { label: 'Error',      cls: 'bg-red-50 text-red-700 border-red-200',               dot: 'bg-red-500' },
+    active:     { label: 'Active',     cls: 'text-emerald-600 border-emerald-100',    dot: 'bg-emerald-500' },
+    processing: { label: 'Processing', cls: 'text-amber-600 border-amber-100',          dot: 'bg-amber-500 animate-pulse' },
+    error:      { label: 'Error',      cls: 'text-red-600 border-red-100',               dot: 'bg-red-500' },
   }
   const s = cfg[status] || cfg.active
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-[700] border ${s.cls}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${s.cls}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {s.label}
     </span>
@@ -80,23 +81,21 @@ export default function KnowledgeBasePage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen font-['Plus_Jakarta_Sans'] text-sm">
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-[900] text-[#1E293B] tracking-tight">Knowledge Base</h1>
-          <p className="text-sm text-[#64748B] font-[500] mt-1">
+          <h1 className="text-2xl font-bold text-[#1E293B] tracking-tight">Knowledge Base</h1>
+          <p className="text-sm text-[#64748B] font-medium mt-1">
             Create and manage document repositories that ground your AI personas with real account knowledge.
           </p>
         </div>
         <div className="relative">
           <button
             onClick={() => setIsCreateMenuOpen(!isCreateMenuOpen)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#1E1B4B] text-white text-xs font-[700] rounded-xl hover:bg-[#2d2a6a] transition-all shadow-md hover:shadow-lg active:scale-95"
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#1E1B4B] text-white text-sm font-medium rounded-xl hover:bg-[#2d2a6a] transition-all shadow-md hover:shadow-lg active:scale-95"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
+            <Plus className="w-4 h-4" />
             Create Knowledge Base
           </button>
           
@@ -104,15 +103,15 @@ export default function KnowledgeBasePage() {
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-10 animate-fade-in">
               <button 
                 onClick={() => { setIsCreateOpen(true); setIsCreateMenuOpen(false) }}
-                className="w-full text-left px-4 py-3 text-sm font-[600] text-[#1E293B] hover:bg-gray-50 transition-colors border-b border-gray-50 flex items-center gap-2"
+                className="w-full text-left px-4 py-3 text-sm font-semibold text-[#1E293B] hover:bg-gray-50 transition-colors border-b border-gray-50 flex items-center gap-2"
               >
-                📄 Upload Documents
+                <FileText className="w-4 h-4 text-gray-500" /> Upload Documents
               </button>
               <button 
                 onClick={() => { setIsCrmPanelOpen(true); setIsCreateMenuOpen(false) }}
-                className="w-full text-left px-4 py-3 text-sm font-[600] text-[#1E293B] hover:bg-[#FFF7ED] text-[#EA580C] transition-colors flex items-center gap-2"
+                className="w-full text-left px-4 py-3 text-sm font-semibold text-[#1E293B] hover:bg-[#FFF7ED] hover:text-[#EA580C] transition-colors flex items-center gap-2"
               >
-                🟠 Fetch from CRM
+                <Database className="w-4 h-4 text-orange-500" /> Fetch from CRM
               </button>
             </div>
           )}
@@ -121,7 +120,7 @@ export default function KnowledgeBasePage() {
 
       {/* Knowledge Bases */}
       <div className="mb-4">
-        <p className="text-[10px] font-[800] text-[#94A3B8] uppercase tracking-widest mb-3">
+        <p className="text-xs font-bold text-[#94A3B8] uppercase tracking-widest mb-3">
           Knowledge Bases <span className="ml-2 text-[#CBD5E1]">({kbs.length + 1})</span>
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
@@ -129,33 +128,33 @@ export default function KnowledgeBasePage() {
             {/* KB Header */}
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#EEF2FF] to-[#E0E7FF] flex items-center justify-center text-lg flex-shrink-0">
-                  🚗
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#EEF2FF] to-[#E0E7FF] flex items-center justify-center text-indigo-500 flex-shrink-0">
+                  <Database className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-[800] text-[#1E293B] text-sm truncate" title="Phoenix Automotive">Phoenix Automotive</h3>
-                  <p className="text-[10px] text-[#94A3B8] font-[600] font-mono">phoenix_automotive</p>
+                  <h3 className="font-bold text-[#1E293B] text-sm truncate" title="Phoenix Automotive">Phoenix Automotive</h3>
+                  <p className="text-[11px] text-[#94A3B8] font-semibold font-mono">phoenix_automotive</p>
                 </div>
               </div>
               <StatusBadge status="active" />
             </div>
 
             {/* Description */}
-            <p className="text-xs text-[#64748B] font-[500] mb-3 line-clamp-2 min-h-[32px]">Static knowledge base</p>
+            <p className="text-sm text-[#64748B] font-medium mb-3 line-clamp-2 min-h-[32px]">Static knowledge base</p>
 
             {/* Stats */}
             <div className="flex gap-4 mb-4 py-3 border-y border-gray-50 mt-auto">
               <div className="text-center">
-                <div className="text-lg font-[900] text-[#1E293B]">10+</div>
-                <div className="text-[10px] text-[#94A3B8] font-[700] uppercase tracking-wide">Docs</div>
+                <div className="text-lg font-bold text-[#1E293B]">10+</div>
+                <div className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wide">Docs</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-[900] text-[#1E293B]">124</div>
-                <div className="text-[10px] text-[#94A3B8] font-[700] uppercase tracking-wide">Chunks</div>
+                <div className="text-lg font-bold text-[#1E293B]">124</div>
+                <div className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wide">Chunks</div>
               </div>
               <div className="text-center ml-auto">
-                <div className="text-xs font-[700] text-[#64748B]">System</div>
-                <div className="text-[10px] text-[#94A3B8] font-[600] uppercase tracking-wide">Created</div>
+                <div className="text-sm font-semibold text-[#64748B]">System</div>
+                <div className="text-[10px] text-[#94A3B8] font-semibold uppercase tracking-wide">Created</div>
               </div>
             </div>
 
@@ -163,11 +162,8 @@ export default function KnowledgeBasePage() {
             <div className="flex items-center gap-2">
               <button
                 disabled
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#F1F5F9] text-[#94A3B8] text-[11px] font-[700] rounded-lg cursor-not-allowed"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#F1F5F9] text-[#94A3B8] text-xs font-semibold rounded-lg cursor-not-allowed"
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
                 System Defined
               </button>
             </div>
@@ -191,35 +187,35 @@ export default function KnowledgeBasePage() {
                 {/* KB Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#EEF2FF] to-[#E0E7FF] flex items-center justify-center text-lg flex-shrink-0">
-                      📄
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#EEF2FF] to-[#E0E7FF] flex items-center justify-center text-indigo-500 flex-shrink-0">
+                      <Folder className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-[800] text-[#1E293B] text-sm truncate" title={kb.name}>{kb.name}</h3>
-                      <p className="text-[10px] text-[#94A3B8] font-[600] font-mono">{kb.slug}</p>
+                      <h3 className="font-bold text-[#1E293B] text-sm truncate" title={kb.name}>{kb.name}</h3>
+                      <p className="text-[11px] text-[#94A3B8] font-semibold font-mono">{kb.slug}</p>
                     </div>
                   </div>
                   <StatusBadge status={kb.status} />
                 </div>
 
                 {/* Description */}
-                <p className="text-xs text-[#64748B] font-[500] mb-3 line-clamp-2 min-h-[32px]">
+                <p className="text-sm text-[#64748B] font-medium mb-3 line-clamp-2 min-h-[32px]">
                   {kb.description || ''}
                 </p>
 
                 {/* Stats */}
                 <div className="flex gap-4 mb-4 py-3 border-y border-gray-50 mt-auto">
                   <div className="text-center">
-                    <div className="text-lg font-[900] text-[#1E293B]">{kb.document_count}</div>
-                    <div className="text-[10px] text-[#94A3B8] font-[700] uppercase tracking-wide">Docs</div>
+                    <div className="text-lg font-bold text-[#1E293B]">{kb.document_count}</div>
+                    <div className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wide">Docs</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-[900] text-[#1E293B]">{kb.chunk_count}</div>
-                    <div className="text-[10px] text-[#94A3B8] font-[700] uppercase tracking-wide">Chunks</div>
+                    <div className="text-lg font-bold text-[#1E293B]">{kb.chunk_count}</div>
+                    <div className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wide">Chunks</div>
                   </div>
                   <div className="text-center ml-auto">
-                    <div className="text-xs font-[700] text-[#64748B]">{formatDate(kb.created_at)}</div>
-                    <div className="text-[10px] text-[#94A3B8] font-[600] uppercase tracking-wide">Created</div>
+                    <div className="text-sm font-semibold text-[#64748B]">{formatDate(kb.created_at)}</div>
+                    <div className="text-[10px] text-[#94A3B8] font-semibold uppercase tracking-wide">Created</div>
                   </div>
                 </div>
 
@@ -227,11 +223,9 @@ export default function KnowledgeBasePage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setUploadTarget(kb)}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#F1F5F9] text-[#1E293B] text-[11px] font-[700] rounded-lg hover:bg-[#E2E8F0] transition-all"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#F1F5F9] text-[#1E293B] text-xs font-semibold rounded-lg hover:bg-[#E2E8F0] transition-all"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
+                    <Upload className="w-4 h-4 text-gray-500" />
                     Upload More
                   </button>
                   <button
@@ -241,14 +235,9 @@ export default function KnowledgeBasePage() {
                     title="Delete knowledge base"
                   >
                     {deleting === kb.slug ? (
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                      </svg>
+                      <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
+                      <Trash2 className="w-5 h-5" />
                     )}
                   </button>
                 </div>
@@ -285,24 +274,22 @@ export default function KnowledgeBasePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full">
             <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mb-4 mx-auto">
-              <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
+              <AlertTriangle className="w-6 h-6 text-red-500" />
             </div>
-            <h3 className="text-center font-[800] text-[#1E293B] text-base mb-1">Delete Knowledge Base?</h3>
-            <p className="text-center text-sm text-[#64748B] font-[500] mb-5">
+            <h3 className="text-center font-bold text-[#1E293B] text-base mb-1">Delete Knowledge Base?</h3>
+            <p className="text-center text-sm text-[#64748B] font-medium mb-5">
               This will permanently delete <strong>"{confirmDelete.name}"</strong> and all {confirmDelete.chunk_count} embedded chunks. This cannot be undone.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmDelete(null)}
-                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-[700] text-[#64748B] hover:bg-gray-50 transition-all"
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-[#64748B] hover:bg-gray-50 transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDelete(confirmDelete)}
-                className="flex-1 py-2.5 bg-red-500 rounded-xl text-sm font-[700] text-white hover:bg-red-600 transition-all"
+                className="flex-1 py-2.5 bg-red-500 rounded-xl text-sm font-semibold text-white hover:bg-red-600 transition-all"
               >
                 Delete
               </button>

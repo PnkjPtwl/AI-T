@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Plus, Share, Search, FileText } from 'lucide-react'
 import PersonaDetailsSidebar from '@/components/manager/PersonaDetailsSidebar'
 import AssignTrainingWizard from '@/components/manager/AssignTrainingWizard'
 import SharePersonaModal from '@/components/manager/SharePersonaModal'
@@ -66,6 +67,14 @@ export default function ManagerScenariosPage() {
     if (difficultyFilter !== 'All') {
       result = result.filter(s => (s.difficulty || '').toLowerCase() === difficultyFilter.toLowerCase())
     }
+    
+    // Sort by latest created by default
+    result.sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
+      return dateB - dateA
+    })
+    
     return result
   }, [scenarios, searchTerm, difficultyFilter])
 
@@ -93,12 +102,12 @@ export default function ManagerScenariosPage() {
   }
 
   return (
-    <div className="space-y-6 pb-12 font-sans max-w-[1360px] mx-auto">
+    <div className="space-y-6 pb-12 font-['Plus_Jakarta_Sans'] max-w-[1360px] mx-auto text-sm">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-[800] text-[#1E293B] tracking-tight">Persona Library</h1>
-          <p className="text-xs text-[#64748B] font-[500] mt-0.5">
+          <h1 className="text-2xl font-bold text-[#1E293B] tracking-tight">Persona Library</h1>
+          <p className="text-sm text-[#64748B] mt-0.5">
             Browse, manage, and assign AI training personas to your sales representatives.
           </p>
         </div>
@@ -106,35 +115,37 @@ export default function ManagerScenariosPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/scenarios/new"
-            className="px-5 py-2.5 bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] rounded-xl shadow-md transition-colors flex items-center gap-2"
+            className="px-5 py-2.5 bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-sm font-medium rounded-xl shadow-md transition-colors flex items-center gap-2 group"
           >
-            <span>+</span> Create New Persona
+            <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            <span>Create New Persona</span>
           </Link>
         </div>
       </div>
 
       {/* Filter Bar */}
       <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 flex-1">
+        <div className="flex items-center gap-3 flex-1 relative">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3" />
           <input
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Search by persona, role, or company..."
-            className="w-full max-w-sm h-10 bg-gray-50 border border-gray-200 rounded-xl px-3.5 text-xs text-[#1E293B] focus:outline-none focus:ring-2 focus:ring-[#1E1B4B]"
+            className="w-full max-w-sm h-10 bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 text-sm text-[#1E293B] focus:outline-none focus:ring-2 focus:ring-[#1E1B4B]"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs font-[700] text-[#64748B]">Difficulty:</span>
+          <span className="text-sm font-medium text-[#64748B]">Difficulty:</span>
           {(['All', 'Beginner', 'Intermediate', 'Advanced'] as const).map(diff => (
             <button
               key={diff}
               onClick={() => setDifficultyFilter(diff)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-[700] transition-colors ${
+              className={`px-3 py-1.5 rounded-xl text-sm transition-colors ${
                 difficultyFilter === diff
-                  ? 'bg-[#1E1B4B] text-white shadow-sm'
-                  : 'bg-gray-50 text-[#64748B] border border-gray-200 hover:bg-gray-100'
+                  ? 'bg-[#1E1B4B] text-white shadow-sm font-medium'
+                  : 'bg-gray-50 text-[#64748B] border border-gray-200 hover:bg-gray-100 font-normal'
               }`}
             >
               {diff}
@@ -145,26 +156,26 @@ export default function ManagerScenariosPage() {
 
       {/* Persona Data Table (Figma media__1785585779255.png) */}
       <div className="bg-white border border-gray-200/80 rounded-2xl overflow-hidden shadow-sm">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-gray-50/80 border-b border-gray-200 text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold text-[#64748B] uppercase tracking-wider">
             <tr>
-              <th className="p-4">PERSONA</th>
-              <th className="p-4">ROLE & COMPANY</th>
-              <th className="p-4">DIFFICULTY</th>
-              <th className="p-4">SCORECARD</th>
-              <th className="p-4">USAGE</th>
-              <th className="p-4">LAST UPDATED</th>
-              <th className="p-4 text-right">ACTIONS</th>
+              <th className="p-4 font-semibold">PERSONA</th>
+              <th className="p-4 font-semibold">ROLE & COMPANY</th>
+              <th className="p-4 font-semibold">DIFFICULTY</th>
+              <th className="p-4 font-semibold">SCORECARD</th>
+              <th className="p-4 font-semibold">USAGE</th>
+              <th className="p-4 font-semibold">LAST UPDATED</th>
+              <th className="p-4 font-semibold text-right">ACTIONS</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 font-[500] text-[#334155]">
+          <tbody className="divide-y divide-gray-100 text-[#334155]">
             {filteredScenarios.length === 0 ? (
               <tr>
                 <td colSpan={7} className="p-12 text-center text-[#64748B]">
                   <div className="flex flex-col items-center gap-3">
-                    <span className="text-4xl">🎭</span>
-                    <p className="font-[700] text-sm text-[#1E293B]">No personas found</p>
-                    <p className="text-xs">Create your first training persona to get started.</p>
+                    <FileText className="w-8 h-8 text-gray-400" />
+                    <p className="font-medium text-sm text-[#1E293B]">No personas found</p>
+                    <p className="text-sm">Create your first training persona to get started.</p>
                   </div>
                 </td>
               </tr>
@@ -180,34 +191,30 @@ export default function ManagerScenariosPage() {
                 onClick={() => handleOpenDetails(sc)}
                 className="hover:bg-gray-50/80 transition-colors cursor-pointer"
               >
-                <td className="p-4 font-[800] text-[#1E293B] flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[#1E1B4B] text-white flex items-center justify-center font-[800] text-xs">
-                    {sc.persona_name?.substring(0, 2).toUpperCase() || 'SC'}
-                  </div>
-                  <span>{sc.persona_name || sc.contact_title || 'Unnamed'}</span>
+                <td className="p-4 flex items-center gap-2">
+                  <span className="font-semibold text-[15px] text-[#1E293B]">{sc.persona_name || sc.contact_title || 'Unnamed'}</span>
                   {sc.is_shared && (
-                    <span className="ml-2 px-2 py-0.5 bg-purple-50 text-purple-600 text-[9px] font-[800] uppercase tracking-wider rounded-md border border-purple-100">
-                      Shared
+                    <span className="ml-2 text-purple-600 text-[10px] font-medium uppercase tracking-wider">
+                      (Shared)
                     </span>
                   )}
                 </td>
                 <td className="p-4">
-                  <p className="font-[700] text-[#1E293B]">{sc.contact_title || '—'}</p>
-                  <p className="text-[11px] text-purple-600 font-[600]">{sc.contact_company || '—'}</p>
+                  <p className="font-medium text-[#1E293B]">{sc.contact_title || '—'}</p>
+                  <p className="text-xs text-[#64748B]">{sc.contact_company || '—'}</p>
                 </td>
                 <td className="p-4">
-                  <span className="px-2.5 py-0.5 bg-red-50 text-red-600 font-[700] text-[10px] rounded-md">
+                  <span className="text-[#64748B]">
                     {sc.difficulty || 'N/A'}
                   </span>
                 </td>
                 <td className="p-4">
-                  <span className="px-2.5 py-1 bg-purple-50 text-purple-700 font-[700] text-[10px] rounded-lg border border-purple-100">
-                    ⚡ {metricsCount} Metric{metricsCount !== 1 ? 's' : ''}
+                  <span className="text-[#64748B]">
+                    {metricsCount} Metric{metricsCount !== 1 ? 's' : ''}
                   </span>
                 </td>
                 <td className="p-4">
-                  <span className="flex items-center gap-1.5 font-[700] text-[#1E293B]">
-                    <span className={`w-2 h-2 rounded-full ${assignedCount > 0 ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                  <span className="text-[#64748B]">
                     {assignedCount > 0 ? `Assigned ${assignedCount}x` : 'Not assigned'}
                   </span>
                 </td>
@@ -217,17 +224,17 @@ export default function ManagerScenariosPage() {
                     {!sc.is_shared && (
                       <button
                         onClick={() => handleShareClick(sc)}
-                        className="px-3 py-1.5 bg-white hover:bg-purple-50 text-[#64748B] hover:text-purple-700 font-[700] text-xs rounded-xl border border-gray-200 hover:border-purple-300 shadow-xs transition-all"
+                        className="p-2 text-[#64748B] hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-all"
                         title="Share with other managers"
                       >
-                        📤 Share
+                        <Share className="w-4 h-4" />
                       </button>
                     )}
                     <button
                       onClick={() => handleAssignClick(sc.id)}
-                      className="px-3.5 py-1.5 bg-[#1E1B4B] hover:bg-[#2E2A72] text-white font-[700] text-xs rounded-xl shadow-xs transition-colors"
+                      className="px-3.5 py-1.5 bg-[#1E1B4B] hover:bg-[#2E2A72] text-white font-medium text-xs rounded-xl shadow-xs transition-colors"
                     >
-                      Assign Persona
+                      Assign
                     </button>
                   </div>
                 </td>

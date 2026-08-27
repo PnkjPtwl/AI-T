@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { Plus, Search, ClipboardList } from 'lucide-react'
 import AssignTrainingWizard from '@/components/manager/AssignTrainingWizard'
 import AssignmentDetailsSidebar from '@/components/manager/AssignmentDetailsSidebar'
 import ReassignModal from '@/components/manager/ReassignModal'
@@ -96,12 +97,12 @@ export default function ManagerTrainingPage() {
   }
 
   return (
-    <div className="space-y-6 pb-12 font-sans max-w-[1360px] mx-auto">
+    <div className="space-y-6 pb-12 font-['Plus_Jakarta_Sans'] max-w-[1360px] mx-auto text-sm">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-[800] text-[#1E293B] tracking-tight">Training Management</h1>
-          <p className="text-xs text-[#64748B] font-[500] mt-0.5">
+          <h1 className="text-2xl font-bold text-[#1E293B] tracking-tight">Training Management</h1>
+          <p className="text-sm text-[#64748B] mt-0.5">
             Monitor, assign, and review training assignments across your entire sales organization.
           </p>
         </div>
@@ -109,32 +110,34 @@ export default function ManagerTrainingPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsWizardOpen(true)}
-            className="px-5 py-2.5 bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-xs font-[700] rounded-xl shadow-md transition-colors flex items-center gap-2"
+            className="px-5 py-2.5 bg-[#1E1B4B] hover:bg-[#2E2A72] text-white text-sm font-medium rounded-xl shadow-md transition-colors flex items-center gap-2 group"
           >
-            <span>+</span> Assign Training
+            <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            <span>Assign Training</span>
           </button>
         </div>
       </div>
 
       {/* Filter Bar */}
       <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 flex-1">
+        <div className="flex items-center gap-3 flex-1 relative">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3" />
           <input
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Search by sales rep, scenario, or persona..."
-            className="w-full max-w-sm h-10 bg-gray-50 border border-gray-200 rounded-xl px-3.5 text-xs text-[#1E293B] focus:outline-none focus:ring-2 focus:ring-[#1E1B4B]"
+            className="w-full max-w-sm h-10 bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 text-sm text-[#1E293B] focus:outline-none focus:ring-2 focus:ring-[#1E1B4B]"
           />
         </div>
 
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-[700] text-[#64748B]">Sort:</span>
+            <span className="text-sm font-medium text-[#64748B]">Sort:</span>
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as any)}
-              className="h-9 bg-gray-50 border border-gray-200 rounded-xl px-3 text-xs font-[700] text-[#1E293B] focus:outline-none"
+              className="h-9 bg-gray-50 border border-gray-200 rounded-xl px-3 text-sm font-medium text-[#1E293B] focus:outline-none"
             >
               <option value="default">Default (Latest)</option>
               <option value="score-desc">Score: High to Low</option>
@@ -143,11 +146,11 @@ export default function ManagerTrainingPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-[700] text-[#64748B]">Mode:</span>
+            <span className="text-sm font-medium text-[#64748B]">Mode:</span>
             <select
               value={modeFilter}
               onChange={e => setModeFilter(e.target.value)}
-              className="h-9 bg-gray-50 border border-gray-200 rounded-xl px-3 text-xs font-[700] text-[#1E293B] focus:outline-none"
+              className="h-9 bg-gray-50 border border-gray-200 rounded-xl px-3 text-sm font-medium text-[#1E293B] focus:outline-none"
             >
               <option value="All">All Modes</option>
               <option value="Exam Mode">Exam Mode</option>
@@ -157,15 +160,15 @@ export default function ManagerTrainingPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-[700] text-[#64748B]">Status:</span>
+            <span className="text-sm font-medium text-[#64748B]">Status:</span>
             {(['All', 'In Progress', 'Completed', 'Overdue', 'Pending'] as const).map(st => (
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-[700] transition-colors ${
+                className={`px-3 py-1.5 rounded-xl text-sm transition-colors ${
                   statusFilter === st
-                    ? 'bg-[#1E1B4B] text-white shadow-sm'
-                    : 'bg-gray-50 text-[#64748B] border border-gray-200 hover:bg-gray-100'
+                    ? 'bg-[#1E1B4B] text-white shadow-sm font-medium'
+                    : 'bg-gray-50 text-[#64748B] border border-gray-200 hover:bg-gray-100 font-normal'
                 }`}
               >
                 {st}
@@ -177,45 +180,45 @@ export default function ManagerTrainingPage() {
 
       {/* Assignments Data Table (Figma media__1785585971677.png) */}
       <div className="bg-white border border-gray-200/80 rounded-2xl overflow-hidden shadow-sm">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-gray-50/80 border-b border-gray-200 text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold text-[#64748B] uppercase tracking-wider">
             <tr>
-              <th className="p-4">SALES REP</th>
-              <th className="p-4">SCENARIO & PERSONA</th>
-              <th className="p-4">MODE</th>
-              <th className="p-4">PRIORITY</th>
-              <th className="p-4">DUE DATE</th>
-              <th className="p-4">SCORE</th>
-              <th className="p-4">STATUS</th>
-              <th className="p-4 text-right">ACTION</th>
+              <th className="p-4 font-semibold">SALES REP</th>
+              <th className="p-4 font-semibold">SCENARIO & PERSONA</th>
+              <th className="p-4 font-semibold">MODE</th>
+              <th className="p-4 font-semibold">PRIORITY</th>
+              <th className="p-4 font-semibold">DUE DATE</th>
+              <th className="p-4 font-semibold">SCORE</th>
+              <th className="p-4 font-semibold">STATUS</th>
+              <th className="p-4 font-semibold text-right">ACTION</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 font-[500] text-[#334155]">
+          <tbody className="divide-y divide-gray-100 text-[#334155]">
             {filteredAssignments.length === 0 ? (
               <tr>
                 <td colSpan={8} className="p-12 text-center text-[#64748B]">
                   <div className="flex flex-col items-center gap-3">
-                    <span className="text-4xl">📋</span>
-                    <p className="font-[700] text-sm text-[#1E293B]">No assignments found</p>
-                    <p className="text-xs">Create a new assignment using the &quot;Assign Training&quot; button above.</p>
+                    <ClipboardList className="w-8 h-8 text-gray-400" />
+                    <p className="font-medium text-sm text-[#1E293B]">No assignments found</p>
+                    <p className="text-sm">Create a new assignment using the &quot;Assign Training&quot; button above.</p>
                   </div>
                 </td>
               </tr>
             ) : filteredAssignments.map((assign: any) => {
               let badge = (
-                <span className="px-2.5 py-1 bg-amber-50 text-amber-700 text-[10px] font-[800] rounded-full border border-amber-100 uppercase">
+                <span className="text-amber-600 font-medium">
                   ● {assign.status || 'In Progress'}
                 </span>
               )
               if (assign.status === 'Completed') {
                 badge = (
-                  <span className="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-[800] rounded-full border border-green-100 uppercase">
+                  <span className="text-green-600 font-medium">
                     ● Completed
                   </span>
                 )
               } else if (assign.status === 'Overdue') {
                 badge = (
-                  <span className="px-2.5 py-1 bg-red-50 text-red-700 text-[10px] font-[800] rounded-full border border-red-100 uppercase">
+                  <span className="text-red-600 font-medium">
                     ● Overdue
                   </span>
                 )
@@ -227,31 +230,34 @@ export default function ManagerTrainingPage() {
                   onClick={() => handleRowClick(assign)}
                   className="hover:bg-gray-50/80 transition-colors cursor-pointer"
                 >
-                  <td className="p-4 font-[800] text-[#1E293B] flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#1E1B4B] text-white flex items-center justify-center font-[800] text-xs">
-                      {assign.rep_name?.substring(0, 2).toUpperCase() || 'SR'}
-                    </div>
-                    <span>{assign.rep_name || 'Sales Rep'}</span>
+                  <td className="p-4">
+                    <span className="font-semibold text-[15px] text-[#1E293B]">{assign.rep_name || 'Sales Rep'}</span>
                   </td>
 
                   <td className="p-4">
-                    <p className="font-[700] text-[#1E293B]">{assign.scenario_name || assign.scenario?.persona_name || 'Technical Discovery'}</p>
-                    <p className="text-[11px] text-[#64748B]">{assign.persona_name || assign.scenario?.persona_name || 'Prospect'} · {assign.company || assign.scenario?.contact_company || 'Company'}</p>
+                    <p className="font-medium text-[#1E293B]">{assign.scenario_name || assign.scenario?.persona_name || 'Technical Discovery'}</p>
+                    <p className="text-xs text-[#64748B]">{assign.persona_name || assign.scenario?.persona_name || 'Prospect'} · {assign.company || assign.scenario?.contact_company || 'Company'}</p>
                   </td>
 
-                  <td className="p-4 font-[700]">
-                    <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-md font-[700] text-[10px]">
+                  <td className="p-4">
+                    <span className="text-[#64748B]">
                       {assign.training_mode || assign.trainingMode || 'Coach Mode'}
                     </span>
                   </td>
 
-                  <td className="p-4 font-[700] text-red-600">{assign.priority || 'High'}</td>
+                  <td className={`p-4 font-medium ${
+                    (assign.priority || 'High') === 'High' ? 'text-red-600' :
+                    (assign.priority || 'High') === 'Medium' ? 'text-orange-500' :
+                    'text-emerald-600'
+                  }`}>
+                    {assign.priority || 'High'}
+                  </td>
 
                   <td className="p-4 text-[#64748B]">{assign.deadline ? new Date(assign.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No Due Date'}</td>
 
                   <td className="p-4">
                     {assign.score ? (
-                      <span className="font-[800] text-[#1E1B4B]">{Math.round(assign.score)}%</span>
+                      <span className="font-semibold text-[#1E1B4B]">{Math.round(assign.score)}%</span>
                     ) : (
                       <span className="text-gray-400">—</span>
                     )}
@@ -266,13 +272,13 @@ export default function ManagerTrainingPage() {
                           setSelectedReassignAssignment(assign)
                           setIsReassignOpen(true)
                         }}
-                        className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-[700] text-xs rounded-xl transition-colors"
+                        className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium text-xs rounded-xl transition-colors"
                       >
                         Reassign
                       </button>
                       <button
                         onClick={() => handleRowClick(assign)}
-                        className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#334155] font-[700] text-xs rounded-xl transition-colors"
+                        className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#334155] font-medium text-xs rounded-xl transition-colors"
                       >
                         Details →
                       </button>
