@@ -28,16 +28,14 @@ export default function AdminSidebar() {
               <img src="/dash.png" alt="-" className="w-3 h-3 object-contain border-none outline-none -ml-0.5 mr-0.5" />
               <span className="text-xl font-semibold text-gray-900 tracking-tight">SalesCoach</span>
             </div>
-            <span className="block text-[9px] font-[700] text-purple-600 uppercase tracking-widest leading-none ml-[34px] whitespace-nowrap">System Admin</span>
+
           </div>
         </div>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
-        <p className="px-3 text-[10px] font-[800] text-[#64748B] uppercase tracking-wider mb-2">
-          ADMINISTRATION
-        </p>
+
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (

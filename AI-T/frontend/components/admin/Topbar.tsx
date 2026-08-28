@@ -16,12 +16,6 @@ export default function AdminTopbar() {
     <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-sm border-b border-gray-100">
       <div className="flex items-center justify-between h-14 px-8">
         <div className="flex items-center gap-3">
-          <h1 className="text-sm font-[800] text-[#1E293B] tracking-tight">
-            System Administration
-          </h1>
-          <span className="px-2 py-0.5 bg-indigo-100 text-[#1E1B4B] text-[10px] font-[800] uppercase tracking-wider rounded-full">
-            Admin
-          </span>
         </div>
 
         <button

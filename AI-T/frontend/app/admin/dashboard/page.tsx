@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { Users, UserCircle, AlertCircle, ClipboardList } from 'lucide-react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
@@ -189,11 +190,11 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-8 pb-12 font-['Inter'] max-w-[1360px] mx-auto text-[#0b1c30]">
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-6 right-6 z-50 px-6 py-3 rounded-2xl shadow-2xl text-sm font-[700] transition-all animate-in slide-in-from-right ${
-          toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        <div className={`fixed top-6 right-6 z-50 px-6 py-3 rounded-md shadow-lg text-[13px] font-semibold transition-all animate-in slide-in-from-right ${
+          toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-[#ba1a1a] text-white'
         }`}>
           {toast.message}
         </div>
@@ -202,54 +203,54 @@ export default function AdminDashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-[800] text-[#1E293B] tracking-tight">User Management</h1>
-          <p className="text-sm text-[#64748B] font-[500] mt-1">Assign reps to managers and manage team hierarchy</p>
+          <h1 className="text-2xl font-bold font-['Plus_Jakarta_Sans'] text-[#1E293B] tracking-tight">User Management</h1>
+          <p className="text-[14px] text-slate-500 mt-1">Assign reps to managers and manage team hierarchy.</p>
         </div>
       </div>
 
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Total Managers" value={stats.totalManagers} icon="👔" color="blue" />
-          <StatCard label="Total Reps" value={stats.totalReps} icon="🧑‍💼" color="emerald" />
-          <StatCard label="Unassigned Reps" value={stats.unassignedReps} icon="⚠️" color={stats.unassignedReps > 0 ? 'amber' : 'emerald'} />
-          <StatCard label="Unassigned Managers" value={stats.unassignedManagers} icon="📋" color={stats.unassignedManagers > 0 ? 'amber' : 'emerald'} />
+          <StatCard label="Total Managers" value={stats.totalManagers} icon={<Users className="w-6 h-6" />} color="blue" />
+          <StatCard label="Total Reps" value={stats.totalReps} icon={<UserCircle className="w-6 h-6" />} color="emerald" />
+          <StatCard label="Unassigned Reps" value={stats.unassignedReps} icon={<AlertCircle className="w-6 h-6" />} color={stats.unassignedReps > 0 ? 'amber' : 'emerald'} />
+          <StatCard label="Unassigned Managers" value={stats.unassignedManagers} icon={<ClipboardList className="w-6 h-6" />} color={stats.unassignedManagers > 0 ? 'amber' : 'emerald'} />
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Managers Panel */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-sm font-[800] text-[#1E293B] uppercase tracking-wider">Managers</h2>
-            <span className="px-2 py-0.5 bg-indigo-50 text-[#1E1B4B] text-[10px] font-[800] rounded-full">{managers.length}</span>
+        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between">
+            <h2 className="text-[15px] font-bold font-['Plus_Jakarta_Sans'] text-[#1E293B]">Managers</h2>
+            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[11px] font-bold rounded-md">{managers.length}</span>
           </div>
-          <div className="divide-y divide-gray-50 max-h-[500px] overflow-y-auto">
+          <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
             {managers.length === 0 ? (
-              <div className="px-6 py-12 text-center text-sm text-[#94A3B8] font-[600]">No managers found</div>
+              <div className="px-6 py-12 text-center text-[13px] text-slate-400 font-medium">No managers found</div>
             ) : (
               managers.map(manager => (
                 <div key={manager.id} className="group">
                   <button
                     onClick={() => toggleManagerExpand(manager.id)}
-                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-all text-left"
+                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1E1B4B] to-[#312E81] text-white flex items-center justify-center text-sm font-[800]">
+                      <div className="w-9 h-9 rounded-md bg-[#4b41e1] text-white flex items-center justify-center text-[13px] font-bold">
                         {manager.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-sm font-[700] text-[#1E293B]">{manager.name}</p>
-                        <p className="text-[11px] text-[#94A3B8] font-[500]">{manager.email}</p>
+                        <p className="text-[13px] font-semibold text-[#1E293B]">{manager.name}</p>
+                        <p className="text-[12px] text-slate-500">{manager.email}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`px-2.5 py-1 rounded-lg text-[11px] font-[800] ${
-                        manager.rep_count > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                      <span className={`px-2.5 py-1 rounded-md text-[11px] font-semibold ${
+                        manager.rep_count > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
                       }`}>
                         {manager.rep_count} rep{manager.rep_count !== 1 ? 's' : ''}
                       </span>
-                      <svg className={`w-4 h-4 text-[#94A3B8] transition-transform ${expandedManager === manager.id ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className={`w-4 h-4 text-slate-400 transition-transform ${expandedManager === manager.id ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </div>
@@ -257,22 +258,22 @@ export default function AdminDashboardPage() {
 
                   {/* Expanded: Show assigned reps */}
                   {expandedManager === manager.id && (
-                    <div className="px-6 pb-4 bg-gray-50/30">
+                    <div className="px-6 pb-4 bg-slate-50">
                       {!managerReps[manager.id] ? (
-                        <p className="text-xs text-[#94A3B8] py-3">Loading reps...</p>
+                        <p className="text-[12px] text-slate-500 py-3">Loading reps...</p>
                       ) : managerReps[manager.id].length === 0 ? (
-                        <p className="text-xs text-[#94A3B8] py-3 italic">No reps assigned yet</p>
+                        <p className="text-[12px] text-slate-500 py-3 italic">No reps assigned yet</p>
                       ) : (
                         <div className="space-y-2 pt-2">
                           {managerReps[manager.id].map(rep => (
-                            <div key={rep.id} className="flex items-center justify-between px-3 py-2 bg-white rounded-xl border border-gray-100">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-[800]">
+                            <div key={rep.id} className="flex items-center justify-between px-3 py-2 bg-white rounded-md border border-slate-200">
+                              <div className="flex items-center gap-3">
+                                <div className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center text-[10px] font-bold border border-emerald-200">
                                   {rep.name.charAt(0).toUpperCase()}
                                 </div>
                                 <div>
-                                  <p className="text-xs font-[700] text-[#1E293B]">{rep.name}</p>
-                                  <p className="text-[10px] text-[#94A3B8]">{rep.email}</p>
+                                  <p className="text-[12px] font-semibold text-[#1E293B]">{rep.name}</p>
+                                  <p className="text-[11px] text-slate-500">{rep.email}</p>
                                 </div>
                               </div>
                             </div>
@@ -288,10 +289,10 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Unassigned Reps Panel */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-sm font-[800] text-[#1E293B] uppercase tracking-wider">Unassigned Reps</h2>
-            <span className={`px-2 py-0.5 text-[10px] font-[800] rounded-full ${
+        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between">
+            <h2 className="text-[15px] font-bold font-['Plus_Jakarta_Sans'] text-[#1E293B]">Unassigned Reps</h2>
+            <span className={`px-2 py-0.5 text-[11px] font-bold rounded-md ${
               unassignedReps.length > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
             }`}>
               {unassignedReps.length}
@@ -299,12 +300,12 @@ export default function AdminDashboardPage() {
           </div>
 
           {unassignedReps.length > 0 && (
-            <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/50">
+            <div className="px-6 py-3 border-b border-slate-200 bg-slate-50">
               <div className="flex items-center gap-3">
                 <select
                   value={selectedManager}
                   onChange={(e) => setSelectedManager(e.target.value)}
-                  className="flex-1 text-xs font-[600] bg-white border border-gray-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 transition-all"
+                  className="flex-1 text-[13px] font-medium bg-white border border-slate-200 rounded-md px-3 py-1.5 outline-none focus:ring-2 focus:ring-[#4b41e1] text-slate-700"
                 >
                   <option value="">Select manager to assign to...</option>
                   {managers.map(m => (
@@ -314,7 +315,7 @@ export default function AdminDashboardPage() {
                 <button
                   onClick={handleBulkAssign}
                   disabled={selectedReps.length === 0 || !selectedManager || actionLoading}
-                  className="px-4 py-2 bg-[#1E1B4B] hover:bg-[#2A2467] text-white text-[10px] font-[800] uppercase tracking-wider rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="px-4 py-1.5 bg-[#4b41e1] hover:bg-[#3b33b3] text-white text-[12px] font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   Assign {selectedReps.length > 0 ? `(${selectedReps.length})` : ''}
                 </button>
@@ -322,29 +323,29 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
+          <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto">
             {unassignedReps.length === 0 ? (
               <div className="px-6 py-12 text-center">
                 <span className="text-3xl mb-3 block">✅</span>
-                <p className="text-sm text-emerald-600 font-[700]">All reps are assigned!</p>
+                <p className="text-[13px] text-emerald-600 font-semibold">All reps are assigned!</p>
               </div>
             ) : (
               unassignedReps.map(rep => (
-                <div key={rep.id} className="px-6 py-3 flex items-center justify-between hover:bg-gray-50/50 transition-all">
+                <div key={rep.id} className="px-6 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
                   <label className="flex items-center gap-3 cursor-pointer flex-1">
                     <input
                       type="checkbox"
                       checked={selectedReps.includes(rep.id)}
                       onChange={() => toggleRepSelection(rep.id)}
-                      className="w-4 h-4 rounded-md border-gray-300 text-[#1E1B4B] focus:ring-[#1E1B4B]"
+                      className="w-4 h-4 rounded-[4px] border-slate-300 text-[#4b41e1] focus:ring-[#4b41e1]"
                     />
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-[10px] font-[800]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-md bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center text-[10px] font-bold">
                         {rep.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-xs font-[700] text-[#1E293B]">{rep.name}</p>
-                        <p className="text-[10px] text-[#94A3B8]">{rep.email}</p>
+                        <p className="text-[13px] font-semibold text-[#1E293B]">{rep.name}</p>
+                        <p className="text-[12px] text-slate-500">{rep.email}</p>
                       </div>
                     </div>
                   </label>
@@ -355,7 +356,7 @@ export default function AdminDashboardPage() {
                       if (e.target.value) handleAssignRep(rep.id, e.target.value)
                       e.target.value = ''
                     }}
-                    className="text-[10px] font-[600] bg-transparent border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400 cursor-pointer"
+                    className="text-[11px] font-semibold bg-white text-slate-600 border border-slate-200 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-[#4b41e1] cursor-pointer"
                     defaultValue=""
                   >
                     <option value="" disabled>Quick assign →</option>
@@ -371,38 +372,38 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* All Reps Overview */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-sm font-[800] text-[#1E293B] uppercase tracking-wider">All Representatives</h2>
+      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 bg-white">
+          <h2 className="text-[15px] font-bold font-['Plus_Jakarta_Sans'] text-[#1E293B]">All Representatives</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-[13px]">
             <thead>
-              <tr className="bg-gray-50/50 border-b border-gray-100">
-                <th className="px-6 py-3 text-left text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">Rep</th>
-                <th className="px-6 py-3 text-left text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">Assigned To</th>
-                <th className="px-6 py-3 text-left text-[10px] font-[800] text-[#64748B] uppercase tracking-wider">Status</th>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-6 py-3 text-left text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Rep</th>
+                <th className="px-6 py-3 text-left text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Email</th>
+                <th className="px-6 py-3 text-left text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Assigned To</th>
+                <th className="px-6 py-3 text-left text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-slate-100">
               {allReps.map(rep => (
-                <tr key={rep.id} className="hover:bg-gray-50/30 transition-all">
-                  <td className="px-6 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg ${rep.is_assigned ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'} flex items-center justify-center text-[10px] font-[800]`}>
+                <tr key={rep.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-7 h-7 rounded-md ${rep.is_assigned ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'} flex items-center justify-center text-[10px] font-bold`}>
                         {rep.name.charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-xs font-[700] text-[#1E293B]">{rep.name}</span>
+                      <span className="font-semibold text-[#1E293B]">{rep.name}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-3 text-xs text-[#64748B] font-[500]">{rep.email}</td>
-                  <td className="px-6 py-3 text-xs font-[600] text-[#1E293B]">
-                    {rep.manager_name || <span className="text-amber-600 italic">Unassigned</span>}
+                  <td className="px-6 py-4 text-slate-500">{rep.email}</td>
+                  <td className="px-6 py-4 font-semibold text-[#1E293B]">
+                    {rep.manager_name || <span className="text-amber-600 italic font-normal">Unassigned</span>}
                   </td>
-                  <td className="px-6 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-[700] ${
-                      rep.is_assigned ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                  <td className="px-6 py-4">
+                    <span className={`px-2.5 py-1 rounded-md text-[11px] font-semibold ${
+                      rep.is_assigned ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
                     }`}>
                       {rep.is_assigned ? 'Assigned' : 'Unassigned'}
                     </span>
@@ -417,21 +418,22 @@ export default function AdminDashboardPage() {
   )
 }
 
-function StatCard({ label, value, icon, color }: { label: string; value: number; icon: string; color: string }) {
+function StatCard({ label, value, icon, color }: { label: string; value: number; icon: React.ReactNode; color: string }) {
   const colorMap: Record<string, string> = {
-    blue: 'bg-indigo-50 border-indigo-100 text-[#1E1B4B]',
-    emerald: 'bg-emerald-50 border-emerald-100 text-emerald-700',
-    amber: 'bg-amber-50 border-amber-100 text-amber-700',
-    red: 'bg-red-50 border-red-100 text-red-700',
+    blue: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+    emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+    amber: 'bg-amber-50 border-amber-200 text-amber-700',
+    red: 'bg-red-50 border-[#ffdad6] text-[#ba1a1a]',
   }
 
   return (
-    <div className={`rounded-2xl border p-5 ${colorMap[color] || colorMap.blue}`}>
+    <div className="bg-white border border-slate-200 rounded-lg p-6 flex flex-col justify-between relative overflow-hidden">
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${colorMap[color] ? colorMap[color].split(' ')[0] : 'bg-indigo-50'}`}></div>
       <div className="flex items-center justify-between mb-2">
         <span className="text-2xl">{icon}</span>
-        <span className="text-2xl font-[800]">{value}</span>
+        <span className="text-3xl font-bold font-['Plus_Jakarta_Sans'] text-[#1E293B]">{value}</span>
       </div>
-      <p className="text-[10px] font-[800] uppercase tracking-wider opacity-70">{label}</p>
+      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
     </div>
   )
 }
