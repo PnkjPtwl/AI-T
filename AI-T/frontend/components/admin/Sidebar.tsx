@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
-import { Users } from 'lucide-react'
+import { Users, KeyRound } from 'lucide-react'
 
 const NAV_ITEMS = [
   { name: 'User Management', href: '/admin/dashboard', icon: Users },
+  { name: 'API Keys', href: '/admin/api-keys', icon: KeyRound },
 ]
 
 export default function AdminSidebar() {

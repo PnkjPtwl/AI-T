@@ -1,8 +1,13 @@
 // =============================================================================
 // lib/secrets.ts — Dynamic Secret Loader with TTL Cache
 // =============================================================================
+// Cerebras and ElevenLabs keys are routed through lib/apiKeys.ts
+// which checks Supabase first (admin-managed), then falls back to .env.
+// All other secrets still come from AWS Secrets Manager or process.env.
+// =============================================================================
 
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager'
+import { getApiKey, MANAGED_KEYS } from './apiKeys'
 
 const CACHE_TTL_MS = 5 * 60 * 1000  // 5 minutes
 const SECRET_NAME  = process.env.SECRET_NAME || 'salescoach/demo/backend'
@@ -44,6 +49,10 @@ export async function getSecrets(): Promise<Record<string, string>> {
 }
 
 export async function getSecret(key: string): Promise<string> {
+  // Supabase-managed keys: check Supabase first, then .env
+  if ((MANAGED_KEYS as readonly string[]).includes(key)) {
+    return getApiKey(key)
+  }
   const secrets = await getSecrets()
   return secrets[key] || ''
 }

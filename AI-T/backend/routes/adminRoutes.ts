@@ -10,7 +10,10 @@ import {
   assignRep,
   unassignRep,
   bulkAssign,
-  getManagerReps
+  getManagerReps,
+  getApiKeys,
+  setApiKey,
+  deleteApiKey,
 } from '../controllers/adminController'
 
 const router = Router()
@@ -28,4 +31,10 @@ router.post('/unassign-rep', unassignRep)
 router.post('/bulk-assign', bulkAssign)
 router.get('/manager/:managerId/reps', getManagerReps)
 
+// API Key Management
+router.get('/api-keys', getApiKeys)
+router.post('/api-keys', setApiKey)
+router.delete('/api-keys/:keyName', deleteApiKey)
+
 export default router
+

@@ -1,4 +1,6 @@
 import { supabase } from '../db/supabase'
+import { getSupabase } from '../db/supabase'
+import { MANAGED_KEYS, invalidateApiKeyCache } from '../lib/apiKeys'
 
 /**
  * GET /api/admin/stats
@@ -378,3 +380,129 @@ export const getManagerReps = async (req: any, res: any) => {
     res.status(500).json({ error: err.message })
   }
 }
+
+// =============================================================================
+// API Key Management
+// =============================================================================
+
+/** Mask a key value — show only last 4 chars */
+function maskKey(value: string): string {
+  if (!value || value.length <= 8) return '••••••••'
+  return '••••••••' + value.slice(-4)
+}
+
+/**
+ * GET /api/admin/api-keys
+ * Returns managed key names, masked values, source, and updated_at
+ */
+export const getApiKeys = async (req: any, res: any) => {
+  try {
+    const sb = await getSupabase()
+    const { data: rows } = await sb
+      .from('api_keys')
+      .select('key_name, key_value, updated_at')
+
+    const dbMap: Record<string, { masked: string; updated_at: string }> = {}
+    ;(rows || []).forEach((r: any) => {
+      dbMap[r.key_name] = {
+        masked: maskKey(r.key_value),
+        updated_at: r.updated_at,
+      }
+    })
+
+    const result = MANAGED_KEYS.map(keyName => {
+      const inDb = !!dbMap[keyName]
+      const inEnv = !!process.env[keyName]
+      return {
+        key_name: keyName,
+        source: inDb ? 'supabase' : inEnv ? 'env' : 'none',
+        masked_value: inDb
+          ? dbMap[keyName].masked
+          : inEnv
+          ? maskKey(process.env[keyName]!)
+          : null,
+        updated_at: inDb ? dbMap[keyName].updated_at : null,
+      }
+    })
+
+    res.json(result)
+  } catch (err: any) {
+    console.error('[admin/api-keys] GET Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+}
+
+/**
+ * POST /api/admin/api-keys
+ * Body: { key_name: string, key_value: string }
+ * Upserts the key into Supabase and immediately invalidates the cache.
+ */
+export const setApiKey = async (req: any, res: any) => {
+  const { key_name, key_value } = req.body
+  const adminId = req.user.id
+
+  if (!key_name || !key_value) {
+    return res.status(400).json({ error: 'key_name and key_value are required' })
+  }
+  if (!(MANAGED_KEYS as readonly string[]).includes(key_name)) {
+    return res.status(400).json({ error: `key_name must be one of: ${MANAGED_KEYS.join(', ')}` })
+  }
+  if (key_value.trim().length < 10) {
+    return res.status(400).json({ error: 'key_value is too short to be a valid API key' })
+  }
+
+  try {
+    const sb = await getSupabase()
+    const { error } = await sb
+      .from('api_keys')
+      .upsert({
+        key_name,
+        key_value: key_value.trim(),
+        updated_at: new Date().toISOString(),
+        updated_by: adminId,
+      }, { onConflict: 'key_name' })
+
+    if (error) throw error
+
+    // Immediately invalidate in-memory cache so new key is used right away
+    invalidateApiKeyCache(key_name)
+
+    console.log(`[admin/api-keys] ✅ ${key_name} updated by admin ${adminId}`)
+    res.json({ success: true, message: `${key_name} updated successfully` })
+  } catch (err: any) {
+    console.error('[admin/api-keys] SET Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+}
+
+/**
+ * DELETE /api/admin/api-keys/:keyName
+ * Removes the key from Supabase — backend will fall back to .env
+ */
+export const deleteApiKey = async (req: any, res: any) => {
+  const { keyName } = req.params
+
+  if (!(MANAGED_KEYS as readonly string[]).includes(keyName)) {
+    return res.status(400).json({ error: `keyName must be one of: ${MANAGED_KEYS.join(', ')}` })
+  }
+
+  try {
+    const sb = await getSupabase()
+    const { error } = await sb
+      .from('api_keys')
+      .delete()
+      .eq('key_name', keyName)
+
+    if (error) throw error
+
+    // Invalidate cache so it falls back to .env immediately
+    invalidateApiKeyCache(keyName)
+
+    console.log(`[admin/api-keys] 🗑️  ${keyName} deleted — falling back to .env`)
+    res.json({ success: true, message: `${keyName} removed. Falling back to .env value.` })
+  } catch (err: any) {
+    console.error('[admin/api-keys] DELETE Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+}
+
