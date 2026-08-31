@@ -1,6 +1,9 @@
 fastapi
 uvicorn
-sentence-transformers
+# Pin to stable versions — sentence-transformers 6.x pulls transformers 5.x
+# which has a NameError bug (nn not defined in accelerate.py)
+sentence-transformers==2.7.0
+transformers==4.44.2
 langchain
 langchain-core
 langchain-community
