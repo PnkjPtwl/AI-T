@@ -11,6 +11,6 @@ supabase
 python-dotenv
 python-docx
 pgvector
-numpy
+numpy<2
 langchain-huggingface
 python-multipart
