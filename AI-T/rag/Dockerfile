@@ -11,6 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install (fastapi + uvicorn are already listed here)
 COPY rag/requirements.txt ./rag/requirements.txt
+# Install CPU-only PyTorch FIRST so pip won't pull the 2GB CUDA version
+# (sentence-transformers pulls torch as a dep — this pins it to the ~180MB CPU wheel)
+RUN pip install --no-cache-dir \
+    torch==2.2.2+cpu \
+    --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r rag/requirements.txt
 
 # Copy the full RAG package
