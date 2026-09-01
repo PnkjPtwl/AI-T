@@ -1,6 +1,7 @@
 import { AssemblyAI } from 'assemblyai'
 import OpenAI from 'openai'
 import { getSecret } from '../lib/secrets'
+import { trackCerebrasUsage } from '../lib/apiUsageTracker'
 
 export const generatePersonaFromAudio = async (req: any, res: any) => {
   try {
@@ -87,6 +88,16 @@ Return ONLY a valid JSON object matching this exact structure:
       max_tokens: 4000,
       response_format: { type: 'json_object' }
     })
+
+    if (completion.usage) {
+      trackCerebrasUsage(
+        completion.usage.prompt_tokens || 0,
+        completion.usage.completion_tokens || 0,
+        'generatePersonaFromAudio',
+        modelName,
+        req.user?.id
+      ).catch(err => console.error('Failed to track usage:', err))
+    }
 
     const msg = completion.choices?.[0]?.message
     const resultText = msg?.content || (msg as any)?.reasoning

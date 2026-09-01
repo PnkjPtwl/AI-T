@@ -3,6 +3,7 @@ import { supabase } from '../db/supabase'
 import OpenAI from 'openai'
 import { getSecret } from '../lib/secrets'
 import { searchKnowledgeBase, formatRagContext } from '../utils/ragClient'
+import { trackCerebrasUsage } from '../lib/apiUsageTracker'
 
 // POST /api/questions/generate
 export const generateQuestions = async (req: Request, res: Response) => {
@@ -77,6 +78,16 @@ Return ONLY raw JSON with this format:
       temperature: 0.5,
       response_format: { type: 'json_object' }
     })
+
+    if (completion.usage) {
+      trackCerebrasUsage(
+        completion.usage.prompt_tokens || 0,
+        completion.usage.completion_tokens || 0,
+        'generateQuestions',
+        modelName,
+        (req as any).user?.id
+      ).catch(err => console.error('Failed to track usage:', err))
+    }
 
     const text = completion.choices[0].message.content || '{}'
     const jsonMatch = text.match(/\{[\s\S]*\}/);

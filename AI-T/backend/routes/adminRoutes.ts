@@ -14,6 +14,9 @@ import {
   getApiKeys,
   setApiKey,
   deleteApiKey,
+  getLlmConfig,
+  setLlmConfig,
+  getLlmUsage
 } from '../controllers/adminController'
 
 const router = Router()
@@ -35,6 +38,11 @@ router.get('/manager/:managerId/reps', getManagerReps)
 router.get('/api-keys', getApiKeys)
 router.post('/api-keys', setApiKey)
 router.delete('/api-keys/:keyName', deleteApiKey)
+
+// API Usage & Costs
+router.get('/llm-config', getLlmConfig)
+router.post('/llm-config', setLlmConfig)
+router.get('/llm-usage', getLlmUsage)
 
 export default router
 

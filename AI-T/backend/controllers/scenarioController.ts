@@ -17,6 +17,7 @@ export function getScenarioDisplayLabel(scenario: any): string {
 }
 
 import { searchKnowledgeBase, formatRagContext } from '../utils/ragClient'
+import { trackCerebrasUsage } from '../lib/apiUsageTracker'
 
 export const generateScorecardMetrics = async (req: any, res: any) => {
   const { context_text, personality_traits, objection_style, target_skills, contact_title, contact_company, account_name } = req.body
@@ -94,6 +95,16 @@ Generate between 5 and 7 criteria. Make them precise and grounded in the Knowled
       max_tokens: 1200,
       response_format: { type: 'json_object' }
     })
+
+    if (completion.usage) {
+      trackCerebrasUsage(
+        completion.usage.prompt_tokens || 0,
+        completion.usage.completion_tokens || 0,
+        'generateScorecard',
+        modelName,
+        req.user?.id
+      ).catch(err => console.error('Failed to track usage:', err))
+    }
 
     let raw = completion.choices[0]?.message?.content || '{"metrics":[]}'
     raw = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
@@ -939,6 +950,16 @@ Return ONLY a valid JSON object matching this structure:
       max_tokens: 1000,
       response_format: { type: 'json_object' }
     });
+
+    if (completion.usage) {
+      trackCerebrasUsage(
+        completion.usage.prompt_tokens || 0,
+        completion.usage.completion_tokens || 0,
+        'autoGenerateFromHubspot',
+        modelName,
+        req.user?.id
+      ).catch(err => console.error('Failed to track usage:', err))
+    }
 
     let rawJson = completion.choices[0]?.message?.content || '{}';
     rawJson = rawJson.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();

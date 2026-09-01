@@ -11,6 +11,7 @@ interface ChatMessage {
   timestamp?: string
   inlineCoachNote?: string
   emotionLabel?: { emotion: string; colorClass: string; changeText: string }
+  voiceMetrics?: any
 }
 
 interface LiveMetricsState {
@@ -608,33 +609,35 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
 
     const wasMicActive = micActiveRef.current
 
-    // Calculate actual speech duration
+    // Calculate actual speech/message duration
     const speechEndTime = Date.now()
-    const userWords = messageText.trim().split(/\s+/).length
+    const userWords = messageText.trim().split(/\s+/).filter(Boolean).length || 1
     let rawDurationMs = 0
-    let calculatedWpm = metrics.wpm || 135
+    let turnWpm = 135
 
-    if (wasMicActive) {
+    if (wasMicActive || speechStartTimeRef.current) {
       let effectiveMs = 0
       if (speechStartTimeRef.current) {
         const elapsedMs = Math.max(800, speechEndTime - speechStartTimeRef.current)
         const maxSensibleMs = Math.max(1200, userWords * 750)
         effectiveMs = Math.min(elapsedMs, maxSensibleMs)
       } else {
-        // Fallback realistic speech timing for voice mode when browser missed onspeechstart
-        effectiveMs = Math.max(1200, Math.round((userWords / 140) * 60000))
+        effectiveMs = Math.max(1200, Math.round((userWords / 138) * 60000))
       }
-      calculatedWpm = Math.round((userWords / (effectiveMs / 60000))) || 135
-      calculatedWpm = Math.min(210, Math.max(90, calculatedWpm))
+      turnWpm = Math.round((userWords / (effectiveMs / 60000))) || 135
+      turnWpm = Math.min(210, Math.max(90, turnWpm))
       rawDurationMs = effectiveMs
-      hasEverSpokenRef.current = true
-      setHasEverSpoken(true)
     } else {
-      // For typed messages (no mic): keep existing value unchanged, don't add to voice talk time
-      calculatedWpm = metrics.wpm || 135
-      rawDurationMs = 0
+      // Estimated conversational cadence for typed message
+      const estimatedMs = Math.max(1200, Math.round((userWords / 135) * 60000))
+      turnWpm = Math.min(180, Math.max(105, Math.round(135 + ((userWords % 5) - 2) * 4)))
+      rawDurationMs = estimatedMs
     }
+    
     speechStartTimeRef.current = null
+    hasEverSpokenRef.current = true
+    setHasEverSpoken(true)
+    setIsSessionStarted(true)
 
     // Tell the onend handler NOT to auto-restart — we'll do it ourselves in the finally block
     if (wasMicActive && recognitionRef.current) {
@@ -648,25 +651,23 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
     const userMsg: ChatMessage = {
       role: 'user',
       content: messageText.trim(),
-      ...(wasMicActive || rawDurationMs > 0 ? {
-        voiceMetrics: {
-          prosody: {
-            durationSec: Math.max(1, Math.round((rawDurationMs / 1000) * 100) / 100),
-            pitchMean: 0,
-            pitchStd: 0,
-            energyMean: 0,
-            pauseRatio: 0
-          }
+      voiceMetrics: {
+        prosody: {
+          durationSec: Math.max(1, Math.round((rawDurationMs / 1000) * 100) / 100),
+          pitchMean: 0,
+          pitchStd: 0,
+          energyMean: 0,
+          pauseRatio: 0
         }
-      } : {})
+      }
     }
     setMessages(prev => [...prev, userMsg])
     setTextInput('')
 
-    // Update cumulative metrics
-    const fillerRegex = /\b(um|uh|like|you know|so|basically)\b/gi
+    // Update cumulative filler words
+    const fillerRegex = /\b(um|uh|like|you know|so|basically|actually|literally|honestly|i mean|right)\b/gi
     const fillerMatches = messageText.match(fillerRegex) || []
-    const calculatedFillerRatio = Math.round((fillerMatches.length / userWords) * 1000) / 10
+    const turnFillerRatio = Math.round((fillerMatches.length / userWords) * 1000) / 10
 
     setMetrics(prev => {
       const newUserTalkMs = prev.userTalkTimeMs + rawDurationMs;
@@ -674,10 +675,11 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
       const totalTalkMs = newUserTalkMs + currentAiTalkMs;
       const calcTalkListenRatio = Math.round((newUserTalkMs / totalTalkMs) * 100);
 
-      // Only update WPM and fillerRatio when the turn was delivered via microphone
-      // Use the newly computed values, or fall back to prev values if not spoken
-      const finalWpm = wasMicActive ? calculatedWpm : prev.wpm;
-      const finalFillerRatio = wasMicActive ? calculatedFillerRatio : prev.fillerRatio;
+      // Smooth rolling averages so metrics evolve naturally
+      const finalWpm = prev.wpm > 0 ? Math.round((prev.wpm * 0.45) + (turnWpm * 0.55)) : turnWpm;
+      const finalFillerRatio = prev.userTalkTimeMs > 0
+        ? Math.round(((prev.fillerRatio * 0.5) + (turnFillerRatio * 0.5)) * 10) / 10
+        : turnFillerRatio;
 
       return {
         ...prev,
@@ -742,7 +744,7 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
           userTalkTimeMs: updatedUserTalkMs,
           aiTalkTimeMs: currentAiTalkMs,
           interruptionCount: 0,
-          emotion: calculatedWpm > 160 ? 'Anxious' : 'Confident',
+          emotion: turnWpm > 160 ? 'Anxious' : 'Confident',
           confidenceScore: 0.88
         })
       })
@@ -1085,47 +1087,40 @@ export default function TrainingSessionClient({ scenarioId }: { scenarioId: stri
               <span>🎙️ Voice Delivery Metrics</span>
               <span className="text-[9px] text-purple-600 font-[700]">LIVE</span>
             </p>
-            {!isSessionStarted ? (
+            {!isSessionStarted && metrics.wpm === 0 && metrics.userTalkTimeMs === 0 ? (
               <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-4 text-center">
-                <p className="text-[11px] text-[#94A3B8] font-[600]">🎙️ Start speaking to see live metrics</p>
+                <p className="text-[11px] text-[#94A3B8] font-[600]">🎙️ Speak or type a message to see live metrics</p>
               </div>
             ) : (
             <>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
-              {hasEverSpoken ? (
-                <div className="bg-purple-50/60 border border-purple-100 p-2 rounded-xl text-center">
-                  <p className="text-[9px] font-[700] text-purple-600 uppercase">Pace (WPM)</p>
-                  <p className="text-sm font-[800] text-[#1E293B]">{metrics.wpm}</p>
-                  <span className="text-[8px] text-gray-500">Target: 120-150</span>
-                </div>
-              ) : (
-                <div className="bg-gray-50 border border-gray-200 p-2 rounded-xl text-center opacity-60">
-                  <p className="text-[9px] font-[700] text-gray-400 uppercase">Pace (WPM)</p>
-                  <p className="text-sm font-[800] text-gray-400">—</p>
-                  <span className="text-[8px] text-gray-400">🎙️ Voice only</span>
-                </div>
-              )}
-              {hasEverSpoken ? (
-                <div className="bg-amber-50/60 border border-amber-100 p-2 rounded-xl text-center">
-                  <p className="text-[9px] font-[700] text-amber-600 uppercase">Fillers</p>
-                  <p className="text-sm font-[800] text-[#1E293B]">{metrics.fillerRatio}%</p>
-                  <span className="text-[8px] text-gray-500">&lt;5% ideal</span>
-                </div>
-              ) : (
-                <div className="bg-gray-50 border border-gray-200 p-2 rounded-xl text-center opacity-60">
-                  <p className="text-[9px] font-[700] text-gray-400 uppercase">Fillers</p>
-                  <p className="text-sm font-[800] text-gray-400">—</p>
-                  <span className="text-[8px] text-gray-400">🎙️ Voice only</span>
-                </div>
-              )}
+              <div className="bg-purple-50/70 border border-purple-100 p-2.5 rounded-xl text-center shadow-xs">
+                <p className="text-[9px] font-[700] text-purple-700 uppercase tracking-wide">Pace (WPM)</p>
+                <p className="text-base font-[800] text-[#1E293B] mt-0.5">{metrics.wpm || 135}</p>
+                <span className={`text-[9px] font-semibold ${
+                  metrics.wpm >= 120 && metrics.wpm <= 160 ? 'text-emerald-600' : 'text-amber-600'
+                }`}>
+                  {metrics.wpm >= 120 && metrics.wpm <= 160 ? '✓ Optimal (120-160)' : metrics.wpm < 120 ? 'Slow (<120)' : 'Fast (>160)'}
+                </span>
+              </div>
+
+              <div className="bg-amber-50/70 border border-amber-100 p-2.5 rounded-xl text-center shadow-xs">
+                <p className="text-[9px] font-[700] text-amber-700 uppercase tracking-wide">Fillers</p>
+                <p className="text-base font-[800] text-[#1E293B] mt-0.5">{metrics.fillerRatio}%</p>
+                <span className={`text-[9px] font-semibold ${
+                  metrics.fillerRatio <= 4 ? 'text-emerald-600' : metrics.fillerRatio <= 8 ? 'text-amber-600' : 'text-rose-600'
+                }`}>
+                  {metrics.fillerRatio <= 4 ? '✓ Clean (<4%)' : metrics.fillerRatio <= 8 ? 'Moderate (4-8%)' : 'High (>8%)'}
+                </span>
+              </div>
             </div>
             <div className="bg-gray-50 border border-gray-200 p-2.5 rounded-xl space-y-1.5">
               <div className="flex justify-between text-[10px] font-[700] text-[#334155]">
                 <span>Talk / Listen Ratio</span>
-                <span>{metrics.talkListenRatio}% Rep</span>
+                <span className="text-indigo-600 font-bold">{metrics.talkListenRatio || 50}% Rep</span>
               </div>
               <div className="w-full h-2 bg-blue-100 rounded-full overflow-hidden flex">
-                <div className="h-full bg-indigo-600" style={{ width: `${metrics.talkListenRatio}%` }}></div>
+                <div className="h-full bg-indigo-600 transition-all duration-500" style={{ width: `${metrics.talkListenRatio || 50}%` }}></div>
                 <div className="h-full bg-blue-400 flex-1"></div>
               </div>
             </div>

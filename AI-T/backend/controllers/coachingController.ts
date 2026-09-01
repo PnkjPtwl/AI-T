@@ -1,5 +1,6 @@
 import { supabase } from '../db/supabase'
 import { getSecret } from '../lib/secrets'
+import { trackCerebrasUsage } from '../lib/apiUsageTracker'
 
 export const getMySignals = async (req: any, res: any) => {
   const repId = req.user.id
@@ -77,6 +78,17 @@ Format the response in professional Markdown.`
     })
 
     const data = await response.json() as any
+
+    if (data.usage) {
+      trackCerebrasUsage(
+        data.usage.prompt_tokens || 0,
+        data.usage.completion_tokens || 0,
+        'generateStudyGuide',
+        model,
+        req.user?.id
+      ).catch(err => console.error('Failed to track usage:', err))
+    }
+
     const msg = data.choices?.[0]?.message
     const guide = msg?.content || msg?.reasoning || 'Failed to generate guide.'
 

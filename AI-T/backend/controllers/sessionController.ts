@@ -1,6 +1,7 @@
 import { supabase } from '../db/supabase'
 import * as fs from 'fs'
 import OpenAI from 'openai'
+import { trackCerebrasUsage } from '../lib/apiUsageTracker'
 import { generateSystemInstruction } from '../utils/promptGenerator'
 import { generateEvaluationPrompt, getScorecardScoreKeys, generateConversationAnalyticsPrompt, DynamicMetric } from '../utils/evaluationGenerator'
 import { getSecret } from '../lib/secrets'
@@ -400,6 +401,17 @@ export const sendMessage = async (req: any, res: any) => {
       temperature: 0.7
     })
 
+    if (completion.usage) {
+      trackCerebrasUsage(
+        completion.usage.prompt_tokens || 0,
+        completion.usage.completion_tokens || 0,
+        'sendMessage',
+        sessionModel,
+        req.user?.id,
+        sessionId
+      ).catch(err => console.error('Failed to track usage:', err))
+    }
+
     const replyText = extractLLMContent(completion, '')
 
     if (!replyText) throw new Error("Empty response from Groq")
@@ -717,6 +729,17 @@ export const endSession = async (req: any, res: any) => {
           temperature: 0.3,
           response_format: { type: 'json_object' }
         })
+
+        if (completion.usage) {
+          trackCerebrasUsage(
+            completion.usage.prompt_tokens || 0,
+            completion.usage.completion_tokens || 0,
+            'evaluation',
+            sessionModel,
+            req.user?.id,
+            sessionId
+          ).catch(err => console.error('Failed to track usage:', err))
+        }
 
         const text = extractLLMContent(completion);
         const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -1216,6 +1239,16 @@ ${factCheckBlock}`
         temperature: isLearning ? 0.5 : 0.35,
         response_format: { type: 'json_object' }
       })
+      if (completion.usage) {
+        trackCerebrasUsage(
+          completion.usage.prompt_tokens || 0,
+          completion.usage.completion_tokens || 0,
+          'liveSentiment',
+          sentModel,
+          req.user?.id,
+          sessionId
+        ).catch(err => console.error('Failed to track usage:', err))
+      }
       rawText = extractLLMContent(completion)
     } catch (primaryErr: any) {
       console.warn('[LiveSentiment] Primary LLM failed, trying Groq fallback:', primaryErr?.message)
@@ -1457,6 +1490,16 @@ export const processLiveTurn = async (req: any, res: any) => {
         temperature: 0.7,
         max_tokens: 600
       })
+      if (chatCompletion.usage) {
+        trackCerebrasUsage(
+          chatCompletion.usage.prompt_tokens || 0,
+          chatCompletion.usage.completion_tokens || 0,
+          'liveTurn',
+          sentModel,
+          req.user?.id,
+          sessionId
+        ).catch(err => console.error('Failed to track usage:', err))
+      }
       aiResponse = extractLLMContent(chatCompletion, '')
     } catch (groqErr) {
       console.error('[processLiveTurn] Groq AI completion failed, using context-aware fallback:', groqErr)
@@ -1549,6 +1592,15 @@ export const processLiveCoach = async (req: any, res: any) => {
         temperature: 0.3,
         max_tokens: 400
       })
+      if (coachCompletion.usage) {
+        trackCerebrasUsage(
+          coachCompletion.usage.prompt_tokens || 0,
+          coachCompletion.usage.completion_tokens || 0,
+          'liveCoach',
+          sentModel,
+          req.user?.id
+        ).catch(err => console.error('Failed to track usage:', err))
+      }
       const tipText = extractLLMContent(coachCompletion, '')
       if (tipText.trim()) {
         coachTip = { shouldPopup: true, tip: tipText, severity: 'info' }
@@ -1630,6 +1682,16 @@ export const pauseSession = async (req: any, res: any) => {
           temperature: 0.3,
           response_format: { type: 'json_object' }
         })
+        if (completion.usage) {
+          trackCerebrasUsage(
+            completion.usage.prompt_tokens || 0,
+            completion.usage.completion_tokens || 0,
+            'pauseSession',
+            sessionModel,
+            req.user?.id,
+            sessionId
+          ).catch(err => console.error('Failed to track usage:', err))
+        }
         const text = extractLLMContent(completion);
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         feedback = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');

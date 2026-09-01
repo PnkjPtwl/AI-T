@@ -506,3 +506,258 @@ export const deleteApiKey = async (req: any, res: any) => {
   }
 }
 
+// =============================================================================
+// Cerebras API Analytics & Costs
+// =============================================================================
+
+/**
+ * GET /api/admin/llm-config
+ * Get current balance and cost configuration for Cerebras
+ */
+export const getLlmConfig = async (req: any, res: any) => {
+  try {
+    const sb = await getSupabase()
+    
+    // 1. Try api_costs table
+    try {
+      const { data, error } = await sb
+        .from('api_costs')
+        .select('*')
+        .eq('provider', 'cerebras')
+        .single()
+
+      if (!error && data) {
+        const bal = Number(data.balance ?? 4.43)
+        return res.json({
+          provider: 'cerebras',
+          balance: bal,
+          globalBalance: bal,
+          input_token_cost: Number(data.input_token_cost ?? 0.0000006),
+          output_token_cost: Number(data.output_token_cost ?? 0.0000006),
+          updated_at: data.updated_at
+        })
+      }
+    } catch (e) {}
+
+    // 2. Fallback to api_keys table
+    const { data: keyData } = await sb
+      .from('api_keys')
+      .select('key_value, updated_at')
+      .eq('key_name', 'CEREBRAS_USAGE_DATA')
+      .single()
+
+    let bal = 4.43
+    if (keyData?.key_value) {
+      try {
+        const parsed = JSON.parse(keyData.key_value)
+        if (parsed.balance !== undefined) bal = Number(parsed.balance)
+      } catch (e) {}
+    }
+
+    res.json({
+      provider: 'cerebras',
+      balance: bal,
+      globalBalance: bal,
+      input_token_cost: 0.0000006,
+      output_token_cost: 0.0000006,
+      updated_at: keyData?.updated_at || new Date().toISOString()
+    })
+  } catch (err: any) {
+    console.error('[admin/llm-config] GET Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+}
+
+/**
+ * POST /api/admin/llm-config
+ * Body: { balance: number, globalBalance?: number, inputTokenCost?: number, outputTokenCost?: number }
+ */
+export const setLlmConfig = async (req: any, res: any) => {
+  const balanceVal = req.body.globalBalance !== undefined ? req.body.globalBalance : req.body.balance
+  const inputCost = req.body.inputTokenCost !== undefined ? Number(req.body.inputTokenCost) : 0.0000006
+  const outputCost = req.body.outputTokenCost !== undefined ? Number(req.body.outputTokenCost) : 0.0000006
+
+  if (balanceVal === undefined || isNaN(Number(balanceVal))) {
+    return res.status(400).json({ error: 'Valid balance is required' })
+  }
+
+  const numBal = Number(balanceVal)
+
+  try {
+    const sb = await getSupabase()
+
+    // 1. Try updating api_costs
+    try {
+      await sb
+        .from('api_costs')
+        .upsert({
+          provider: 'cerebras',
+          balance: numBal,
+          input_token_cost: inputCost,
+          output_token_cost: outputCost,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'provider' })
+    } catch (e) {}
+
+    // 2. Also update api_keys backup store
+    const { data: existing } = await sb
+      .from('api_keys')
+      .select('key_value')
+      .eq('key_name', 'CEREBRAS_USAGE_DATA')
+      .single()
+
+    let usageData: any = { balance: numBal, logs: [] }
+    if (existing?.key_value) {
+      try {
+        usageData = JSON.parse(existing.key_value)
+      } catch (e) {}
+    }
+    usageData.balance = numBal
+
+    await sb.from('api_keys').upsert({
+      key_name: 'CEREBRAS_USAGE_DATA',
+      key_value: JSON.stringify(usageData),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'key_name' })
+
+    res.json({
+      success: true,
+      balance: numBal,
+      globalBalance: numBal,
+      message: 'Cerebras balance updated successfully'
+    })
+  } catch (err: any) {
+    console.error('[admin/llm-config] POST Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+}
+
+/**
+ * GET /api/admin/llm-usage
+ * Get aggregated LLM usage stats & logs
+ */
+export const getLlmUsage = async (req: any, res: any) => {
+  try {
+    const sb = await getSupabase()
+    
+    // 1. Try fetching from api_usage_logs table
+    try {
+      const { data: logs, error } = await sb
+        .from('api_usage_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100)
+
+      if (!error && logs && logs.length > 0) {
+        let totalInput = 0
+        let totalOutput = 0
+        let totalCost = 0
+        const sessionCostMap: Record<string, number> = {}
+
+        const formattedLogs = logs.map((log: any) => {
+          const inTok = log.input_tokens || 0
+          const outTok = log.output_tokens || 0
+          const cost = Number(log.total_cost || 0)
+
+          totalInput += inTok
+          totalOutput += outTok
+          totalCost += cost
+
+          if (log.session_id) {
+            sessionCostMap[log.session_id] = (sessionCostMap[log.session_id] || 0) + cost
+          }
+
+          return {
+            id: log.id,
+            created_at: log.created_at,
+            endpoint_name: log.call_type || log.endpoint_name || 'Inference',
+            model_name: log.model || log.model_name || 'Cerebras LLM',
+            prompt_tokens: inTok,
+            completion_tokens: outTok,
+            cost: cost,
+            session_id: log.session_id,
+            user_id: log.user_id
+          }
+        })
+
+        const numCalls = formattedLogs.length
+        const numSessions = Object.keys(sessionCostMap).length
+
+        const metrics = {
+          totalCalls: numCalls,
+          totalTokens: totalInput + totalOutput,
+          totalCost: totalCost,
+          avgInputTokens: Math.round(totalInput / numCalls),
+          avgOutputTokens: Math.round(totalOutput / numCalls),
+          avgCostPerSession: numSessions > 0 ? (totalCost / numSessions) : (totalCost / numCalls),
+          totalInputTokens: totalInput,
+          totalOutputTokens: totalOutput
+        }
+
+        return res.json({
+          metrics,
+          logs: formattedLogs,
+          ...metrics
+        })
+      }
+    } catch (e) {}
+
+    // 2. Fallback to api_keys store
+    const { data: keyData } = await sb
+      .from('api_keys')
+      .select('key_value')
+      .eq('key_name', 'CEREBRAS_USAGE_DATA')
+      .single()
+
+    if (keyData?.key_value) {
+      try {
+        const parsed = JSON.parse(keyData.key_value)
+        const logs = parsed.logs || []
+        const totalCalls = parsed.totalCalls || logs.length
+        const totalInput = parsed.totalInputTokens || 0
+        const totalOutput = parsed.totalOutputTokens || 0
+        const totalCost = parsed.totalCost || 0
+        const numSessions = Object.keys(parsed.sessionCosts || {}).length
+
+        const metrics = {
+          totalCalls,
+          totalTokens: totalInput + totalOutput,
+          totalCost,
+          avgInputTokens: totalCalls > 0 ? Math.round(totalInput / totalCalls) : 0,
+          avgOutputTokens: totalCalls > 0 ? Math.round(totalOutput / totalCalls) : 0,
+          avgCostPerSession: numSessions > 0 ? (totalCost / numSessions) : (totalCalls > 0 ? (totalCost / totalCalls) : 0),
+          totalInputTokens: totalInput,
+          totalOutputTokens: totalOutput
+        }
+
+        return res.json({
+          metrics,
+          logs,
+          ...metrics
+        })
+      } catch (e) {}
+    }
+
+    // Default empty response
+    const defaultMetrics = {
+      totalCalls: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      avgInputTokens: 0,
+      avgOutputTokens: 0,
+      avgCostPerSession: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0
+    }
+
+    res.json({
+      metrics: defaultMetrics,
+      logs: [],
+      ...defaultMetrics
+    })
+
+  } catch (err: any) {
+    console.error('[admin/llm-usage] GET Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+}
